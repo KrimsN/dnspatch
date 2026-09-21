@@ -1,0 +1,22 @@
+# golangci-lint v2 configuration.
+version: "2"
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - revive
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
