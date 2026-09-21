@@ -10,7 +10,7 @@
 # which recreates the container.
 services:
   dnspatch:
-    image: ghcr.io/krimsn/dnspatch:${DNSPATCH_VERSION:-latest}
+    image: krimsn/dnspatch:${DNSPATCH_VERSION:-latest}
     # `docker compose up -d --build` builds the image from this checkout instead.
     build: .
     restart: unless-stopped

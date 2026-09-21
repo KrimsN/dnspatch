@@ -36,8 +36,10 @@ docker run -d --name dnspatch --restart unless-stopped \
   -v "$PWD/dnspatch.toml:/etc/dnspatch/config.toml:ro" \
   --env-file .env \
   --log-opt max-size=10m --log-opt max-file=3 \
-  ghcr.io/krimsn/dnspatch:latest
+  krimsn/dnspatch:latest
 ```
+
+The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
 Things to know before running it in a container:
 
