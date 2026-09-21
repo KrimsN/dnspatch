@@ -37,6 +37,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # goreleaser otherwise picks the tag itself, and when a release
+          # candidate and the final release sit on one commit it takes the
+          # candidate, whose release already exists.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
 
   image:
     name: image
