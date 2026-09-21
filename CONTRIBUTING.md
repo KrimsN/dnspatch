@@ -49,6 +49,80 @@ golangci-lint run ./...
 
 ## Writing a plugin
 
+A plugin is a package under `plugins/` with a configuration struct and a
+constructor. The steps below use a provider; a retriever differs only in the
+interface it implements (`GetIPAddress` instead of `SetIPAddress`) and in the
+`RegisterRetriever` call. `plugins/regru` (provider) and `plugins/ifconfigco`
+(retriever) are complete examples to copy from.
+
+### 1. Lay out the package
+
+```
+plugins/example/
+  example.go        package doc, Name constant, init() registration
+  config.go         the Config struct
+  provider.go       the implementation
+  provider_test.go  tests against httptest
+```
+
+The package doc comment says what the service is, what the plugin can and
+cannot do with it (for example, that the API cannot set a TTL), and any
+service rules the user should know, such as rate limits. It ends up on
+pkg.go.dev.
+
+### 2. Declare the configuration
+
+Every parameter is a field of an exported `Config` struct. The struct tags are
+the single source of truth: the decoder, the parameter reference in
+`docs/PARAMETERS.md` and the example configuration are all built from them.
+
+```go
+type Config struct {
+	Token   string `toml:"token" required:"true" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
+	Zone    string `toml:"zone" required:"true" example:"example.com" doc:"Domain name of the zone"`
+	BaseURL string `toml:"base_url" default:"https://api.example.com" doc:"Base URL of the API"`
+
+	httpx.ProxyConfig
+}
+```
+
+| Tag | Meaning | Why it matters |
+|-----|---------|----------------|
+| `toml:"name"` | the key in the configuration file | without it the key is the lower-cased field name; spell it out so that renaming a field never renames a parameter |
+| `required:"true"` | the parameter must be set | a missing required parameter stops the daemon at startup with an error naming it; without the tag a forgotten token becomes an unauthorised request to the API |
+| `default:"value"` | the value used when the parameter is omitted | shown in the reference and the example file; the daemon and the docs cannot disagree, since both read the same tag |
+| `doc:"text"` | the description shown in `docs/PARAMETERS.md` and as a comment in the example file | a parameter without it appears as "no description" in the reference |
+| `example:"value"` | the value the example file shows | required for a required parameter that is not a plain string; for a secret, use a `${NAME}` reference |
+
+Notes:
+
+- Embed `httpx.ProxyConfig` in a provider to get the `proxy` parameter
+  (`httpx.DirectProxyConfig` in a retriever, where the default is `direct`) and
+  build the client with `httpx.NewClient`. Do not read `HTTP_PROXY` yourself.
+- Values of type `time.Duration`, `netip.Addr` and anything implementing
+  `encoding.TextUnmarshaler` are parsed from strings.
+- Unknown parameters and missing required ones are reported by the decoder; the
+  constructor only checks what the tags cannot express, such as that `base_url`
+  is an `http(s)` URL. Prefix its errors with the parameter name.
+
+### 3. Register the plugin
+
+```go
+const Name = "example"
+
+func init() {
+	plugin.RegisterProvider(Name, func(cfg Config) (plugin.Provider, error) {
+		return newProvider(cfg, nil)
+	})
+}
+```
+
+The name must be unique among providers (and among retrievers): registering a
+name twice panics at start-up. Add a blank import of the package to
+`plugins/all/all.go`, otherwise the binary does not contain it.
+
+### 4. Implement it
+
 Every network call a plugin makes must be bound to the `ctx` it receives, for
 example with `http.NewRequestWithContext(ctx, ...)`. The runner puts a deadline
 (30 seconds by default) on every `GetIPAddress` and `SetIPAddress` call and
@@ -56,4 +130,46 @@ cancels the context on shutdown; a plugin that ignores `ctx` can stall its
 instance indefinitely. An HTTP client field on the plugin is fine for tests
 against `httptest`, but it must not replace the context.
 
-<!-- TODO: the rest of the plugin guide, review expectations -->
+Make the plugin testable without the network:
+
+- Keep the constructor as `newProvider(cfg Config, client *http.Client)`: the
+  registered function passes `nil` to get the real client, a test passes
+  `srv.Client()`.
+- Take the base URL from the configuration, so a test can point it at an
+  `httptest.Server`. Never hard-code the host of the service.
+- Cap the size of a response you read (`io.LimitReader`) and close bodies.
+- Do not put secrets into error messages or logs. That includes proxy URLs.
+- A provider decides the record type from the address: `addr.Is4()` is an `A`
+  record, anything else `AAAA`. Writing a record that already holds the address
+  must succeed and change nothing: after a restart the daemon writes to every
+  provider without knowing what it wrote before.
+- A retriever returns a valid global unicast address, and an error otherwise.
+
+### 5. Test it
+
+Test against `httptest`, and cover at least: the success path for both address
+families (for a provider), an HTTP error status, a malformed reply, a
+cancelled context, and every validation error of the constructor.
+Use `plugin.NewRegistry()` rather than `plugin.Default` in tests, so that
+registrations do not leak between them.
+
+### 6. Regenerate the documentation
+
+`docs/PARAMETERS.md` and `config.toml.example` are generated from the tags. After
+adding a plugin or changing a `Config`, run
+
+```
+go generate ./...
+```
+
+and commit the result. The test `TestCommittedFilesAreCurrent` (part of
+`go test ./...`, so of CI) fails when the committed files are out of date.
+Never edit the generated files by hand.
+
+### Plugins outside this repository
+
+`plugin` is a public package, so a plugin can also live in your own module and
+register itself in `plugin.Default` or in a registry you create. Note that the
+configuration loader and the runner are internal packages in `v0.x`: a program
+of your own has to build and drive the instances itself, so for most plugins a
+pull request here is the easier route.
