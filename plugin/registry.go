@@ -45,9 +45,9 @@ func NewRegistry() *Registry {
 //
 // C is the plugin's configuration struct; parameters from the configuration
 // file are decoded into it with Decode before build is called. It panics if
-// name is empty, build is nil, C is not a struct or name is already
-// registered, since all four are programming errors that surface at process
-// start.
+// name is empty, build is nil, C is not a struct, two fields of C take the same
+// parameter name or name is already registered, since all of these are
+// programming errors that surface at process start.
 func RegisterProvider[C any](name string, build func(cfg C) (Provider, error)) {
 	RegisterProviderIn(Default, name, build)
 }
@@ -90,9 +90,9 @@ func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Ret
 }
 
 // checkRegistration rejects registration arguments that cannot work. C is the
-// configuration type: Decode cannot fill anything but a struct, and catching
-// that here beats an error on the first configuration file that names the
-// plugin.
+// configuration type: Decode cannot fill anything but a struct, nor a struct
+// whose fields share a parameter name, and catching that here beats a failure
+// on the first configuration file that names the plugin.
 func checkRegistration[C any](kind, name string, nilBuild bool) {
 	if name == "" {
 		panic("plugin: " + kind + " name is empty")
@@ -103,6 +103,9 @@ func checkRegistration[C any](kind, name string, nilBuild bool) {
 	if t := reflect.TypeFor[C](); t.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("plugin: %s %q: configuration type %s is not a struct", kind, name, t))
 	}
+
+	// configFields panics on duplicated parameter names.
+	configFields(reflect.TypeFor[C]())
 }
 
 // register adds an entry to one of the registry's maps, creating the map on

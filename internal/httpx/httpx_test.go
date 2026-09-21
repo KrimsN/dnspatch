@@ -289,3 +289,27 @@ func TestDirectIsNotAProxyURL(t *testing.T) {
 		t.Errorf("error = %v, want it to point at the direct keyword", err)
 	}
 }
+
+// replacedTransport stands in for a http.DefaultTransport swapped by another
+// package in the process, for example by an instrumentation library.
+type replacedTransport struct{}
+
+func (replacedTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, io.EOF
+}
+
+func TestNewClientIgnoresReplacedDefaultTransport(t *testing.T) {
+	original := http.DefaultTransport
+	http.DefaultTransport = replacedTransport{}
+	t.Cleanup(func() { http.DefaultTransport = original })
+
+	for _, proxy := range []string{"", Direct, "socks5://proxy.example.com:1080"} {
+		client, err := NewClient(proxy, time.Second)
+		if err != nil {
+			t.Fatalf("NewClient(%q): %v", proxy, err)
+		}
+		if _, ok := client.Transport.(*http.Transport); !ok {
+			t.Errorf("NewClient(%q): transport is %T, want *http.Transport", proxy, client.Transport)
+		}
+	}
+}

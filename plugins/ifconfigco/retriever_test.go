@@ -173,3 +173,11 @@ func TestRegisteredInDefault(t *testing.T) {
 		t.Error("misspelled parameter was accepted")
 	}
 }
+
+func TestRecommendedIntervalIsOneMinute(t *testing.T) {
+	r := newTestRetriever(t, "ipv4", func(http.ResponseWriter, *http.Request) {})
+
+	if got := r.RecommendedInterval(); got != time.Minute {
+		t.Errorf("RecommendedInterval = %s, want the rate ifconfig.co asks for, one minute", got)
+	}
+}

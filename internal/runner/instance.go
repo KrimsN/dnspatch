@@ -64,12 +64,34 @@ func newInstance(cfg Instance, opts Options) *instance {
 	}
 }
 
+// intervalAdvisor is implemented by retrievers whose service asks not to be
+// polled more often than once per the returned interval. It is optional and
+// matched structurally, so a plugin does not import this package to provide it.
+// The runner only warns about a shorter interval and still honours it.
+type intervalAdvisor interface {
+	RecommendedInterval() time.Duration
+}
+
+// warnShortInterval logs a warning when the polling interval is shorter than
+// the retriever's service asks for.
+func (in *instance) warnShortInterval() {
+	advisor, ok := in.retriever.(intervalAdvisor)
+	if !ok {
+		return
+	}
+	if advised := advisor.RecommendedInterval(); in.interval < advised {
+		in.log.Warn("interval is shorter than the retriever's service allows, requests may be rejected or the address blocked",
+			"interval", in.interval, "recommended", advised)
+	}
+}
+
 // run ticks immediately and then once per interval until ctx is cancelled.
 func (in *instance) run(ctx context.Context) {
 	ticker := in.clock.NewTicker(in.interval)
 	defer ticker.Stop()
 
 	in.log.Info("instance started", "interval", in.interval)
+	in.warnShortInterval()
 	// Every failure is logged per provider inside tick, so the returned error
 	// is not reported again.
 	for ctx.Err() == nil {

@@ -16,7 +16,8 @@ services:
     restart: unless-stopped
 
     # Every variable of .env becomes an environment variable of the container,
-    # where dnspatch.toml refers to it as ${NAME}.
+    # where dnspatch.toml refers to it as ${NAME}. DNSPATCH_LOG_LEVEL=debug in
+    # .env turns on debug logging.
     env_file: .env
 
     volumes:
