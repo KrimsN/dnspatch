@@ -230,9 +230,25 @@ func TestProxyParameterIsDocumented(t *testing.T) {
 	}
 
 	doc := field.Tag.Get("doc")
-	for _, want := range []string{"socks5", "socks5h", "https", "retriever"} {
+	for _, want := range []string{"socks5", "socks5h", "https", "direct", "retriever"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("proxy doc does not mention %q: %s", want, doc)
 		}
+	}
+}
+
+func TestProxyDirectIgnoresEnvironment(t *testing.T) {
+	cfg := Config{Username: "u", Password: "p", Zone: "example.com", RRName: "home", BaseURL: "https://api.test"}
+	cfg.Proxy = "direct"
+
+	p := realProvider(t, cfg)
+	if p.client.Transport.(*http.Transport).Proxy != nil {
+		t.Error("direct must leave the transport without a proxy function, so the environment is ignored")
+	}
+
+	cfg.Proxy = ""
+	p = realProvider(t, cfg)
+	if p.client.Transport.(*http.Transport).Proxy == nil {
+		t.Error("an empty proxy must keep following the environment")
 	}
 }

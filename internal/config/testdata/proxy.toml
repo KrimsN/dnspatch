@@ -3,10 +3,14 @@
 # and password, comes from the environment so that it stays out of this file.
 interval = "5m"
 
-# The retriever has no proxy parameter: it always connects directly, so that it
-# reports the address of this host and not the address of the proxy.
+# A retriever connects without a proxy unless it is given one; it reports the
+# address the service sees, and behind a proxy that is the proxy's address.
 [retriever.home]
 type = "ifconfigco"
+
+[retriever.via-vps]
+type  = "ifconfigco"
+proxy = "${PROXY_URL}"
 
 [provider.regru]
 type     = "regru"
@@ -32,8 +36,19 @@ ref     = "regru"
 rr_name = "www"
 proxy   = "https://proxy.example.net:8443"
 
-# ...or the default behaviour: direct, unless the environment names a proxy.
+# ...or no proxy at all, whatever HTTP_PROXY and HTTPS_PROXY say.
 [[instance.provider]]
 ref     = "regru"
 rr_name = "direct"
-proxy   = ""
+proxy   = "direct"
+
+[[instance]]
+name = "vps"
+
+# The definition's proxy, replaced for this reference.
+[instance.retriever]
+ref   = "via-vps"
+proxy = "socks5://other.example.net:1080"
+
+[[instance.provider]]
+ref = "regru"
