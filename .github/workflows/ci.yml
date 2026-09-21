@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: build & test (${{ matrix.os }})
+    name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +26,17 @@ jobs:
       # The tests include a check that docs/PARAMETERS.md and config.toml.example
       # match the plugin tags; run `go generate ./...` if it fails.
       - run: go test -race ./...
+
+  # Branch protection requires a check named "build & test". The matrix above
+  # names its jobs after the OS, so this job stands in for all of them and
+  # keeps the required name stable when the matrix changes.
+  test-result:
+    name: build & test
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = success
 
   lint:
     name: golangci-lint
