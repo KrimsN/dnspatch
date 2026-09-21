@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -258,11 +259,62 @@ func TestSetIPAddressRefusesAmbiguousRecords(t *testing.T) {
 	)
 
 	err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
-	if err == nil || !strings.Contains(err.Error(), "2 A records") {
+	if err == nil || !strings.Contains(err.Error(), "2 A records") || !strings.Contains(err.Error(), "none is 203.0.113.7") {
 		t.Fatalf("error = %v", err)
 	}
 	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records" {
 		t.Errorf("calls = %s, want no writes", got)
+	}
+}
+
+func TestSetIPAddressRemovesStaleRecordsNextToCurrentOne(t *testing.T) {
+	api, srv := newFakeAPI(t,
+		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"},
+		resourceRecord{Subname: "home", Rectype: "A", Content: "203.0.113.7"},
+		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.2"},
+		resourceRecord{Subname: "www", Rectype: "A", Content: "198.51.100.1"},
+		resourceRecord{Subname: "home", Rectype: "AAAA", Content: "2001:db8::1"},
+	)
+
+	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records zone/remove_record zone/remove_record" {
+		t.Fatalf("calls = %s, want removals and no add", got)
+	}
+
+	want := map[string]string{"home/A": "203.0.113.7", "www/A": "198.51.100.1", "home/AAAA": "2001:db8::1"}
+	if len(api.rrs) != len(want) {
+		t.Fatalf("records = %+v", api.rrs)
+	}
+	for _, rr := range api.rrs {
+		if key := rr.Subname + "/" + rr.Rectype; want[key] != rr.Content {
+			t.Errorf("record %s = %s, want %s", key, rr.Content, want[key])
+		}
+	}
+}
+
+func TestSetIPAddressHealsAfterFailedRemoval(t *testing.T) {
+	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"})
+	p := mustProvider(t, testConfig(srv), srv)
+
+	// The add goes through and the removal fails: both records stay in the zone.
+	api.failWith["zone/remove_record"] = "try again later"
+	if err := p.SetIPAddress(context.Background(), v4); err == nil || !strings.Contains(err.Error(), "try again later") {
+		t.Fatalf("first attempt: error = %v", err)
+	}
+	if len(api.rrs) != 2 {
+		t.Fatalf("records after the failed replacement = %+v, want both", api.rrs)
+	}
+
+	// The next attempt must not be stuck on the two records.
+	delete(api.failWith, "zone/remove_record")
+	if err := p.SetIPAddress(context.Background(), v4); err != nil {
+		t.Fatalf("second attempt: %v", err)
+	}
+	if len(api.rrs) != 1 || api.rrs[0].Content != "203.0.113.7" {
+		t.Errorf("records = %+v, want only the new one", api.rrs)
 	}
 }
 
@@ -354,6 +406,29 @@ func TestSetIPAddressCancelled(t *testing.T) {
 	}
 }
 
+func TestSetIPAddressDoesNotFollowRedirects(t *testing.T) {
+	var leaked atomic.Bool
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.FormValue("password") != "" {
+			leaked.Store(true)
+		}
+		http.Error(w, "should not be reached", http.StatusTeapot)
+	}))
+	defer target.Close()
+
+	origin := httptest.NewServer(http.RedirectHandler(target.URL+"/zone/get_resource_records", http.StatusTemporaryRedirect))
+	defer origin.Close()
+
+	err := mustProvider(t, testConfig(origin), origin).SetIPAddress(context.Background(), v4)
+	if err == nil || !strings.Contains(err.Error(), "307") {
+		t.Errorf("error = %v, want the redirect reported as an unexpected status", err)
+	}
+	if leaked.Load() {
+		t.Error("the password was sent to the redirect target")
+	}
+}
+
 func TestNewProviderValidation(t *testing.T) {
 	valid := Config{Username: "u", Password: "p", Zone: "example.com", RRName: "home", BaseURL: "https://api.test"}
 
@@ -367,6 +442,8 @@ func TestNewProviderValidation(t *testing.T) {
 		{"empty rr_name", func(c *Config) { c.RRName = " " }, "rr_name"},
 		{"rr_name with a trailing dot", func(c *Config) { c.RRName = "home." }, "rr_name"},
 		{"bad base_url", func(c *Config) { c.BaseURL = "api.test" }, "base_url"},
+		{"base_url with a login", func(c *Config) { c.BaseURL = "ftp://user:" + testPass + "@api.test" }, "base_url"},
+		{"unparsable base_url with a password", func(c *Config) { c.BaseURL = "https://user:" + testPass + "@api.test/%zz" }, "base_url"},
 	}
 
 	for _, tt := range tests {
@@ -374,8 +451,12 @@ func TestNewProviderValidation(t *testing.T) {
 			cfg := valid
 			tt.mutate(&cfg)
 
-			if _, err := newProvider(cfg, nil); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("error = %v, want it to contain %q", err, tt.wantErr)
+			_, err := newProvider(cfg, nil)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
+			}
+			if strings.Contains(err.Error(), testPass) {
+				t.Errorf("error leaks the password: %v", err)
 			}
 		})
 	}

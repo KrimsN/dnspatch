@@ -118,6 +118,8 @@ func TestNewRetrieverValidation(t *testing.T) {
 	}{
 		{name: "bad family", cfg: Config{BaseURL: "https://ifconfig.co", Family: "both"}, wantErr: "family"},
 		{name: "bad url", cfg: Config{BaseURL: "ifconfig.co", Family: "ipv4"}, wantErr: "base_url"},
+		{name: "bad url with a login", cfg: Config{BaseURL: "ftp://user:hunter2@ifconfig.co", Family: "ipv4"}, wantErr: "base_url"},
+		{name: "unparsable url with a password", cfg: Config{BaseURL: "https://user:hunter2@ifconfig.co/%zz", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "family is case-insensitive", cfg: Config{BaseURL: "https://ifconfig.co", Family: "IPv6"}},
 	}
 
@@ -132,6 +134,9 @@ func TestNewRetrieverValidation(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
+			}
+			if strings.Contains(err.Error(), "hunter2") {
+				t.Errorf("error leaks the password from base_url: %v", err)
 			}
 		})
 	}

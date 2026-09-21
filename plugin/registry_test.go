@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KrimsN/dnspatch/plugin"
@@ -165,8 +166,13 @@ func TestRegistrationRejectsNilConstructor(t *testing.T) {
 	plugin.RegisterProviderIn(plugin.NewRegistry(), "fake", (func(fakeConfig) (plugin.Provider, error))(nil))
 }
 
+// defaultRuns numbers the runs of TestPackageRegistrationWritesToDefault: Default
+// cannot be emptied, so under -count or -shuffle each run registers a name of
+// its own instead of colliding with the previous one.
+var defaultRuns atomic.Int64
+
 func TestPackageRegistrationWritesToDefault(t *testing.T) {
-	const name = "package-level-test-provider"
+	name := fmt.Sprintf("package-level-test-provider-%d", defaultRuns.Add(1))
 
 	plugin.RegisterProvider(name, newProvider)
 
