@@ -33,6 +33,40 @@ most likely to need one.
 `feat`, `fix` and `perf` commits appear in the release notes; every other type
 is filtered out by `.goreleaser.yaml`.
 
+## Issues, branches and Linear
+
+Bug reports, questions and ideas go to [GitHub Issues](https://github.com/KrimsN/dnspatch/issues).
+That is all an outside contributor needs.
+
+The maintainer plans the work in [Linear](https://linear.app), a task tracker: a
+project `dnspatch` in a team whose key is `DNS`. Every planned task there is an
+issue with an ID such as `DNS-13`, and the pull requests of this repository
+refer to those IDs, which is why you will see them in branch names and PR
+descriptions. The board is the maintainer's working tool; you do not need
+access to it, and nothing in this repository depends on it.
+
+If you have no Linear ID, name the branch `<type>/<slug>` with the same types as
+commits (`feat/retry-after`, `fix/regru-timeout`) and leave the `Linear:` line
+out of the description. The maintainer links the pull request to a task, if it
+belongs to one.
+
+For work that does belong to a task, the convention is:
+
+- **Branch:** `<type>/dns-<N>-<slug>`, for example `fix/dns-13-review-e`. The
+  type is the commit type from the table above, `<N>` is the number of the
+  issue. Linear recognises the ID in the branch name and attaches the pull
+  request to the issue by itself.
+- **Pull request description:** a line `Linear: DNS-<N>`. Write `Closes DNS-<N>`
+  when the pull request finishes the task, so that merging it closes the issue,
+  and `Part of DNS-<N>` when more pull requests are to follow. Both are Linear's
+  keywords; either way the issue links back to the pull request.
+- **Pull request title:** the Conventional Commits title, without the ID. The
+  title ends up in the release notes, and `DNS-13` means nothing to a reader
+  outside the tracker.
+
+Pull requests without a task, such as dependency bumps from Dependabot and
+maintenance of the workflows, carry no ID.
+
 ## Pull requests
 
 The pull request title follows the same convention — it becomes the subject of
