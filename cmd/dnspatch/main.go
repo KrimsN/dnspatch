@@ -21,9 +21,9 @@ import (
 // Exit codes. A configuration problem is told apart from a runtime failure
 // so that service managers and scripts can react to them differently.
 const (
-	exitOK      = 0
-	exitFailure = 1
-	exitConfig  = 2
+	exitOK int = iota
+	exitFailure
+	exitConfig
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

@@ -8,5 +8,6 @@ package all
 import (
 	// Built-in plugins register themselves in init.
 	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"
+	_ "github.com/KrimsN/dnspatch/plugins/regru"
 	_ "github.com/KrimsN/dnspatch/plugins/selectelv1"
 )
