@@ -222,3 +222,48 @@ func TestConcurrentRegistrationAndBuild(t *testing.T) {
 		t.Errorf("registered retrievers = %d, want 16", got)
 	}
 }
+
+func TestRegistrationRejectsNonStructConfig(t *testing.T) {
+	tests := map[string]func(){
+		"string": func() {
+			plugin.RegisterProviderIn(plugin.NewRegistry(), "fake", func(string) (plugin.Provider, error) { return nil, nil })
+		},
+		"pointer to struct": func() {
+			plugin.RegisterRetrieverIn(plugin.NewRegistry(), "fake", func(*fakeConfig) (plugin.Retriever, error) { return nil, nil })
+		},
+	}
+
+	for name, register := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					t.Fatal("registering a non-struct configuration did not panic")
+				}
+				if !strings.Contains(fmt.Sprint(recovered), "is not a struct") {
+					t.Errorf("panic = %v, want it to say the type is not a struct", recovered)
+				}
+			}()
+
+			register()
+		})
+	}
+}
+
+func TestZeroRegistryIsUsable(t *testing.T) {
+	var registry plugin.Registry
+
+	if _, err := registry.BuildProvider("fake", nil); err == nil || !strings.Contains(err.Error(), "no provider types are registered") {
+		t.Errorf("BuildProvider on an empty registry: error = %v, want the unknown-type error", err)
+	}
+
+	plugin.RegisterProviderIn(&registry, "fake", newProvider)
+	plugin.RegisterRetrieverIn(&registry, "fake", newRetriever)
+
+	if _, err := registry.BuildProvider("fake", map[string]any{"token": "secret"}); err != nil {
+		t.Errorf("BuildProvider: %v", err)
+	}
+	if _, err := registry.BuildRetriever("fake", map[string]any{"token": "secret"}); err != nil {
+		t.Errorf("BuildRetriever: %v", err)
+	}
+}
