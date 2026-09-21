@@ -59,13 +59,12 @@ release:
   footer: |
     ## Install
 
-    **Docker** ([Docker Hub](https://hub.docker.com/r/krimsn/dnspatch)), for `linux/amd64`, `linux/arm64` and `linux/arm/v7`:
+    **Docker**, for `linux/amd64`, `linux/arm64` and `linux/arm/v7`. The same tags are on [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) and on the GitHub Container Registry:
 
     ```sh
     docker pull krimsn/dnspatch:{{ .Version }}
+    docker pull ghcr.io/krimsn/dnspatch:{{ .Version }}
     ```
-
-    The same tags are mirrored to `ghcr.io/krimsn/dnspatch`.
 
     **Go:**
 
