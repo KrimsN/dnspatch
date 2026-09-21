@@ -1,0 +1,58 @@
+# Polling interval used by instances that do not set their own.
+interval = "5m"
+
+# Retriever definitions, referenced by instances through "ref".
+[retriever.home]
+type = "ifconfigco"
+
+[retriever.office]
+type       = "unifi"
+base_url   = "https://10.0.0.1"
+verify_tls = false
+api_token  = "${UNIFI_TOKEN}"
+
+# Provider definitions. Any parameter can be overridden per instance.
+[provider.selectel-main]
+type      = "selectel"
+api_token = "${SELECTEL_TOKEN}"
+zone      = "homelab.com"
+rr_name   = "@"
+ttl       = 60
+
+[provider.spaceship]
+type    = "spaceship"
+api_key = "literal $${NOT_EXPANDED}"
+zone    = "example.org"
+rr_name = "*"
+
+# An instance ties one retriever to one or more providers.
+[[instance]]
+name     = "homelab"
+interval = "30s"
+
+[instance.retriever]
+ref = "home"
+
+[[instance.provider]]
+ref = "selectel-main"
+
+# The same definition again, for a second zone.
+[[instance.provider]]
+ref     = "selectel-main"
+zone    = "homelab.net"
+rr_name = "sub"
+
+[[instance.provider]]
+ref = "spaceship"
+
+# No interval: falls back to the global one.
+[[instance]]
+name = "office"
+
+[instance.retriever]
+ref = "office"
+verify_tls = true
+
+[[instance.provider]]
+ref  = "selectel-main"
+zone = "office.com"
