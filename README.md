@@ -45,6 +45,22 @@ Addresses are passed as `netip.Addr`, so providers pick the record type themselv
 
 TOML. DNS record names routinely contain `@` and `*`, which YAML reserves, and plugin parameters are loosely typed — TOML avoids both hazards.
 
+### Reaching a DNS API through a proxy
+
+Some DNS APIs only accept requests from a fixed address, which does not fit a daemon on a dynamic one. Run a proxy on a small host with a static address, allow that address in the provider's API settings, and give the provider a `proxy` parameter:
+
+```toml
+[provider.regru]
+type  = "regru"
+proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
+# ...
+```
+
+- Supported schemes are `socks5`, `socks5h`, `http` and `https`, with an optional `user:pass@`; percent-encode special characters in them. With `socks5` and `socks5h` the proxy resolves the API host name.
+- The parameter belongs to providers only. Retrievers always connect directly, ignoring `HTTP_PROXY` and `HTTPS_PROXY` too: through a proxy they would report the address of the proxy, and that is what would end up in DNS.
+- Without `proxy`, a provider connects the way Go does by default, so `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` from the environment apply. With it, the environment is ignored.
+- A malformed URL stops the daemon at startup. The URL is never printed in logs or errors, since it may hold a password.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

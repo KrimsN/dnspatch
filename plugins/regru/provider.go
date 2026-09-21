@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/KrimsN/dnspatch/internal/httpx"
 )
 
 const (
@@ -54,8 +56,8 @@ type envelope struct {
 	} `json:"answer"`
 }
 
-// newProvider validates cfg and builds the provider. A nil client selects a
-// default one; tests pass their own.
+// newProvider validates cfg and builds the provider. A nil client selects one
+// that honours the proxy parameter; tests pass their own.
 func newProvider(cfg Config, client *http.Client) (*provider, error) {
 	zone := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(cfg.Zone)), ".")
 	if zone == "" || strings.ContainsAny(zone, "/ ") {
@@ -73,7 +75,10 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 	}
 
 	if client == nil {
-		client = &http.Client{Timeout: requestTimeout}
+		var err error
+		if client, err = httpx.NewClient(cfg.Proxy, requestTimeout); err != nil {
+			return nil, err
+		}
 	}
 
 	return &provider{
