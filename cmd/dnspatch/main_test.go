@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,13 +18,14 @@ import (
 	"github.com/KrimsN/dnspatch/plugin"
 )
 
-// fakeWorld plays both external services: the IP echo and the DNS API. It
-// counts the writes the daemon makes.
+// fakeWorld plays both external services: the IP echo and the REG.RU DNS API.
+// It keeps the contents of the A records at home.example.com and counts how
+// many records the daemon has added.
 type fakeWorld struct {
-	mu      sync.Mutex
-	ip      string
-	content string
-	writes  int
+	mu       sync.Mutex
+	ip       string
+	contents []string
+	adds     int
 }
 
 func (w *fakeWorld) setIP(ip string) {
@@ -32,34 +34,49 @@ func (w *fakeWorld) setIP(ip string) {
 	w.ip = ip
 }
 
-func (w *fakeWorld) snapshot() (content string, writes int) {
+// snapshot returns the record contents, comma-joined, and the number of adds.
+func (w *fakeWorld) snapshot() (content string, adds int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.content, w.writes
+	return strings.Join(w.contents, ","), w.adds
 }
 
 func (w *fakeWorld) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	switch {
-	case r.URL.Path == "/ip":
+	if r.URL.Path == "/ip" {
 		_, _ = fmt.Fprint(rw, w.ip)
-	case r.URL.Path == "/example.com/records" && r.Method == http.MethodGet:
-		if w.content == "" {
-			_, _ = fmt.Fprint(rw, `[]`)
-			return
+		return
+	}
+
+	var input struct {
+		Ipaddr  string `json:"ipaddr"`
+		Content string `json:"content"`
+	}
+	_ = json.Unmarshal([]byte(r.FormValue("input_data")), &input)
+
+	rrs := []map[string]string{}
+
+	switch r.URL.Path {
+	case "/zone/get_resource_records":
+		for _, content := range w.contents {
+			rrs = append(rrs, map[string]string{"subname": "home", "rectype": "A", "content": content})
 		}
-		_, _ = fmt.Fprintf(rw, `[{"id":1,"type":"A","name":"home.example.com","content":%q,"ttl":300}]`, w.content)
-	case strings.HasPrefix(r.URL.Path, "/example.com/records"):
-		var body struct{ Content string }
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		w.content = body.Content
-		w.writes++
-		_, _ = fmt.Fprint(rw, `{}`)
+	case "/zone/add_alias":
+		w.contents = append(w.contents, input.Ipaddr)
+		w.adds++
+	case "/zone/remove_record":
+		w.contents = slices.DeleteFunc(w.contents, func(content string) bool { return content == input.Content })
 	default:
 		http.NotFound(rw, r)
+		return
 	}
+
+	_ = json.NewEncoder(rw).Encode(map[string]any{
+		"result": "success",
+		"answer": map[string]any{"domains": []any{map[string]any{"dname": "example.com", "result": "success", "rrs": rrs}}},
+	})
 }
 
 func writeConfig(t *testing.T, body string) string {
@@ -86,12 +103,12 @@ type     = "ifconfigco"
 base_url = %[1]q
 
 [provider.dns]
-type      = "selectel_v1"
-api_token = "token"
-zone      = "example.com"
-rr_name   = "home"
-ttl       = 300
-base_url  = %[1]q
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+base_url = %[1]q
 
 [[instance]]
 name = "home"
@@ -117,8 +134,8 @@ ref = "dns"
 
 	// An unchanged address must not cause further writes over several ticks.
 	time.Sleep(2500 * time.Millisecond)
-	if _, writes := world.snapshot(); writes != 1 {
-		t.Errorf("writes after unchanged ticks = %d, want 1", writes)
+	if _, adds := world.snapshot(); adds != 1 {
+		t.Errorf("records added after unchanged ticks = %d, want 1", adds)
 	}
 
 	// A new address is picked up on a later tick.
@@ -167,7 +184,8 @@ ref = "dns"
 [retriever.echo]
 type = "ifconfigco"
 [provider.dns]
-type = "selectel_v1"
+type = "regru"
+username = "user"
 zone = "example.com"
 rr_name = "home"
 [[instance]]
@@ -177,7 +195,7 @@ ref = "echo"
 [[instance.provider]]
 ref = "dns"
 `,
-			wantErr: "api_token",
+			wantErr: "password",
 		},
 	}
 
