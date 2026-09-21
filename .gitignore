@@ -1,7 +1,7 @@
-# Локальная конфигурация — содержит API-токены
+# Local configuration, holds API tokens
 config.toml
 
-# Сборка
+# Build output
 /dnspatch
 /dnspatch.exe
 /dist/

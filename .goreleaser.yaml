@@ -1,0 +1,49 @@
+# Release build configuration. Validate with: goreleaser check
+version: 2
+
+project_name: dnspatch
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dnspatch
+    main: ./cmd/dnspatch
+    binary: dnspatch
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    # Conventional Commits types that do not belong in release notes,
+    # with or without a scope. See CONTRIBUTING.md
+    exclude:
+      - '^(docs|test|ci|build|chore|refactor|style)(\([^)]*\))?!?:'
+
+release:
+  draft: false
+  prerelease: auto
+
+# TODO: ghcr.io image via dockers_v2, once a Dockerfile exists.
