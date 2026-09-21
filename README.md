@@ -1,6 +1,14 @@
 # dnspatch
 
+[![CI](https://img.shields.io/github/actions/workflow/status/KrimsN/dnspatch/ci.yml?branch=main&label=CI)](https://github.com/KrimsN/dnspatch/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/KrimsN/dnspatch)](https://github.com/KrimsN/dnspatch/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/KrimsN/dnspatch.svg)](https://pkg.go.dev/github.com/KrimsN/dnspatch)
+[![Docker pulls](https://img.shields.io/docker/pulls/krimsn/dnspatch)](https://hub.docker.com/r/krimsn/dnspatch)
+[![License](https://img.shields.io/github/license/KrimsN/dnspatch)](LICENSE)
+
 A dynamic DNS daemon in Go: it watches your public IP address and patches your DNS records when it changes.
+
+[Releases](https://github.com/KrimsN/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/KrimsN/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/KrimsN/dnspatch) · [Issues](https://github.com/KrimsN/dnspatch/issues)
 
 - One static binary or a container image of a few megabytes, no runtime dependencies.
 - Several independent instances in one process: track more than one site, update more than one provider.

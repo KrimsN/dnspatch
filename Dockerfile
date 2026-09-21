@@ -35,6 +35,16 @@ FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c
 
 COPY --from=build /out/dnspatch /usr/local/bin/dnspatch
 
+# The release workflow overwrites title, description, source and licenses with
+# the values of the GitHub repository (docker/metadata-action) and adds version,
+# revision and created; the same values are here so that a local build is
+# labelled too. "source" is also what links the ghcr.io package to the repository.
+LABEL org.opencontainers.image.title="dnspatch" \
+      org.opencontainers.image.description="Dynamic DNS daemon in Go with a pluggable retriever/provider architecture" \
+      org.opencontainers.image.source="https://github.com/KrimsN/dnspatch" \
+      org.opencontainers.image.documentation="https://pkg.go.dev/github.com/KrimsN/dnspatch" \
+      org.opencontainers.image.licenses="MIT"
+
 USER nonroot:nonroot
 
 # The daemon looks for /etc/dnspatch/config.toml on its own; mount the file there.
