@@ -18,13 +18,32 @@ services:
     # Every variable of .env becomes an environment variable of the container,
     # where dnspatch.toml refers to it as ${NAME}. DNSPATCH_LOG_LEVEL=debug in
     # .env turns on debug logging.
+    #
+    # The values are visible to anyone who can run `docker inspect` on the
+    # container, so access to the Docker daemon is access to the secrets.
     env_file: .env
 
     volumes:
       # The daemon reads /etc/dnspatch/config.toml on its own. The container
       # runs as an unprivileged user (uid 65532), so the file has to be
       # readable by everyone on the host: chmod 644 dnspatch.toml
+      #
+      # Because of that, no password or token belongs in dnspatch.toml itself:
+      # write ${NAME} there and put the value in .env, which stays private.
       - ./dnspatch.toml:/etc/dnspatch/config.toml:ro
+
+    # Docker keeps container logs without limit by default, and a daemon that
+    # runs for months fills the disk with them.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # The default bridge network of Docker has no IPv6. A retriever with
+    # family = "ipv6" cannot reach ifconfig.co from it and fails on every tick.
+    # For that, give the container an IPv6 network, or on Linux run it with
+    # `network_mode: host`.
 
     read_only: true
     cap_drop: [ALL]

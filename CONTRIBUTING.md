@@ -47,6 +47,10 @@ go test -race ./...
 golangci-lint run ./...
 ```
 
+CI also runs `govulncheck` on the newest Go release. The Go standard library is
+part of the binary, so an old local toolchain can report fixed bugs of it; update
+Go before treating such a finding as yours.
+
 ## Writing a plugin
 
 A plugin is a package under `plugins/` with a configuration struct and a
