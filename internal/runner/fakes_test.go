@@ -1,0 +1,217 @@
+package runner
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"net/netip"
+	"sync"
+	"testing"
+	"time"
+)
+
+var epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// fakeClock is a Clock whose time only moves when a test calls Advance.
+type fakeClock struct {
+	mu     sync.Mutex
+	now    time.Time
+	timers []*fakeTimer
+}
+
+type fakeTimer struct {
+	clock  *fakeClock
+	when   time.Time
+	period time.Duration // zero for one-shot timers
+	ch     chan time.Time
+	fn     func()
+	active bool
+}
+
+func newFakeClock() *fakeClock { return &fakeClock{now: epoch} }
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeClock) NewTicker(d time.Duration) Ticker {
+	return fakeTicker{c.add(&fakeTimer{period: d, when: c.Now().Add(d), ch: make(chan time.Time, 1)})}
+}
+
+// fakeTicker adapts fakeTimer to Ticker, whose Stop has no result.
+type fakeTicker struct{ *fakeTimer }
+
+func (t fakeTicker) Stop() { t.fakeTimer.Stop() }
+
+func (c *fakeClock) AfterFunc(d time.Duration, f func()) Timer {
+	return c.add(&fakeTimer{when: c.Now().Add(d), fn: f})
+}
+
+func (c *fakeClock) add(t *fakeTimer) *fakeTimer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t.clock, t.active = c, true
+	c.timers = append(c.timers, t)
+	return t
+}
+
+// Advance moves time forward, firing every timer that falls due on the way in
+// chronological order.
+func (c *fakeClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	target := c.now.Add(d)
+	for {
+		var next *fakeTimer
+		for _, t := range c.timers {
+			if t.active && !t.when.After(target) && (next == nil || t.when.Before(next.when)) {
+				next = t
+			}
+		}
+		if next == nil {
+			break
+		}
+		c.now = next.when
+		if next.period > 0 {
+			select {
+			case next.ch <- c.now:
+			default:
+			}
+			next.when = next.when.Add(next.period)
+			continue
+		}
+		next.active = false
+		c.mu.Unlock()
+		next.fn()
+		c.mu.Lock()
+	}
+	c.now = target
+}
+
+func (t *fakeTimer) C() <-chan time.Time { return t.ch }
+
+func (t *fakeTimer) Stop() bool {
+	t.clock.mu.Lock()
+	defer t.clock.mu.Unlock()
+	was := t.active
+	t.active = false
+	return was
+}
+
+// fakeRetriever returns a configurable address or error.
+type fakeRetriever struct {
+	mu   sync.Mutex
+	addr netip.Addr
+	err  error
+}
+
+func newFakeRetriever(addr string) *fakeRetriever {
+	return &fakeRetriever{addr: netip.MustParseAddr(addr)}
+}
+
+func (r *fakeRetriever) set(addr string, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.addr, r.err = netip.MustParseAddr(addr), err
+}
+
+func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.addr, r.err
+}
+
+// fakeProvider records every write and fails or blocks on demand.
+type fakeProvider struct {
+	mu     sync.Mutex
+	writes []netip.Addr
+	// fail is consulted with the 1-based call number; a non-nil result is
+	// returned to the runner.
+	fail func(call int) error
+	// block makes the provider wait for its context instead of returning.
+	block  bool
+	called chan netip.Addr
+}
+
+func newFakeProvider() *fakeProvider {
+	return &fakeProvider{called: make(chan netip.Addr, 1000)}
+}
+
+func (p *fakeProvider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
+	p.mu.Lock()
+	p.writes = append(p.writes, addr)
+	call := len(p.writes)
+	fail, block := p.fail, p.block
+	p.mu.Unlock()
+	p.called <- addr
+
+	if block {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if fail != nil {
+		return fail(call)
+	}
+	return nil
+}
+
+func (p *fakeProvider) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.writes)
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// newTestInstance builds an instance on a fake clock with silent logging and
+// no random jitter.
+func newTestInstance(clock Clock, interval time.Duration, r *fakeRetriever, providers ...*fakeProvider) *instance {
+	cfg := Instance{Name: "test", Interval: interval, Retriever: r}
+	for i, p := range providers {
+		cfg.Providers = append(cfg.Providers, NamedProvider{Name: string(rune('a' + i)), Provider: p})
+	}
+	in := newInstance(cfg, Options{Logger: discardLogger(), Clock: clock, AttemptTimeout: DefaultAttemptTimeout})
+	in.jitter = func(int64) int64 { return 0 }
+	return in
+}
+
+func receive[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the event")
+		panic("unreachable")
+	}
+}
+
+// settle waits until no attempt deadline is pending, that is until every
+// in-flight retrieval or write has finished. Tests call it before Advance so
+// that the advance cannot fire a deadline of a call still on its way out.
+func (c *fakeClock) settle(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for c.pendingDeadlines() > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("attempts did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (c *fakeClock) pendingDeadlines() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, t := range c.timers {
+		if t.active && t.period == 0 {
+			n++
+		}
+	}
+	return n
+}

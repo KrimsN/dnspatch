@@ -14,6 +14,17 @@ dnspatch is built around three concepts:
 
 Instances run independently, so several sites or networks can be tracked at once.
 
+### Failure handling
+
+- Providers of an instance are updated independently: one failing provider never stops the others (a stuck one delays the rest of the tick by at most its 30-second deadline).
+- A provider is written only when the address differs from the last one it accepted; a failed provider is retried on later ticks, the others are left alone.
+- A failing provider is retried with exponential backoff and jitter: the delay is at most the polling interval after the first failure (at least half of it) and its ceiling doubles with every further failure, up to 30 minutes (or the interval, if that is longer).
+- Every retrieval and every write has a 30-second deadline.
+
+### State is not persisted
+
+The last written address is kept in memory only. After a restart the first tick writes the current address to every provider, and a provider that was backing off is tried again immediately. This costs one API call per provider per restart and is intended.
+
 ## Extensibility
 
 The `plugin` package is public on purpose. Writing a retriever or a provider means implementing a two-method interface and registering it — either upstream in this repository, or in your own module with your own `main`:
