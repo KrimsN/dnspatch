@@ -26,7 +26,9 @@ func assignValue(field reflect.Value, raw any, key string) error {
 
 	rawValue := reflect.ValueOf(raw)
 	if rawValue.Type() == field.Type() {
-		field.Set(rawValue)
+		// Copy, so that the configuration does not alias the caller's map:
+		// the caller may reuse it, for example to merge definitions.
+		field.Set(deepCopy(rawValue))
 
 		return nil
 	}
@@ -61,6 +63,56 @@ func assignValue(field reflect.Value, raw any, key string) error {
 		return decodeStruct(field, nested, key+".")
 	default:
 		return assignBasic(field, raw, key)
+	}
+}
+
+// deepCopy returns a copy of v that shares no slice, map or pointer with it.
+// Structs are copied by value, which is enough for the types a TOML parser
+// produces.
+func deepCopy(v reflect.Value) reflect.Value {
+	switch v.Kind() {
+	case reflect.Slice:
+		if v.IsNil() {
+			return v
+		}
+
+		clone := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		for i := range v.Len() {
+			clone.Index(i).Set(deepCopy(v.Index(i)))
+		}
+
+		return clone
+	case reflect.Map:
+		if v.IsNil() {
+			return v
+		}
+
+		clone := reflect.MakeMapWithSize(v.Type(), v.Len())
+		for iter := v.MapRange(); iter.Next(); {
+			clone.SetMapIndex(iter.Key(), deepCopy(iter.Value()))
+		}
+
+		return clone
+	case reflect.Pointer:
+		if v.IsNil() {
+			return v
+		}
+
+		clone := reflect.New(v.Type().Elem())
+		clone.Elem().Set(deepCopy(v.Elem()))
+
+		return clone
+	case reflect.Interface:
+		if v.IsNil() {
+			return v
+		}
+
+		clone := reflect.New(v.Type()).Elem()
+		clone.Set(deepCopy(v.Elem()))
+
+		return clone
+	default:
+		return v
 	}
 }
 

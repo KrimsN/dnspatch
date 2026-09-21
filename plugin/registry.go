@@ -8,11 +8,11 @@ import (
 	"sync"
 )
 
-// ProviderFactory builds a Provider from raw configuration parameters.
-type ProviderFactory func(params map[string]any) (Provider, error)
+// providerFactory builds a Provider from raw configuration parameters.
+type providerFactory func(params map[string]any) (Provider, error)
 
-// RetrieverFactory builds a Retriever from raw configuration parameters.
-type RetrieverFactory func(params map[string]any) (Retriever, error)
+// retrieverFactory builds a Retriever from raw configuration parameters.
+type retrieverFactory func(params map[string]any) (Retriever, error)
 
 // entry[F] is one registered plugin: its factory and the type of its
 // configuration struct, kept for documentation generation.
@@ -21,12 +21,13 @@ type entry[F any] struct {
 	configType reflect.Type
 }
 
-// Registry maps plugin type names to factories. The zero Registry is not
-// usable; create one with NewRegistry. A Registry is safe for concurrent use.
+// Registry maps plugin type names to factories. The zero Registry is empty and
+// ready to use. A Registry is safe for concurrent use and must not be copied
+// after first use.
 type Registry struct {
 	mu         sync.RWMutex
-	providers  map[string]entry[ProviderFactory]
-	retrievers map[string]entry[RetrieverFactory]
+	providers  map[string]entry[providerFactory]
+	retrievers map[string]entry[retrieverFactory]
 }
 
 // Default is the package-level registry that built-in plugins register into
@@ -37,18 +38,16 @@ var Default = NewRegistry()
 // programs that embed dnspatch as a library use it to control exactly which
 // plugins are available.
 func NewRegistry() *Registry {
-	return &Registry{
-		providers:  make(map[string]entry[ProviderFactory]),
-		retrievers: make(map[string]entry[RetrieverFactory]),
-	}
+	return &Registry{}
 }
 
 // RegisterProvider registers a provider type in Default.
 //
 // C is the plugin's configuration struct; parameters from the configuration
 // file are decoded into it with Decode before build is called. It panics if
-// name is empty, build is nil or name is already registered, since all three
-// are programming errors that surface at process start.
+// name is empty, build is nil, C is not a struct or name is already
+// registered, since all four are programming errors that surface at process
+// start.
 func RegisterProvider[C any](name string, build func(cfg C) (Provider, error)) {
 	RegisterProviderIn(Default, name, build)
 }
@@ -61,7 +60,7 @@ func RegisterRetriever[C any](name string, build func(cfg C) (Retriever, error))
 // RegisterProviderIn registers a provider type in the given registry.
 // See RegisterProvider.
 func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (Provider, error)) {
-	checkRegistration("provider", name, build == nil)
+	checkRegistration[C]("provider", name, build == nil)
 
 	factory := func(params map[string]any) (Provider, error) {
 		cfg, err := Decode[C](params)
@@ -71,19 +70,13 @@ func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (Prov
 		return build(cfg)
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.providers[name]; ok {
-		panic(fmt.Sprintf("plugin: provider %q is already registered", name))
-	}
-	r.providers[name] = entry[ProviderFactory]{factory: factory, configType: reflect.TypeFor[C]()}
+	register(&r.mu, &r.providers, "provider", name, entry[providerFactory]{factory: factory, configType: reflect.TypeFor[C]()})
 }
 
 // RegisterRetrieverIn registers a retriever type in the given registry.
 // See RegisterProvider.
 func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Retriever, error)) {
-	checkRegistration("retriever", name, build == nil)
+	checkRegistration[C]("retriever", name, build == nil)
 
 	factory := func(params map[string]any) (Retriever, error) {
 		cfg, err := Decode[C](params)
@@ -93,23 +86,39 @@ func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Ret
 		return build(cfg)
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.retrievers[name]; ok {
-		panic(fmt.Sprintf("plugin: retriever %q is already registered", name))
-	}
-	r.retrievers[name] = entry[RetrieverFactory]{factory: factory, configType: reflect.TypeFor[C]()}
+	register(&r.mu, &r.retrievers, "retriever", name, entry[retrieverFactory]{factory: factory, configType: reflect.TypeFor[C]()})
 }
 
-// checkRegistration rejects registration arguments that cannot work.
-func checkRegistration(kind, name string, nilBuild bool) {
+// checkRegistration rejects registration arguments that cannot work. C is the
+// configuration type: Decode cannot fill anything but a struct, and catching
+// that here beats an error on the first configuration file that names the
+// plugin.
+func checkRegistration[C any](kind, name string, nilBuild bool) {
 	if name == "" {
 		panic("plugin: " + kind + " name is empty")
 	}
 	if nilBuild {
 		panic(fmt.Sprintf("plugin: %s %q has a nil constructor", kind, name))
 	}
+	if t := reflect.TypeFor[C](); t.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("plugin: %s %q: configuration type %s is not a struct", kind, name, t))
+	}
+}
+
+// register adds an entry to one of the registry's maps, creating the map on
+// first use so that the zero Registry works.
+func register[F any](mu *sync.RWMutex, entries *map[string]entry[F], kind, name string, e entry[F]) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if *entries == nil {
+		*entries = make(map[string]entry[F])
+	}
+
+	if _, ok := (*entries)[name]; ok {
+		panic(fmt.Sprintf("plugin: %s %q is already registered", kind, name))
+	}
+	(*entries)[name] = e
 }
 
 // BuildProvider builds the provider registered under name, decoding params
@@ -117,7 +126,10 @@ func checkRegistration(kind, name string, nilBuild bool) {
 func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, error) {
 	r.mu.RLock()
 	found, ok := r.providers[name]
-	names := keysOf(r.providers)
+	var names []string
+	if !ok {
+		names = keysOf(r.providers)
+	}
 	r.mu.RUnlock()
 
 	if !ok {
@@ -137,7 +149,10 @@ func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, 
 func (r *Registry) BuildRetriever(name string, params map[string]any) (Retriever, error) {
 	r.mu.RLock()
 	found, ok := r.retrievers[name]
-	names := keysOf(r.retrievers)
+	var names []string
+	if !ok {
+		names = keysOf(r.retrievers)
+	}
 	r.mu.RUnlock()
 
 	if !ok {

@@ -109,20 +109,6 @@ func TestDecodeExplicitValueOverridesDefault(t *testing.T) {
 	}
 }
 
-func TestDecodeIntegerFromTOMLIsInt64(t *testing.T) {
-	cfg, err := plugin.Decode[decodeConfig](map[string]any{
-		"api_token": "secret",
-		"port":      int64(1024),
-	})
-	if err != nil {
-		t.Fatalf("Decode: %v", err)
-	}
-
-	if cfg.Port != 1024 {
-		t.Errorf("Port = %d, want 1024", cfg.Port)
-	}
-}
-
 func TestDecodeRequiredParameterMissing(t *testing.T) {
 	_, err := plugin.Decode[decodeConfig](map[string]any{"port": int64(80)})
 	if err == nil {
@@ -401,4 +387,60 @@ func TestDecodeDuplicateParameterNamePanics(t *testing.T) {
 	}()
 
 	_, _ = plugin.Decode[duplicated](map[string]any{"same": "value"})
+}
+
+type brokenDefault struct {
+	Port int `toml:"port" default:"many"`
+}
+
+func TestDecodeSkipsDefaultWhenValueIsGiven(t *testing.T) {
+	cfg, err := plugin.Decode[brokenDefault](map[string]any{"port": int64(80)})
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if cfg.Port != 80 {
+		t.Errorf("Port = %d, want the explicit 80", cfg.Port)
+	}
+}
+
+func TestDecodeReportsBrokenDefaultWhenValueIsMissing(t *testing.T) {
+	_, err := plugin.Decode[brokenDefault](nil)
+	if err == nil || !strings.Contains(err.Error(), `invalid default for parameter "port"`) {
+		t.Errorf("error = %v, want it to report the invalid default", err)
+	}
+}
+
+type loose struct {
+	List  []any          `toml:"list"`
+	Table map[string]any `toml:"table"`
+}
+
+func TestDecodeDoesNotShareMemoryWithParams(t *testing.T) {
+	params := map[string]any{
+		"list":  []any{"a", []any{"inner"}},
+		"table": map[string]any{"key": "value", "sub": map[string]any{"deep": "value"}},
+	}
+
+	cfg, err := plugin.Decode[loose](params)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	// Changing what the caller passed in, at every depth, must not reach the
+	// decoded configuration.
+	list := params["list"].([]any)
+	list[0] = "changed"
+	list[1].([]any)[0] = "changed"
+
+	table := params["table"].(map[string]any)
+	table["key"] = "changed"
+	table["sub"].(map[string]any)["deep"] = "changed"
+
+	if cfg.List[0] != "a" || cfg.List[1].([]any)[0] != "inner" {
+		t.Errorf("List = %v, want it unaffected by the caller's changes", cfg.List)
+	}
+	if cfg.Table["key"] != "value" || cfg.Table["sub"].(map[string]any)["deep"] != "value" {
+		t.Errorf("Table = %v, want it unaffected by the caller's changes", cfg.Table)
+	}
 }

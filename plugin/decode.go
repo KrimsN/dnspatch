@@ -58,7 +58,9 @@ func decodeStruct(target reflect.Value, params map[string]any, prefix string) er
 		field := target.FieldByIndex(match.spec.index)
 		name := prefix + match.spec.key
 
-		if match.spec.hasDefault {
+		// A default is a fallback: when the user gave a value it is never
+		// parsed, so a broken tag cannot fail a configuration that overrides it.
+		if match.spec.hasDefault && !match.given {
 			if err := setFromString(field, match.spec.defaultVal); err != nil {
 				return fmt.Errorf("invalid default for parameter %q: %w", name, err)
 			}
