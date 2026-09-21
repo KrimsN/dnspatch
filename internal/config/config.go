@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -309,6 +310,8 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 		inst.Providers = append(inst.Providers, plugin)
 	}
 
+	errs = append(errs, duplicateProviders(inst.Providers)...)
+
 	return inst, errs
 }
 
@@ -382,4 +385,28 @@ func definedNames(kind string, pool map[string]map[string]any) string {
 	}
 
 	return "defined: " + strings.Join(slices.Sorted(maps.Keys(pool)), ", ")
+}
+
+// duplicateProviders reports providers of one instance that were built from
+// the same definition and ended up with the same parameters: they would write
+// the same record twice on every tick. A provider that overrides a parameter,
+// such as the zone, is a different one.
+func duplicateProviders(providers []Plugin) []error {
+	var errs []error
+
+	for i, later := range providers {
+		if later.Ref == "" {
+			continue
+		}
+
+		for j, earlier := range providers[:i] {
+			if earlier.Ref == later.Ref && reflect.DeepEqual(earlier.Params, later.Params) {
+				errs = append(errs, fmt.Errorf("provider #%d repeats provider #%d: same ref %q and same parameters, the record would be written twice",
+					i+1, j+1, later.Ref))
+				break
+			}
+		}
+	}
+
+	return errs
 }

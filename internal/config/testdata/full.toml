@@ -6,21 +6,21 @@ interval = "5m"
 type = "ifconfigco"
 
 [retriever.office]
-type       = "unifi"
+type       = "example-local"
 base_url   = "https://10.0.0.1"
 verify_tls = false
-api_token  = "${UNIFI_TOKEN}"
+api_token  = "${LOCAL_TOKEN}"
 
 # Provider definitions. Any parameter can be overridden per instance.
-[provider.selectel-main]
-type      = "selectel"
-api_token = "${SELECTEL_TOKEN}"
+[provider.example-main]
+type      = "example"
+api_token = "${MAIN_TOKEN}"
 zone      = "homelab.com"
 rr_name   = "@"
 ttl       = 60
 
-[provider.spaceship]
-type    = "spaceship"
+[provider.example-alt]
+type    = "example-alt"
 api_key = "literal $${NOT_EXPANDED}"
 zone    = "example.org"
 rr_name = "*"
@@ -34,16 +34,16 @@ interval = "30s"
 ref = "home"
 
 [[instance.provider]]
-ref = "selectel-main"
+ref = "example-main"
 
 # The same definition again, for a second zone.
 [[instance.provider]]
-ref     = "selectel-main"
+ref     = "example-main"
 zone    = "homelab.net"
 rr_name = "sub"
 
 [[instance.provider]]
-ref = "spaceship"
+ref = "example-alt"
 
 # No interval: falls back to the global one.
 [[instance]]
@@ -54,5 +54,5 @@ ref = "office"
 verify_tls = true
 
 [[instance.provider]]
-ref  = "selectel-main"
+ref  = "example-main"
 zone = "office.com"

@@ -16,7 +16,7 @@ const header = `
 type = "ifconfigco"
 
 [provider.main]
-type      = "selectel"
+type      = "example"
 api_token = "secret"
 zone      = "a.com"
 rr_name   = "@"
@@ -24,8 +24,8 @@ rr_name   = "@"
 
 func setFullEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("UNIFI_TOKEN", "unifi-secret")
-	t.Setenv("SELECTEL_TOKEN", "selectel-secret")
+	t.Setenv("LOCAL_TOKEN", "local-secret")
+	t.Setenv("MAIN_TOKEN", "main-secret")
 }
 
 func loadFull(t *testing.T) Config {
@@ -96,14 +96,14 @@ func TestFullExampleParses(t *testing.T) {
 		t.Fatalf("homelab has %d providers, want 3", len(homelab.Providers))
 	}
 
-	wantSelectel := map[string]any{
-		"api_token": "selectel-secret",
+	wantMain := map[string]any{
+		"api_token": "main-secret",
 		"zone":      "homelab.com",
 		"rr_name":   "@",
 		"ttl":       int64(60),
 	}
-	if got := homelab.Providers[0].Params; !reflect.DeepEqual(got, wantSelectel) {
-		t.Errorf("homelab provider 1 params = %v, want %v", got, wantSelectel)
+	if got := homelab.Providers[0].Params; !reflect.DeepEqual(got, wantMain) {
+		t.Errorf("homelab provider 1 params = %v, want %v", got, wantMain)
 	}
 }
 
@@ -131,14 +131,14 @@ func TestOverrideWinsAndRestIsInherited(t *testing.T) {
 	wantRetriever := map[string]any{
 		"base_url":   "https://10.0.0.1",
 		"verify_tls": true, // overridden: the definition says false
-		"api_token":  "unifi-secret",
+		"api_token":  "local-secret",
 	}
 	if got := office.Retriever.Params; !reflect.DeepEqual(got, wantRetriever) {
 		t.Errorf("office retriever params = %v, want %v", got, wantRetriever)
 	}
 
 	wantProvider := map[string]any{
-		"api_token": "selectel-secret",
+		"api_token": "main-secret",
 		"zone":      "office.com", // overridden
 		"rr_name":   "@",          // inherited
 		"ttl":       int64(60),    // inherited
@@ -167,8 +167,8 @@ func TestSameDefinitionReferencedTwice(t *testing.T) {
 	providers := cfg.Instances[0].Providers
 
 	first, second := providers[0], providers[1]
-	if first.Ref != "selectel-main" || second.Ref != "selectel-main" {
-		t.Fatalf("refs = %q, %q; want both selectel-main", first.Ref, second.Ref)
+	if first.Ref != "example-main" || second.Ref != "example-main" {
+		t.Fatalf("refs = %q, %q; want both example-main", first.Ref, second.Ref)
 	}
 
 	if first.Params["zone"] != "homelab.com" || first.Params["rr_name"] != "@" {
@@ -183,7 +183,7 @@ func TestSameDefinitionReferencedTwice(t *testing.T) {
 func TestMergeSharesNoMemory(t *testing.T) {
 	newDefinition := func() map[string]any {
 		return map[string]any{
-			"type":   "selectel",
+			"type":   "example",
 			"zone":   "a.com",
 			"nested": map[string]any{"list": []any{"x"}},
 		}
@@ -229,7 +229,7 @@ func TestMergeIsShallow(t *testing.T) {
 type = "ifconfigco"
 
 [provider.main]
-type = "selectel"
+type = "example"
 opts = { a = 1, b = 2 }
 
 [[instance]]
@@ -280,7 +280,7 @@ func TestEnvExpansion(t *testing.T) {
 type = "ifconfigco"
 
 [provider.main]
-type   = "selectel"
+type   = "example"
 key    = "${TOKEN}"
 mixed  = "pre-${TOKEN}-${TOKEN}-post"
 empty  = "${EMPTY}"
@@ -336,7 +336,7 @@ func TestStructuralKeysAreNotExpanded(t *testing.T) {
 [retriever.home]
 type = "ifconfigco"
 [provider.main]
-type = "selectel"
+type = "example"
 [[instance]]
 name = "${NAME}"
 interval = "${NAME}"
@@ -361,7 +361,7 @@ func TestArrayOfTablesInParametersIsExpanded(t *testing.T) {
 type = "ifconfigco"
 
 [provider.main]
-type = "selectel"
+type = "example"
 
 [[provider.main.zones]]
 name = "${TOKEN}"
@@ -383,7 +383,7 @@ ref = "main"
 func TestUnusedDefinitionDoesNotNeedItsEnv(t *testing.T) {
 	mustParse(t, header+`
 [provider.unused]
-type      = "selectel"
+type      = "example"
 api_token = "${DNSPATCH_TEST_SURELY_UNSET}"
 
 [[instance]]
@@ -443,6 +443,29 @@ ref = "main"
 			wants: []string{`instance "a"`, `retriever is required`},
 		},
 		{
+			name: "provider repeated with the same parameters",
+			doc: instance(`[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+[[instance.provider]]
+ref = "main"
+`),
+			wants: []string{`instance "a"`, `provider #2 repeats provider #1`, `ref "main"`},
+		},
+		{
+			name: "provider repeated with an override that changes nothing",
+			doc: instance(`[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+[[instance.provider]]
+ref  = "main"
+zone = "a.com"
+`),
+			wants: []string{`provider #2 repeats provider #1`},
+		},
+		{
 			name:  "instance without providers",
 			doc:   instance("[instance.retriever]\nref = \"home\"\n"),
 			wants: []string{`instance "a"`, `at least one provider is required`},
@@ -493,7 +516,7 @@ ref = "main"
 [retriever.home]
 type = "ifconfigco"
 [provider.main]
-type = "selectel"
+type = "example"
 opts = { token = "${DNSPATCH_TEST_SURELY_UNSET}" }
 [[instance]]
 name = "a"
@@ -588,7 +611,7 @@ ref = "main"
 		},
 		{
 			name:  "definition written as an array of tables",
-			doc:   "[[provider.main]]\ntype = \"selectel\"\n",
+			doc:   "[[provider.main]]\ntype = \"example\"\n",
 			wants: []string{`provider "main" must be a table`},
 		},
 		{
@@ -658,7 +681,7 @@ ref = "main"
 			name: "ref inside a definition",
 			doc: `
 [provider.main]
-type = "selectel"
+type = "example"
 ref  = "other"
 `,
 			wants: []string{`provider "main"`, `"ref" is only valid in an instance`},
@@ -669,7 +692,7 @@ ref  = "other"
 [retriever.home]
 type = "ifconfigco"
 [provider.main]
-type = "selectel"
+type = "example"
 a = "${A-B}"
 b = "${TOKEN"
 c = "${}"
@@ -689,7 +712,7 @@ ref = "main"
 [retriever.home]
 type = "ifconfigco"
 [provider.main]
-type = "selectel"
+type = "example"
 a = "${DNSPATCH_TEST_UNSET_ONE}"
 b = ["x", "${DNSPATCH_TEST_UNSET_TWO}"]
 [[instance]]
@@ -707,9 +730,9 @@ ref = "main"
 [retriever.home]
 type = "ifconfigco"
 [provider.zeta]
-type = "selectel"
+type = "example"
 [provider.alpha]
-type = "selectel"
+type = "example"
 [[instance]]
 name = "a"
 [instance.retriever]
@@ -859,5 +882,23 @@ func TestProxyParameterExpandedAndOverridden(t *testing.T) {
 	}
 	if got := cfg.Instances[1].Retriever.Params["proxy"]; got != "socks5://other.example.net:1080" {
 		t.Errorf("retriever override: proxy = %q", got)
+	}
+}
+
+func TestProvidersOfOneDefinitionWithDifferentParametersAreAllowed(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[instance]]
+name = "a"
+[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+[[instance.provider]]
+ref  = "main"
+zone = "b.com"
+`)
+
+	if got := len(cfg.Instances[0].Providers); got != 2 {
+		t.Fatalf("providers = %d, want 2", got)
 	}
 }

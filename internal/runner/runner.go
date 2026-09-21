@@ -63,7 +63,7 @@ type Options struct {
 // unknown state would be worse than one restarted by its service manager, for
 // example by Docker's restart policy.
 func Run(ctx context.Context, instances []Instance, opts Options) error {
-	if err := validate(instances); err != nil {
+	if err := Validate(instances); err != nil {
 		return err
 	}
 	if opts.Logger == nil {
@@ -95,7 +95,11 @@ func SignalContext(parent context.Context) (context.Context, context.CancelFunc)
 	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }
 
-func validate(instances []Instance) error {
+// Validate checks that instances can be run: there is at least one, and each has
+// a positive interval, a retriever and providers. All problems are reported
+// together. Run performs the same check itself; calling Validate first lets a
+// caller tell an invalid setup apart from a failure while running.
+func Validate(instances []Instance) error {
 	if len(instances) == 0 {
 		return errors.New("no instances to run")
 	}

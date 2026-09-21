@@ -2,8 +2,9 @@ package plugin
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -201,13 +202,7 @@ func configTypesOf[F any](entries map[string]entry[F]) map[string]reflect.Type {
 
 // keysOf returns the registered names of a registry map, sorted.
 func keysOf[F any](entries map[string]entry[F]) []string {
-	names := make([]string, 0, len(entries))
-	for name := range entries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	return names
+	return slices.Sorted(maps.Keys(entries))
 }
 
 // unknownTypeError explains an unregistered type name and lists the names

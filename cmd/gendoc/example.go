@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/KrimsN/dnspatch/internal/config"
+	"github.com/KrimsN/dnspatch/internal/paramspec"
 )
 
 const (
@@ -256,9 +257,7 @@ func zeroLiteral(t reflect.Type) (string, error) {
 // isText reports whether a type is written as a TOML string: a string, or a
 // type such as netip.Addr that parses itself from text.
 func isText(t reflect.Type) bool {
-	return t.Kind() == reflect.String ||
-		t.Implements(textUnmarshalerType) ||
-		reflect.PointerTo(t).Implements(textUnmarshalerType)
+	return t.Kind() == reflect.String || paramspec.ParsesText(t)
 }
 
 // isPlainString reports whether a type is a string that takes any text, which
