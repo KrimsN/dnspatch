@@ -1,0 +1,11 @@
+# Локальная конфигурация — содержит API-токены
+config.toml
+
+# Сборка
+/dnspatch
+/dnspatch.exe
+/dist/
+
+# Go
+*.test
+*.out
