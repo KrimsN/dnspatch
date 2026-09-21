@@ -169,6 +169,10 @@ Addresses are passed as `netip.Addr`, so providers pick the record type themselv
 
 A plugin is a configuration struct plus a constructor; struct tags declare the parameters and feed the generated reference. The step-by-step guide is in [CONTRIBUTING.md](CONTRIBUTING.md#writing-a-plugin).
 
+## Contributing
+
+Bug reports and ideas go to [GitHub Issues](https://github.com/KrimsN/dnspatch/issues). [CONTRIBUTING.md](CONTRIBUTING.md) covers commit messages, pull requests, how branch names and `Linear: DNS-N` lines in pull requests relate to the maintainer's task tracker, and how to write a plugin.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
