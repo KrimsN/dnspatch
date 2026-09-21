@@ -830,16 +830,18 @@ func TestResolvePathReadsEnv(t *testing.T) {
 }
 
 func TestProxyParameterExpandedAndOverridden(t *testing.T) {
+	const vps = "socks5://proxyuser:pr0xy@203.0.113.5:1080"
+
 	t.Setenv("REGRU_USERNAME", "user")
 	t.Setenv("REGRU_PASSWORD", "pass")
-	t.Setenv("PROXY_URL", "socks5://proxyuser:pr0xy@203.0.113.5:1080")
+	t.Setenv("PROXY_URL", vps)
 
 	cfg, err := Load(filepath.Join("testdata", "proxy.toml"))
 	if err != nil {
 		t.Fatalf("Load(proxy.toml): %v", err)
 	}
 
-	want := []string{"socks5://proxyuser:pr0xy@203.0.113.5:1080", "https://proxy.example.net:8443", ""}
+	want := []string{vps, "https://proxy.example.net:8443", "direct"}
 
 	providers := cfg.Instances[0].Providers
 	if len(providers) != len(want) {
@@ -851,7 +853,11 @@ func TestProxyParameterExpandedAndOverridden(t *testing.T) {
 		}
 	}
 
+	// A retriever gets a proxy only when the file names one.
 	if _, ok := cfg.Instances[0].Retriever.Params["proxy"]; ok {
-		t.Error("the retriever must not receive a proxy parameter")
+		t.Error("the retriever without a proxy parameter was given one")
+	}
+	if got := cfg.Instances[1].Retriever.Params["proxy"]; got != "socks5://other.example.net:1080" {
+		t.Errorf("retriever override: proxy = %q", got)
 	}
 }

@@ -260,3 +260,32 @@ func TestClientProxyRejectsCredentials(t *testing.T) {
 		t.Errorf("proxy served %v despite the wrong password", got)
 	}
 }
+
+func TestNewClientDirectIgnoresProxy(t *testing.T) {
+	for _, value := range []string{"direct", "Direct", " DIRECT "} {
+		client, err := NewClient(value, time.Second)
+		if err != nil {
+			t.Fatalf("%q: %v", value, err)
+		}
+
+		if client.Transport.(*http.Transport).Proxy != nil {
+			t.Errorf("%q: the transport still has a proxy function, so the environment would apply", value)
+		}
+		if !IsDirect(value) {
+			t.Errorf("IsDirect(%q) = false", value)
+		}
+	}
+
+	for _, value := range []string{"", "socks5://203.0.113.5:1080", "directly"} {
+		if IsDirect(value) {
+			t.Errorf("IsDirect(%q) = true", value)
+		}
+	}
+}
+
+func TestDirectIsNotAProxyURL(t *testing.T) {
+	_, err := ParseProxy("direct")
+	if err == nil || !strings.Contains(err.Error(), "direct") {
+		t.Errorf("error = %v, want it to point at the direct keyword", err)
+	}
+}

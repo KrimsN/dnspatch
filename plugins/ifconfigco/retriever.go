@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/KrimsN/dnspatch/internal/httpx"
 )
 
 const (
@@ -44,9 +46,8 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 	}
 
 	if client == nil {
-		client = &http.Client{
-			Timeout:   requestTimeout,
-			Transport: familyTransport(family),
+		if client, err = newClient(cfg.Proxy, family); err != nil {
+			return nil, err
 		}
 	}
 
@@ -55,6 +56,19 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 		family:   family,
 		client:   client,
 	}, nil
+}
+
+// newClient builds the client the retriever uses. Without a proxy, that is
+// direct or empty, the connection is pinned to the IP family. With one, the
+// connection to the proxy is left alone, since the family that matters is the
+// one the proxy connects to the service over, and the reply check in parse is
+// what enforces the family.
+func newClient(proxy, family string) (*http.Client, error) {
+	if strings.TrimSpace(proxy) == "" || httpx.IsDirect(proxy) {
+		return &http.Client{Timeout: requestTimeout, Transport: familyTransport(family)}, nil
+	}
+
+	return httpx.NewClient(proxy, requestTimeout)
 }
 
 // familyTransport returns a transport that only dials over the given IP
