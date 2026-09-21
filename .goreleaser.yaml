@@ -54,5 +54,25 @@ changelog:
 release:
   draft: false
   prerelease: auto
+  # Appended to the notes of every release, a candidate as well: the image tag
+  # is the version without the "v", the Go tag is the git tag.
+  footer: |
+    ## Install
+
+    **Docker** ([Docker Hub](https://hub.docker.com/r/krimsn/dnspatch)), for `linux/amd64`, `linux/arm64` and `linux/arm/v7`:
+
+    ```sh
+    docker pull krimsn/dnspatch:{{ .Version }}
+    ```
+
+    The same tags are mirrored to `ghcr.io/krimsn/dnspatch`.
+
+    **Go:**
+
+    ```sh
+    go install github.com/KrimsN/dnspatch/cmd/dnspatch@{{ .Tag }}
+    ```
+
+    **Binary:** download the archive for your platform below and check it against `checksums.txt`.
 
 # The container image is built from the Dockerfile by .github/workflows/release.yml.
