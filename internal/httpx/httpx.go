@@ -20,7 +20,7 @@ const Direct = "direct"
 // requests go through a proxy. Left empty, the client follows the proxy
 // environment variables.
 type ProxyConfig struct {
-	Proxy string `toml:"proxy" doc:"URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one"`
+	Proxy string `toml:"proxy" example:"socks5://user:pass@203.0.113.5:1080" doc:"URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one"`
 }
 
 // DirectProxyConfig is the configuration block a retriever embeds. Unlike a
