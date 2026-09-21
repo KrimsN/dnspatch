@@ -27,7 +27,7 @@ chmod 644 dnspatch.toml                # the container user must be able to read
 docker compose up -d
 ```
 
-Every variable in `.env` reaches the container, and `dnspatch.toml` refers to it as `${NAME}`, so secrets stay out of the configuration file. After editing `dnspatch.toml`, run `docker compose restart`. After editing `.env`, run `docker compose up -d`, which recreates the container with the new environment; `restart` does not re-read it.
+Every variable in `.env` reaches the container, and `dnspatch.toml` refers to it as `${NAME}`. After editing `dnspatch.toml`, run `docker compose restart`. After editing `.env`, run `docker compose up -d`, which recreates the container with the new environment; `restart` does not re-read it.
 
 Without Compose:
 
@@ -35,8 +35,16 @@ Without Compose:
 docker run -d --name dnspatch --restart unless-stopped \
   -v "$PWD/dnspatch.toml:/etc/dnspatch/config.toml:ro" \
   --env-file .env \
+  --log-opt max-size=10m --log-opt max-file=3 \
   ghcr.io/krimsn/dnspatch:latest
 ```
+
+Things to know before running it in a container:
+
+- **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${REGRU_PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
+- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets.
+- **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
+- **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
 
 ### From source
 
@@ -145,7 +153,7 @@ The last written address is kept in memory only. **After a restart the daemon do
 
 ## Writing your own plugin
 
-The `plugin` package is public on purpose. Writing a retriever or a provider means implementing a two-method interface and registering it — either upstream in this repository, or in your own module with your own `main`:
+The `plugin` package is public on purpose. Writing a retriever or a provider means implementing a two-method interface and registering it. The easy route is a pull request to this repository. A plugin can also live in your own module, but in `v0.x` the configuration loader and the runner are internal packages, so a program of your own has to build the plugins and drive the polling itself instead of reusing `dnspatch`:
 
 ```go
 type Retriever interface {
