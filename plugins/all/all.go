@@ -5,4 +5,8 @@
 // instead, to avoid pulling in the dependencies of the others.
 package all
 
-// TODO: blank imports of the packages under plugins/.
+import (
+	// Built-in plugins register themselves in init.
+	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"
+	_ "github.com/KrimsN/dnspatch/plugins/regru"
+)

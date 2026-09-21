@@ -21,7 +21,7 @@ This repository follows [Conventional Commits](https://www.conventionalcommits.o
 | `chore` | anything else, including dependency bumps |
 
 The scope is the package the change belongs to: `feat(plugin)`, `fix(runner)`,
-`feat(plugins/selectel)`. Omit it for changes that span the repository.
+`feat(plugins/regru)`. Omit it for changes that span the repository.
 
 Write the description in the imperative mood, in lower case, with no trailing
 period: `add backoff to failing providers`, not `Added backoff.`.
