@@ -40,9 +40,10 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 		return nil, fmt.Errorf(`family: must be "ipv4" or "ipv6", got %q`, cfg.Family)
 	}
 
+	// The URL may carry a login and password, so the message does not quote it.
 	base, err := url.Parse(cfg.BaseURL)
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, fmt.Errorf("base_url: %q is not an http(s) URL", cfg.BaseURL)
+		return nil, errors.New("base_url: not an http(s) URL")
 	}
 
 	if client == nil {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,9 +70,10 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 		return nil, fmt.Errorf(`rr_name: %q must be "@", "*" or a name relative to the zone, without a trailing dot`, cfg.RRName)
 	}
 
+	// The URL may carry a login and password, so the message does not quote it.
 	base, err := url.Parse(cfg.BaseURL)
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, fmt.Errorf("base_url: %q is not an http(s) URL", cfg.BaseURL)
+		return nil, errors.New("base_url: not an http(s) URL")
 	}
 
 	if client == nil {
@@ -80,6 +82,14 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 			return nil, err
 		}
 	}
+
+	// Every call carries the password in its body, and a 307 or 308 would
+	// repeat that body at whatever address the server names. A redirect is
+	// reported as the unexpected status it is. The client is copied so that a
+	// caller's own is left as it was.
+	noRedirect := *client
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client = &noRedirect
 
 	return &provider{
 		username: cfg.Username,
@@ -97,6 +107,12 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 // The API has no way to change a record in place, so a differing record is
 // replaced: the new one is added first and the old one removed afterwards,
 // which keeps the name resolvable throughout.
+//
+// If that replacement is cut short after the add, the zone holds both the new
+// and the old record. The next call finds the record that already has the
+// wanted address and removes the others, so a failed removal heals itself. Two
+// or more records and none of them the wanted one is a state this provider did
+// not create, and it is left for the operator to sort out.
 func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
 	if !addr.IsValid() {
 		return errors.New("invalid address")
@@ -113,27 +129,40 @@ func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
 		return err
 	}
 
-	switch len(existing) {
-	case 0:
-		return p.call(ctx, addMethod, map[string]any{"subdomain": p.label, "ipaddr": content}, nil)
-	case 1:
-		if existing[0].Content == content {
-			return nil
+	var stale []string
+	current := false
+	for _, rr := range existing {
+		switch {
+		case rr.Content == content:
+			current = true
+		case !slices.Contains(stale, rr.Content):
+			stale = append(stale, rr.Content)
 		}
-	default:
-		return fmt.Errorf("zone %s has %d %s records named %s; refusing to guess which one to replace",
-			p.zone, len(existing), recType, p.label)
 	}
 
-	if err := p.call(ctx, addMethod, map[string]any{"subdomain": p.label, "ipaddr": content}, nil); err != nil {
-		return err
+	if !current {
+		if len(existing) > 1 {
+			return fmt.Errorf("zone %s has %d %s records named %s and none is %s; refusing to guess which one to replace",
+				p.zone, len(existing), recType, p.label, content)
+		}
+
+		if err := p.call(ctx, addMethod, map[string]any{"subdomain": p.label, "ipaddr": content}, nil); err != nil {
+			return err
+		}
 	}
 
-	return p.call(ctx, "zone/remove_record", map[string]any{
-		"subdomain":   p.label,
-		"record_type": recType,
-		"content":     existing[0].Content,
-	}, nil)
+	for _, old := range stale {
+		err := p.call(ctx, "zone/remove_record", map[string]any{
+			"subdomain":   p.label,
+			"record_type": recType,
+			"content":     old,
+		}, nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // findRecords lists the records of the given type at the configured name.
