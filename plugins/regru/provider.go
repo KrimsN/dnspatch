@@ -133,7 +133,7 @@ func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
 	current := false
 	for _, rr := range existing {
 		switch {
-		case rr.Content == content:
+		case sameAddress(rr.Content, addr):
 			current = true
 		case !slices.Contains(stale, rr.Content):
 			stale = append(stale, rr.Content)
@@ -163,6 +163,21 @@ func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
 	}
 
 	return nil
+}
+
+// sameAddress reports whether the content of a record is addr. The API's
+// documentation does not say how it writes an IPv6 address back, so the two are
+// compared as addresses, not as text: 2001:db8::1 and 2001:0db8:0:0:0:0:0:1 are
+// one record. Content that is not an address is compared as text.
+func sameAddress(content string, addr netip.Addr) bool {
+	content = strings.TrimSpace(content)
+
+	parsed, err := netip.ParseAddr(content)
+	if err != nil {
+		return content == addr.String()
+	}
+
+	return parsed.Unmap() == addr.Unmap()
 }
 
 // findRecords lists the records of the given type at the configured name.

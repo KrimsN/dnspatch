@@ -24,6 +24,9 @@ const (
 	maxBody = 1 << 10
 
 	requestTimeout = 30 * time.Second
+
+	// minInterval is the rate ifconfig.co asks automated clients to stay under.
+	minInterval = time.Minute
 )
 
 type retriever struct {
@@ -84,7 +87,7 @@ func familyTransport(family string) *http.Transport {
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := httpx.NewTransport()
 	transport.Proxy = nil
 	transport.DialContext = func(ctx context.Context, _, addr string) (net.Conn, error) {
 		return dialer.DialContext(ctx, network, addr)
@@ -139,6 +142,12 @@ func (r *retriever) parse(body []byte) (netip.Addr, error) {
 	}
 
 	return addr, nil
+}
+
+// RecommendedInterval is the shortest polling interval the service tolerates.
+// The runner warns when an instance polls more often.
+func (r *retriever) RecommendedInterval() time.Duration {
+	return minInterval
 }
 
 // snippet renders a response body for an error message.

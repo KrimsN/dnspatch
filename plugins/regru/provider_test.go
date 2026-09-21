@@ -224,6 +224,67 @@ func TestSetIPAddressIPv6UsesAAAA(t *testing.T) {
 	}
 }
 
+func TestSetIPAddressComparesAddressesNotText(t *testing.T) {
+	forms := map[string]string{
+		"expanded":   "2001:0db8:0000:0000:0000:0000:0000:0007",
+		"upper case": "2001:DB8::7",
+		"padded":     " 2001:db8::7 ",
+	}
+
+	for name, content := range forms {
+		t.Run(name, func(t *testing.T) {
+			api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "AAAA", Content: content})
+
+			if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v6); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records" {
+				t.Errorf("calls = %s, want the listing only", got)
+			}
+		})
+	}
+}
+
+func TestSetIPAddressRemovesStaleIPv6RecordAsTheAPIWroteIt(t *testing.T) {
+	const stale = "2001:0db8:0000:0000:0000:0000:0000:0001"
+	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "AAAA", Content: stale})
+
+	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v6); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records zone/add_aaaa zone/remove_record" {
+		t.Fatalf("calls = %s", got)
+	}
+	if got := api.calls[2].input["content"]; got != stale {
+		t.Errorf("remove_record content = %v, want %q exactly as listed", got, stale)
+	}
+}
+
+func TestSameAddress(t *testing.T) {
+	tests := []struct {
+		content string
+		addr    netip.Addr
+		want    bool
+	}{
+		{"203.0.113.7", v4, true},
+		{"203.0.113.8", v4, false},
+		{"::ffff:203.0.113.7", v4, true},
+		{"2001:db8::7", v6, true},
+		{"2001:db8:0:0:0:0:0:7", v6, true},
+		{"2001:db8::8", v6, false},
+		{"203.0.113.7", v6, false},
+		{"not an address", v4, false},
+		{"", v4, false},
+	}
+
+	for _, tt := range tests {
+		if got := sameAddress(tt.content, tt.addr); got != tt.want {
+			t.Errorf("sameAddress(%q, %s) = %t, want %t", tt.content, tt.addr, got, tt.want)
+		}
+	}
+}
+
 func TestSetIPAddressMatchesNamesLeniently(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "HOME", Rectype: "A", Content: "198.51.100.1"})
 

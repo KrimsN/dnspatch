@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 const testInterval = time.Minute
@@ -290,6 +292,50 @@ func TestShutdownDuringWriteIsNotAFailure(t *testing.T) {
 	}
 	if state := in.providers[0]; state.failures != 0 || !state.next.IsZero() {
 		t.Errorf("state after shutdown: failures=%d next=%v, want it untouched", state.failures, state.next)
+	}
+}
+
+// advisedRetriever is a fakeRetriever whose service asks for a minimum interval.
+type advisedRetriever struct {
+	*fakeRetriever
+	recommended time.Duration
+}
+
+func (r advisedRetriever) RecommendedInterval() time.Duration { return r.recommended }
+
+func TestWarnShortInterval(t *testing.T) {
+	tests := []struct {
+		name      string
+		retriever plugin.Retriever
+		interval  time.Duration
+		wantWarn  bool
+	}{
+		{"shorter than recommended", advisedRetriever{newFakeRetriever("203.0.113.1"), time.Minute}, 10 * time.Second, true},
+		{"equal to recommended", advisedRetriever{newFakeRetriever("203.0.113.1"), time.Minute}, time.Minute, false},
+		{"longer than recommended", advisedRetriever{newFakeRetriever("203.0.113.1"), time.Minute}, 5 * time.Minute, false},
+		{"retriever gives no advice", newFakeRetriever("203.0.113.1"), time.Second, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			in := newInstance(Instance{
+				Name:      "homelab",
+				Interval:  tt.interval,
+				Retriever: tt.retriever,
+				Providers: []NamedProvider{{Name: "a", Provider: newFakeProvider()}},
+			}, Options{Logger: slog.New(slog.NewTextHandler(&buf, nil)), Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
+
+			in.warnShortInterval()
+
+			out := buf.String()
+			if got := strings.Contains(out, "level=WARN"); got != tt.wantWarn {
+				t.Errorf("warned = %t, want %t; log %q", got, tt.wantWarn, out)
+			}
+			if tt.wantWarn && !strings.Contains(out, "instance=homelab") {
+				t.Errorf("log %q does not name the instance", out)
+			}
+		})
 	}
 }
 

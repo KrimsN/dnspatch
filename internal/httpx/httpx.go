@@ -5,6 +5,7 @@ package httpx
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -63,6 +64,22 @@ func ParseProxy(raw string) (*url.URL, error) {
 	return u, nil
 }
 
+// NewTransport returns a transport with the settings of http.DefaultTransport,
+// following the proxy environment variables. It is built here rather than
+// cloned from http.DefaultTransport, which anything in the process may replace
+// with a RoundTripper of another type.
+func NewTransport() *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+}
+
 // NewClient returns a client for requests to a service. With an empty
 // proxyURL it connects the way net/http does by default, which honours
 // HTTP_PROXY, HTTPS_PROXY and NO_PROXY from the environment. With Direct it
@@ -72,7 +89,7 @@ func ParseProxy(raw string) (*url.URL, error) {
 // Both socks5 and socks5h hand the destination host name to the proxy, so the
 // proxy resolves it.
 func NewClient(proxyURL string, timeout time.Duration) (*http.Client, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := NewTransport()
 
 	switch {
 	case IsDirect(proxyURL):

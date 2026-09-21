@@ -11,8 +11,9 @@
 // is the one wanted. The family is then no longer pinned on the connection,
 // since the proxy chooses it; the reply is still checked against it.
 //
-// ifconfig.co asks automated clients to send at most one request per minute;
-// the default polling interval of dnspatch stays well below that rate.
+// ifconfig.co asks automated clients to send at most one request per minute.
+// The default polling interval of dnspatch, five minutes, is within that
+// limit; an instance that polls more often gets a warning in the log.
 package ifconfigco
 
 import "github.com/KrimsN/dnspatch/plugin"

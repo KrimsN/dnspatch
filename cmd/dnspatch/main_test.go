@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -263,4 +264,52 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for: %s", what)
+}
+
+func TestParseLogLevel(t *testing.T) {
+	tests := []struct {
+		name    string
+		flag    string
+		env     string
+		want    slog.Level
+		wantErr string
+	}{
+		{name: "default is info", want: slog.LevelInfo},
+		{name: "flag", flag: "debug", want: slog.LevelDebug},
+		{name: "env", env: "warn", want: slog.LevelWarn},
+		{name: "flag beats env", flag: "error", env: "debug", want: slog.LevelError},
+		{name: "case does not matter", flag: "DEBUG", want: slog.LevelDebug},
+		{name: "bad flag", flag: "loud", wantErr: "--log-level"},
+		{name: "bad env", env: "loud", wantErr: envLogLevel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseLogLevel(tt.flag, tt.env)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want it to mention %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseLogLevel: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("level = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBadLogLevelExitsWithConfigCode(t *testing.T) {
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"--log-level", "loud"}, &bytes.Buffer{}, &stderr, plugin.Default)
+	if code != exitConfig {
+		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	}
+	if !strings.Contains(stderr.String(), "--log-level") {
+		t.Errorf("stderr = %q, want it to name the flag", stderr.String())
+	}
 }

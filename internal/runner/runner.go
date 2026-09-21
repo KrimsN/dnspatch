@@ -46,15 +46,22 @@ type Options struct {
 	Logger *slog.Logger
 	// Clock is the source of time. Defaults to the system clock.
 	Clock Clock
-	// AttemptTimeout bounds every retrieval and every provider write, so a
-	// plugin that ignores its own timeouts cannot block an instance forever.
-	// Defaults to DefaultAttemptTimeout.
+	// AttemptTimeout bounds every retrieval and every provider write: when it
+	// expires the attempt's context is cancelled and the call is expected to
+	// return promptly, as the plugin contract requires. The runner waits for
+	// the call and does not abandon it, so a plugin that ignores its context
+	// blocks its instance. Defaults to DefaultAttemptTimeout.
 	AttemptTimeout time.Duration
 }
 
 // Run starts all instances and blocks until ctx is cancelled and every
 // instance has stopped. It returns an error only if the instances are
 // invalid; cancelling ctx is a normal way to stop and returns nil.
+//
+// A panic in a plugin is not recovered: it terminates the whole process, as a
+// panic in any goroutine does. A daemon that keeps running with a plugin in an
+// unknown state would be worse than one restarted by its service manager, for
+// example by Docker's restart policy.
 func Run(ctx context.Context, instances []Instance, opts Options) error {
 	if err := validate(instances); err != nil {
 		return err

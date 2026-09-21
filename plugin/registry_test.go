@@ -256,6 +256,33 @@ func TestRegistrationRejectsNonStructConfig(t *testing.T) {
 	}
 }
 
+func TestRegistrationRejectsDuplicatedParameterName(t *testing.T) {
+	tests := map[string]func(){
+		"provider": func() {
+			plugin.RegisterProviderIn(plugin.NewRegistry(), "fake", func(duplicated) (plugin.Provider, error) { return nil, nil })
+		},
+		"retriever": func() {
+			plugin.RegisterRetrieverIn(plugin.NewRegistry(), "fake", func(duplicated) (plugin.Retriever, error) { return nil, nil })
+		},
+	}
+
+	for name, register := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					t.Fatal("registering a configuration with a duplicated parameter did not panic")
+				}
+				if !strings.Contains(fmt.Sprint(recovered), `First and Second`) {
+					t.Errorf("panic = %v, want it to name both fields", recovered)
+				}
+			}()
+
+			register()
+		})
+	}
+}
+
 func TestZeroRegistryIsUsable(t *testing.T) {
 	var registry plugin.Registry
 

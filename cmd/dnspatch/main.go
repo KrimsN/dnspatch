@@ -26,6 +26,10 @@ const (
 	exitConfig
 )
 
+// envLogLevel names the environment variable that holds the log level; the
+// --log-level flag takes precedence over it.
+const envLogLevel = "DNSPATCH_LOG_LEVEL"
+
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
@@ -42,6 +46,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 	flags.SetOutput(stderr)
 
 	configPath := flags.String("config", "", "path to the config file (default: $"+config.EnvPath+", ./dnspatch.toml, /etc/dnspatch/config.toml)")
+	logLevel := flags.String("log-level", "", "log level: debug, info, warn or error (default: $"+envLogLevel+", then info)")
 	showVersion := flags.Bool("version", false, "print the version and exit")
 
 	if err := flags.Parse(args); err != nil {
@@ -56,7 +61,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 		return exitOK
 	}
 
-	logger := slog.New(slog.NewTextHandler(stderr, nil))
+	level, err := parseLogLevel(*logLevel, os.Getenv(envLogLevel))
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
+		return exitConfig
+	}
+
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
 
 	path, err := config.ResolvePath(*configPath)
 	if err != nil {
@@ -86,6 +97,25 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 	logger.Info("stopped")
 
 	return exitOK
+}
+
+// parseLogLevel picks the log level: the flag value if set, otherwise the
+// environment value, otherwise info.
+func parseLogLevel(flagValue, envValue string) (slog.Level, error) {
+	name, source := flagValue, "--log-level"
+	if name == "" {
+		name, source = envValue, envLogLevel
+	}
+	if name == "" {
+		return slog.LevelInfo, nil
+	}
+
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(name)); err != nil {
+		return 0, fmt.Errorf("%s: %q is not a log level, use debug, info, warn or error", source, name)
+	}
+
+	return level, nil
 }
 
 // buildInstances turns the parsed configuration into runnable instances by
