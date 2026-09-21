@@ -1,0 +1,39 @@
+# A provider whose API only accepts requests from a fixed address is reached
+# through a proxy on a host with that address. The URL, which may hold a login
+# and password, comes from the environment so that it stays out of this file.
+interval = "5m"
+
+# The retriever has no proxy parameter: it always connects directly, so that it
+# reports the address of this host and not the address of the proxy.
+[retriever.home]
+type = "ifconfigco"
+
+[provider.regru]
+type     = "regru"
+username = "${REGRU_USERNAME}"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+proxy    = "${PROXY_URL}"
+
+[[instance]]
+name = "home"
+
+[instance.retriever]
+ref = "home"
+
+# Uses the proxy of the definition.
+[[instance.provider]]
+ref = "regru"
+
+# Overrides it for one reference: another proxy...
+[[instance.provider]]
+ref     = "regru"
+rr_name = "www"
+proxy   = "https://proxy.example.net:8443"
+
+# ...or the default behaviour: direct, unless the environment names a proxy.
+[[instance.provider]]
+ref     = "regru"
+rr_name = "direct"
+proxy   = ""

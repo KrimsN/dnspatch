@@ -58,7 +58,9 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 }
 
 // familyTransport returns a transport that only dials over the given IP
-// family, so the service sees the address of that family.
+// family, so the service sees the address of that family. It never uses a
+// proxy, not even the one named in HTTP_PROXY or HTTPS_PROXY: a proxy would
+// make the service report the address of the proxy instead of ours.
 func familyTransport(family string) *http.Transport {
 	network := "tcp4"
 	if family == familyIPv6 {
@@ -68,6 +70,7 @@ func familyTransport(family string) *http.Transport {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
 	transport.DialContext = func(ctx context.Context, _, addr string) (net.Conn, error) {
 		return dialer.DialContext(ctx, network, addr)
 	}

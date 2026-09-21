@@ -4,6 +4,10 @@
 // family the request arrives over. The "family" parameter pins the family
 // instead of leaving it to the operating system.
 //
+// The retriever always connects directly: proxy settings, including the
+// HTTP_PROXY and HTTPS_PROXY environment variables, are ignored. Through a
+// proxy the service would report the address of the proxy, not of this host.
+//
 // ifconfig.co asks automated clients to send at most one request per minute;
 // the default polling interval of dnspatch stays well below that rate.
 package ifconfigco

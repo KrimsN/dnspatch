@@ -828,3 +828,30 @@ func TestResolvePathReadsEnv(t *testing.T) {
 		t.Errorf("ResolvePath = %q, %v; want %q", got, err, path)
 	}
 }
+
+func TestProxyParameterExpandedAndOverridden(t *testing.T) {
+	t.Setenv("REGRU_USERNAME", "user")
+	t.Setenv("REGRU_PASSWORD", "pass")
+	t.Setenv("PROXY_URL", "socks5://proxyuser:pr0xy@203.0.113.5:1080")
+
+	cfg, err := Load(filepath.Join("testdata", "proxy.toml"))
+	if err != nil {
+		t.Fatalf("Load(proxy.toml): %v", err)
+	}
+
+	want := []string{"socks5://proxyuser:pr0xy@203.0.113.5:1080", "https://proxy.example.net:8443", ""}
+
+	providers := cfg.Instances[0].Providers
+	if len(providers) != len(want) {
+		t.Fatalf("providers = %d, want %d", len(providers), len(want))
+	}
+	for i, p := range providers {
+		if p.Params["proxy"] != want[i] {
+			t.Errorf("provider %d: proxy = %q, want %q", i, p.Params["proxy"], want[i])
+		}
+	}
+
+	if _, ok := cfg.Instances[0].Retriever.Params["proxy"]; ok {
+		t.Error("the retriever must not receive a proxy parameter")
+	}
+}
