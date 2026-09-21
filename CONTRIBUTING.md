@@ -47,4 +47,13 @@ go test -race ./...
 golangci-lint run ./...
 ```
 
-<!-- TODO: how to write a plugin, review expectations -->
+## Writing a plugin
+
+Every network call a plugin makes must be bound to the `ctx` it receives, for
+example with `http.NewRequestWithContext(ctx, ...)`. The runner puts a deadline
+(30 seconds by default) on every `GetIPAddress` and `SetIPAddress` call and
+cancels the context on shutdown; a plugin that ignores `ctx` can stall its
+instance indefinitely. An HTTP client field on the plugin is fine for tests
+against `httptest`, but it must not replace the context.
+
+<!-- TODO: the rest of the plugin guide, review expectations -->
