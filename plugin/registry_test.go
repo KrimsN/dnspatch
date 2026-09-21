@@ -73,15 +73,15 @@ func TestBuildRetriever(t *testing.T) {
 
 func TestBuildUnknownTypeListsRegistered(t *testing.T) {
 	registry := plugin.NewRegistry()
-	plugin.RegisterProviderIn(registry, "selectel", newProvider)
-	plugin.RegisterProviderIn(registry, "spaceship", newProvider)
+	plugin.RegisterProviderIn(registry, "alpha", newProvider)
+	plugin.RegisterProviderIn(registry, "beta", newProvider)
 
-	_, err := registry.BuildProvider("selectal", nil)
+	_, err := registry.BuildProvider("alpha-typo", nil)
 	if err == nil {
 		t.Fatal("BuildProvider succeeded, want an unknown type error")
 	}
 
-	want := `unknown provider type "selectal" (registered: selectel, spaceship)`
+	want := `unknown provider type "alpha-typo" (registered: alpha, beta)`
 	if err.Error() != want {
 		t.Errorf("error = %q, want %q", err, want)
 	}
@@ -181,6 +181,20 @@ func TestPackageRegistrationWritesToDefault(t *testing.T) {
 	}
 
 	if _, err := plugin.NewRegistry().BuildProvider(name, nil); err == nil {
+		t.Error("a fresh registry knows the plugin, want registration to stay in Default")
+	}
+}
+
+func TestPackageRetrieverRegistrationWritesToDefault(t *testing.T) {
+	name := fmt.Sprintf("package-level-test-retriever-%d", defaultRuns.Add(1))
+
+	plugin.RegisterRetriever(name, newRetriever)
+
+	if _, err := plugin.Default.BuildRetriever(name, map[string]any{"token": "secret"}); err != nil {
+		t.Fatalf("Default.BuildRetriever: %v", err)
+	}
+
+	if _, err := plugin.NewRegistry().BuildRetriever(name, nil); err == nil {
 		t.Error("a fresh registry knows the plugin, want registration to stay in Default")
 	}
 }

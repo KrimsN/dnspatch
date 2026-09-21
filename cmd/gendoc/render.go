@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -166,11 +167,5 @@ func cell(text string) string {
 }
 
 func sortedNames(plugins map[string]reflect.Type) []string {
-	names := make([]string, 0, len(plugins))
-	for name := range plugins {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	return names
+	return slices.Sorted(maps.Keys(plugins))
 }

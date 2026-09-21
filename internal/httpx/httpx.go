@@ -104,3 +104,28 @@ func NewClient(proxyURL string, timeout time.Duration) (*http.Client, error) {
 
 	return &http.Client{Timeout: timeout, Transport: transport}, nil
 }
+
+// ValidateBaseURL checks the address of a service API: an http or https URL
+// with a host. The URL may carry a login and password, so the error quotes no
+// part of it.
+func ValidateBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("not an http(s) URL")
+	}
+
+	return nil
+}
+
+// Snippet renders a response body for an error message: whitespace collapsed,
+// cut to a fixed length and quoted.
+func Snippet(body []byte) string {
+	const limit = 300
+
+	text := strings.Join(strings.Fields(string(body)), " ")
+	if len(text) > limit {
+		text = text[:limit] + "..."
+	}
+
+	return fmt.Sprintf("%q", text)
+}

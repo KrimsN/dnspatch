@@ -2,13 +2,11 @@ package ifconfigco
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"strings"
 	"time"
 
@@ -43,13 +41,12 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 		return nil, fmt.Errorf(`family: must be "ipv4" or "ipv6", got %q`, cfg.Family)
 	}
 
-	// The URL may carry a login and password, so the message does not quote it.
-	base, err := url.Parse(cfg.BaseURL)
-	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, errors.New("base_url: not an http(s) URL")
+	if err := httpx.ValidateBaseURL(cfg.BaseURL); err != nil {
+		return nil, fmt.Errorf("base_url: %w", err)
 	}
 
 	if client == nil {
+		var err error
 		if client, err = newClient(cfg.Proxy, family); err != nil {
 			return nil, err
 		}
@@ -117,7 +114,7 @@ func (r *retriever) GetIPAddress(ctx context.Context) (netip.Addr, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return netip.Addr{}, fmt.Errorf("unexpected status %s: %s", resp.Status, snippet(body))
+		return netip.Addr{}, fmt.Errorf("unexpected status %s: %s", resp.Status, httpx.Snippet(body))
 	}
 
 	return r.parse(body)
@@ -129,7 +126,7 @@ func (r *retriever) parse(body []byte) (netip.Addr, error) {
 
 	addr, err := netip.ParseAddr(text)
 	if err != nil {
-		return netip.Addr{}, fmt.Errorf("response is not an IP address: %s", snippet(body))
+		return netip.Addr{}, fmt.Errorf("response is not an IP address: %s", httpx.Snippet(body))
 	}
 	addr = addr.Unmap()
 
@@ -138,7 +135,7 @@ func (r *retriever) parse(body []byte) (netip.Addr, error) {
 	}
 
 	if want4 := r.family == familyIPv4; addr.Is4() != want4 {
-		return netip.Addr{}, errors.New("response " + addr.String() + " is not an " + r.family + " address")
+		return netip.Addr{}, fmt.Errorf("response %s is not an %s address", addr, r.family)
 	}
 
 	return addr, nil
@@ -148,16 +145,4 @@ func (r *retriever) parse(body []byte) (netip.Addr, error) {
 // The runner warns when an instance polls more often.
 func (r *retriever) RecommendedInterval() time.Duration {
 	return minInterval
-}
-
-// snippet renders a response body for an error message.
-func snippet(body []byte) string {
-	const limit = 200
-
-	text := strings.Join(strings.Fields(string(body)), " ")
-	if len(text) > limit {
-		text = text[:limit] + "..."
-	}
-
-	return fmt.Sprintf("%q", text)
 }

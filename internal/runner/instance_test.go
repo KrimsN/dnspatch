@@ -348,13 +348,13 @@ func TestLogsIdentifyInstanceAndProvider(t *testing.T) {
 		Name:      "homelab",
 		Interval:  testInterval,
 		Retriever: newFakeRetriever("203.0.113.1"),
-		Providers: []NamedProvider{{Name: "selectel", Provider: provider}},
+		Providers: []NamedProvider{{Name: "example", Provider: provider}},
 	}, Options{Logger: log, Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
 
 	_ = in.tick(context.Background())
 
 	out := buf.String()
-	for _, want := range []string{"instance=homelab", "provider=selectel", "update failed", "boom"} {
+	for _, want := range []string{"instance=homelab", "provider=example", "update failed", "boom"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("log %q does not contain %q", out, want)
 		}

@@ -313,3 +313,54 @@ func TestNewClientIgnoresReplacedDefaultTransport(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBaseURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{name: "https", raw: "https://api.example.com"},
+		{name: "http with a port and a path", raw: "http://127.0.0.1:8080/api"},
+		{name: "no scheme", raw: "api.example.com", wantErr: true},
+		{name: "other scheme", raw: "ftp://api.example.com", wantErr: true},
+		{name: "no host", raw: "https://", wantErr: true},
+		{name: "unparsable", raw: "https://api.example.com/%zz", wantErr: true},
+		{name: "empty", raw: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateBaseURL(tt.raw)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateBaseURL(%q) = %v, want error: %v", tt.raw, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateBaseURLDoesNotQuoteTheURL(t *testing.T) {
+	for _, raw := range []string{
+		"ftp://user:" + secret + "@api.example.com",
+		"https://user:" + secret + "@api.example.com/%zz",
+	} {
+		err := ValidateBaseURL(raw)
+		if err == nil {
+			t.Fatalf("ValidateBaseURL(%q) = nil, want an error", raw)
+		}
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("error leaks the password: %v", err)
+		}
+	}
+}
+
+func TestSnippet(t *testing.T) {
+	if got, want := Snippet([]byte("  two\n\tlines  here ")), `"two lines here"`; got != want {
+		t.Errorf("Snippet = %s, want %s", got, want)
+	}
+
+	long := Snippet([]byte(strings.Repeat("x", 1000)))
+	if want := `"` + strings.Repeat("x", 300) + `..."`; long != want {
+		t.Errorf("long Snippet has %d bytes, want the text cut to 300 characters plus an ellipsis", len(long))
+	}
+}

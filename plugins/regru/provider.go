@@ -70,10 +70,8 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 		return nil, fmt.Errorf(`rr_name: %q must be "@", "*" or a name relative to the zone, without a trailing dot`, cfg.RRName)
 	}
 
-	// The URL may carry a login and password, so the message does not quote it.
-	base, err := url.Parse(cfg.BaseURL)
-	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, errors.New("base_url: not an http(s) URL")
+	if err := httpx.ValidateBaseURL(cfg.BaseURL); err != nil {
+		return nil, fmt.Errorf("base_url: %w", err)
 	}
 
 	if client == nil {
@@ -239,12 +237,12 @@ func (p *provider) call(ctx context.Context, method string, extra map[string]any
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: unexpected status %s: %s", method, resp.Status, snippet(body))
+		return fmt.Errorf("%s: unexpected status %s: %s", method, resp.Status, httpx.Snippet(body))
 	}
 
 	var answer envelope
 	if err := json.Unmarshal(body, &answer); err != nil {
-		return fmt.Errorf("%s: response is not JSON: %s", method, snippet(body))
+		return fmt.Errorf("%s: response is not JSON: %s", method, httpx.Snippet(body))
 	}
 
 	if err := answer.failure(method, body); err != nil {
@@ -267,7 +265,7 @@ func (e envelope) failure(method string, body []byte) error {
 	}
 
 	if len(e.Answer.Domains) != 1 {
-		return fmt.Errorf("%s: expected an answer for one domain, got %d: %s", method, len(e.Answer.Domains), snippet(body))
+		return fmt.Errorf("%s: expected an answer for one domain, got %d: %s", method, len(e.Answer.Domains), httpx.Snippet(body))
 	}
 
 	if domain := e.Answer.Domains[0]; domain.Result != "success" {
@@ -279,20 +277,8 @@ func (e envelope) failure(method string, body []byte) error {
 
 func apiError(method, code, text string, body []byte) error {
 	if code == "" && text == "" {
-		return fmt.Errorf("%s: call failed: %s", method, snippet(body))
+		return fmt.Errorf("%s: call failed: %s", method, httpx.Snippet(body))
 	}
 
 	return fmt.Errorf("%s: %s: %s", method, code, text)
-}
-
-// snippet renders a response body for an error message.
-func snippet(body []byte) string {
-	const limit = 300
-
-	text := strings.Join(strings.Fields(string(body)), " ")
-	if len(text) > limit {
-		text = text[:limit] + "..."
-	}
-
-	return fmt.Sprintf("%q", text)
 }

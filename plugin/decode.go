@@ -3,6 +3,8 @@ package plugin
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/KrimsN/dnspatch/internal/paramspec"
 )
 
 // Decode converts a plugin's raw parameters into its configuration struct.
@@ -18,6 +20,10 @@ import (
 // and are converted to the field's integer type, durations are written as
 // strings such as "10s", and types implementing encoding.TextUnmarshaler,
 // among them netip.Addr, are parsed from strings.
+//
+// A field of type any is not supported, since there is no type to convert to.
+// A field of type []any or map[string]any takes a value of exactly that type
+// as it is, and rejects a value of any other type.
 //
 // A field whose type is a struct is a nested table, validated whether or not
 // the table appears in params, so that a required field inside an omitted
@@ -55,13 +61,13 @@ func decodeStruct(target reflect.Value, params map[string]any, prefix string) er
 	}
 
 	for _, match := range matches {
-		field := target.FieldByIndex(match.spec.index)
-		name := prefix + match.spec.key
+		field := target.FieldByIndex(match.spec.Index)
+		name := prefix + match.spec.Key
 
 		// A default is a fallback: when the user gave a value it is never
 		// parsed, so a broken tag cannot fail a configuration that overrides it.
-		if match.spec.hasDefault && !match.given {
-			if err := setFromString(field, match.spec.defaultVal); err != nil {
+		if match.spec.HasDefault && !match.given {
+			if err := setFromString(field, match.spec.Default); err != nil {
 				return fmt.Errorf("invalid default for parameter %q: %w", name, err)
 			}
 		}
@@ -69,7 +75,7 @@ func decodeStruct(target reflect.Value, params map[string]any, prefix string) er
 		if !match.given {
 			// A nested table still carries required fields and defaults of
 			// its own, so it is decoded from nothing rather than skipped.
-			if field.Kind() == reflect.Struct && !isLeaf(field) {
+			if field.Kind() == reflect.Struct && !paramspec.ParsesText(field.Type()) {
 				if err := decodeStruct(field, nil, name+"."); err != nil {
 					return err
 				}
@@ -84,12 +90,4 @@ func decodeStruct(target reflect.Value, params map[string]any, prefix string) er
 	}
 
 	return nil
-}
-
-// isLeaf reports whether a struct is decoded from a single value rather than
-// from a table of its own, as time.Time and netip.Addr are.
-func isLeaf(field reflect.Value) bool {
-	_, ok := textUnmarshaler(field)
-
-	return ok
 }

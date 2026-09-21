@@ -102,7 +102,13 @@ func (s *Server) accept() {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			defer func() { _ = c.Close() }()
+			defer func() {
+				_ = c.Close()
+
+				s.mu.Lock()
+				delete(s.conns, c)
+				s.mu.Unlock()
+			}()
 
 			s.serve(c)
 		}()

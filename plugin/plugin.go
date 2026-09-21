@@ -9,8 +9,8 @@
 // configuration file:
 //
 //	type Config struct {
-//		APIToken string `toml:"api_token" required:"true"`
-//		Timeout  string `toml:"timeout" default:"10s"`
+//		APIToken string        `toml:"api_token" required:"true"`
+//		Timeout  time.Duration `toml:"timeout" default:"10s"`
 //	}
 //
 //	func init() {

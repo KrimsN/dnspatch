@@ -21,12 +21,13 @@ import (
 
 // fakeWorld plays both external services: the IP echo and the REG.RU DNS API.
 // It keeps the contents of the A records at home.example.com and counts how
-// many records the daemon has added.
+// many records the daemon has added and how often it asked for its address.
 type fakeWorld struct {
 	mu       sync.Mutex
 	ip       string
 	contents []string
 	adds     int
+	lookups  int
 }
 
 func (w *fakeWorld) setIP(ip string) {
@@ -42,11 +43,19 @@ func (w *fakeWorld) snapshot() (content string, adds int) {
 	return strings.Join(w.contents, ","), w.adds
 }
 
+// lookupCount returns how many times the daemon has asked for its address.
+func (w *fakeWorld) lookupCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lookups
+}
+
 func (w *fakeWorld) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if r.URL.Path == "/ip" {
+		w.lookups++
 		_, _ = fmt.Fprint(rw, w.ip)
 		return
 	}
@@ -133,8 +142,10 @@ ref = "dns"
 		return content == "203.0.113.7"
 	})
 
-	// An unchanged address must not cause further writes over several ticks.
-	time.Sleep(2500 * time.Millisecond)
+	// An unchanged address must not cause further writes. A tick starts only
+	// after the previous one is finished, so the third lookup proves that the
+	// second tick, which saw the same address again, has been fully handled.
+	waitFor(t, "a tick with an unchanged address", func() bool { return world.lookupCount() >= 3 })
 	if _, adds := world.snapshot(); adds != 1 {
 		t.Errorf("records added after unchanged ticks = %d, want 1", adds)
 	}
@@ -197,6 +208,28 @@ ref = "echo"
 ref = "dns"
 `,
 			wantErr: "password",
+		},
+		{
+			name: "provider listed twice",
+			config: `
+[retriever.echo]
+type = "ifconfigco"
+[provider.dns]
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+[[instance]]
+name = "x"
+[instance.retriever]
+ref = "echo"
+[[instance.provider]]
+ref = "dns"
+[[instance.provider]]
+ref = "dns"
+`,
+			wantErr: "repeats provider #1",
 		},
 	}
 

@@ -3,14 +3,16 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
+
+	"github.com/KrimsN/dnspatch/internal/paramspec"
 )
 
 // paramMatch is one configurable field together with the value given for it,
 // and the name under which the value was written.
 type paramMatch struct {
-	spec  fieldSpec
+	spec  paramspec.Field
 	name  string
 	value any
 	given bool
@@ -19,13 +21,13 @@ type paramMatch struct {
 // matchParams pairs every field with its value, matching parameter names
 // case-insensitively. It reports all the problems of one parameter block at
 // once: parameters matching no field, and required fields left unset.
-func matchParams(params map[string]any, specs []fieldSpec, prefix string) ([]paramMatch, error) {
+func matchParams(params map[string]any, specs []paramspec.Field, prefix string) ([]paramMatch, error) {
 	matches := make([]paramMatch, len(specs))
 	byKey := make(map[string]int, len(specs))
 
 	for i, spec := range specs {
 		matches[i] = paramMatch{spec: spec}
-		byKey[strings.ToLower(spec.key)] = i
+		byKey[strings.ToLower(spec.Key)] = i
 	}
 
 	var errs []error
@@ -38,7 +40,7 @@ func matchParams(params map[string]any, specs []fieldSpec, prefix string) ([]par
 		}
 
 		if matches[i].given {
-			errs = append(errs, conflictingParamsError(matches[i].name, name, prefix+matches[i].spec.key))
+			errs = append(errs, conflictingParamsError(matches[i].name, name, prefix+matches[i].spec.Key))
 			continue
 		}
 
@@ -46,8 +48,8 @@ func matchParams(params map[string]any, specs []fieldSpec, prefix string) ([]par
 	}
 
 	for _, match := range matches {
-		if match.spec.required && !match.given {
-			errs = append(errs, fmt.Errorf("parameter %q is required", prefix+match.spec.key))
+		if match.spec.Required && !match.given {
+			errs = append(errs, fmt.Errorf("parameter %q is required", prefix+match.spec.Key))
 		}
 	}
 
@@ -70,7 +72,7 @@ func conflictingParamsError(first, second, key string) error {
 // unknownParamError explains an unknown parameter, pointing at the closest
 // known name when there is one. The prefix qualifies names in the message
 // without taking part in the comparison.
-func unknownParamError(name string, specs []fieldSpec, prefix string) error {
+func unknownParamError(name string, specs []paramspec.Field, prefix string) error {
 	if closest, ok := closestKey(name, specs); ok {
 		return fmt.Errorf("unknown parameter %q (did you mean %q?)", prefix+name, prefix+closest)
 	}
@@ -79,9 +81,9 @@ func unknownParamError(name string, specs []fieldSpec, prefix string) error {
 
 	keys := make([]string, 0, len(specs))
 	for _, spec := range specs {
-		keys = append(keys, spec.key)
+		keys = append(keys, spec.Key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	if len(keys) == 0 {
 		return fmt.Errorf("unknown parameter %q (this plugin takes no parameters)", name)
@@ -92,14 +94,14 @@ func unknownParamError(name string, specs []fieldSpec, prefix string) error {
 
 // closestKey returns the known parameter closest to name, if one is close
 // enough to be a plausible typo.
-func closestKey(name string, specs []fieldSpec) (string, bool) {
+func closestKey(name string, specs []paramspec.Field) (string, bool) {
 	lowered := strings.ToLower(name)
 	best, bestDistance := "", 0
 
 	for _, spec := range specs {
-		d := editDistance(lowered, strings.ToLower(spec.key))
+		d := editDistance(lowered, strings.ToLower(spec.Key))
 		if best == "" || d < bestDistance {
-			best, bestDistance = spec.key, d
+			best, bestDistance = spec.Key, d
 		}
 	}
 
@@ -138,7 +140,7 @@ func editDistance(a, b string) int {
 // sortErrors orders errors by message, so that iterating a map does not make
 // the output vary between runs.
 func sortErrors(errs []error) {
-	sort.Slice(errs, func(i, j int) bool {
-		return errs[i].Error() < errs[j].Error()
+	slices.SortFunc(errs, func(a, b error) int {
+		return strings.Compare(a.Error(), b.Error())
 	})
 }

@@ -87,6 +87,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 		return exitConfig
 	}
 
+	if err := runner.Validate(instances); err != nil {
+		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
+		return exitConfig
+	}
+
 	logger.Info("starting", "version", buildVersion(), "config", path, "instances", len(instances))
 
 	if err := runner.Run(ctx, instances, runner.Options{Logger: logger}); err != nil {
