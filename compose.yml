@@ -1,0 +1,31 @@
+# Runs dnspatch in a container.
+#
+#   cp config.toml.example dnspatch.toml   # edit it
+#   cp .env.example .env                   # put the secrets in it
+#   docker compose up -d
+#
+# The configuration is not part of the image: dnspatch.toml is mounted from the
+# host. After editing it, apply the change with `docker compose restart`; no
+# rebuild is needed. Changes to .env are picked up by `docker compose up -d`,
+# which recreates the container.
+services:
+  dnspatch:
+    image: ghcr.io/krimsn/dnspatch:${DNSPATCH_VERSION:-latest}
+    # `docker compose up -d --build` builds the image from this checkout instead.
+    build: .
+    restart: unless-stopped
+
+    # Every variable of .env becomes an environment variable of the container,
+    # where dnspatch.toml refers to it as ${NAME}.
+    env_file: .env
+
+    volumes:
+      # The daemon reads /etc/dnspatch/config.toml on its own. The container
+      # runs as an unprivileged user (uid 65532), so the file has to be
+      # readable by everyone on the host: chmod 644 dnspatch.toml
+      - ./dnspatch.toml:/etc/dnspatch/config.toml:ro
+
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

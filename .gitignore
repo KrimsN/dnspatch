@@ -9,3 +9,7 @@ config.toml
 # Go
 *.test
 *.out
+
+# Secrets and the local configuration
+.env
+dnspatch.toml

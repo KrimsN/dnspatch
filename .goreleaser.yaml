@@ -20,6 +20,15 @@ builds:
     goarch:
       - amd64
       - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      # 32-bit ARM is only worth shipping for Linux boxes such as a Raspberry Pi
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
 
 archives:
   - formats:
@@ -46,4 +55,4 @@ release:
   draft: false
   prerelease: auto
 
-# TODO: ghcr.io image via dockers_v2, once a Dockerfile exists.
+# The container image is built from the Dockerfile by .github/workflows/release.yml.

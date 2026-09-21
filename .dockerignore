@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+.plan
+dist
+*.exe
+# Local configuration holds API tokens
+config.toml
+dnspatch.toml
+.env
