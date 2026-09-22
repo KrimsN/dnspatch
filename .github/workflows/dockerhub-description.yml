@@ -1,0 +1,24 @@
+name: Docker Hub description
+
+on:
+  push:
+    branches: [main]
+    paths: [README.md]
+  workflow_dispatch:
+
+# Keeps the Overview of https://hub.docker.com/r/krimsn/dnspatch in sync with
+# README.md. DOCKERHUB_TOKEN needs the Read, Write, Delete scope for this;
+# Read & Write (enough to push the image) is not.
+jobs:
+  sync:
+    name: sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: peter-evans/dockerhub-description@432a30c9e07499fd01da9f8a49f0faf9e0ca5b77 # v4.0.2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: krimsn/dnspatch
+          short-description: Dynamic DNS daemon in Go with a pluggable retriever/provider architecture
+          readme-filepath: ./README.md
