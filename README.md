@@ -120,8 +120,13 @@ rr_name = "*.home"                 # override a parameter of the definition
 
 | Kind | Type | What it does |
 |------|------|--------------|
+| retriever | `2ip` | asks [2ip.io](https://2ip.io) for the public address (IPv4 only) |
+| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4 or IPv6 |
+| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4 or IPv6 |
 | retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4 or IPv6 |
+| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4 or IPv6 |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
+| provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
 
 ### Proxies
 
