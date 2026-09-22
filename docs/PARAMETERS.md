@@ -16,6 +16,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
   - [regru](#provider-regru)
+  - [selectel](#provider-selectel)
 
 ## Retrievers
 
@@ -69,4 +70,19 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `zone` | yes | — | Domain name of the zone, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `base_url` | no | `https://api.reg.ru/api/regru2` | Base URL of the API |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `selectel`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `account_id` | yes | — | Selectel account ID (the domain name used for API auth), shown in the top right corner of the Control panel |
+| `username` | yes | — | Name of the service user used for API calls |
+| `password` | yes | — | Password of the service user |
+| `project_name` | yes | — | Name of the project the DNS zone belongs to |
+| `zone` | yes | — | Domain name of the zone, for example example.com |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `ttl` | no | `60` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL. Selectel accepts 60 to 604800 |
+| `auth_url` | no | `https://cloud.api.selcloud.ru/identity/v3` | Base URL of the identity (Keystone) API used to obtain a project IAM token |
+| `base_url` | no | `https://api.selectel.ru/domains/v2` | Base URL of the DNS Hosting API |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
