@@ -1,0 +1,56 @@
+name: New retriever/provider request
+description: Ask for a new retriever (IP source) or provider (DNS API) plugin
+labels: ["enhancement", "plugins"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing this, check `plugins/` for one that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the retriever/provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Retriever (reports the public IP)
+        - Provider (writes the DNS record)
+    validations:
+      required: true
+
+  - type: input
+    id: service
+    attributes:
+      label: Service name
+      description: The IP-echo service or DNS host this plugin would talk to.
+      placeholder: e.g. Cloudflare, DuckDNS, api.myip.com
+    validations:
+      required: true
+
+  - type: input
+    id: api-docs
+    attributes:
+      label: API documentation
+      description: Link to the service's API docs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this one
+      description: What you're trying to do that existing plugins don't cover.
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication
+      description: How the API authenticates (API key, token, account credentials, IP allowlist, ...), and anything unusual about it (rate limits, IPv6-only, requires a fixed source IP, etc.)
+
+  - type: checkboxes
+    id: willingness
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to write and test this plugin myself

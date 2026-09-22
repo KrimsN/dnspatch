@@ -1,0 +1,30 @@
+name: Feature proposal
+description: Suggest a change that isn't a new retriever/provider plugin
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a new retriever or DNS provider, use the "New retriever/provider request" template instead. For an open-ended idea you're not sure about yet, [Discussions](../discussions) may fit better.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What's missing or awkward today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you'd like to see instead. Rough config or CLI shape is welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to solve the same problem, including workarounds you're using now.

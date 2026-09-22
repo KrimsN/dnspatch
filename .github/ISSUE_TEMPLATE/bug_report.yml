@@ -1,0 +1,64 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What you expected instead, and what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, config, or command that triggers it.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: The `retriever`/`provider`/`instance` blocks involved. Redact API keys, tokens, and zone/domain names you don't want public.
+      render: toml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Run with `--log-level debug` and paste the relevant lines. Redact secrets.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: dnspatch version
+      description: Output of `dnspatch --version`, or the Docker image tag.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it
+      options:
+        - Binary
+        - Docker
+        - go install
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / architecture
+      placeholder: e.g. Linux arm64, Raspberry Pi OS
+    validations:
+      required: true
