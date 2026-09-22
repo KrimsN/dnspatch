@@ -1,0 +1,29 @@
+// Package icanhazip provides a retriever backed by the icanhazip.com service.
+//
+// icanhazip.com is dual-stack: the address it reports depends on which IP
+// family the request arrives over. The service also publishes ipv4. and
+// ipv6. subdomains, but they have a history of DNS misconfiguration (see
+// https://github.com/major/icanhaz/issues/14) that silently breaks the
+// family they claim to pin. The "family" parameter pins the family on the
+// connection instead, the same way the ipify retriever does for its
+// dual-stack host.
+//
+// By default the retriever connects directly and ignores the HTTP_PROXY and
+// HTTPS_PROXY environment variables: through a proxy the service reports the
+// address of the proxy, not of this host. The "proxy" parameter sends the
+// request through a proxy anyway, for the case where the address of the
+// proxy is the one wanted. The family is then no longer pinned on the
+// connection, since the proxy chooses it; the reply is still checked
+// against it.
+package icanhazip
+
+import "github.com/KrimsN/dnspatch/plugin"
+
+// Name is the type name of the retriever in the configuration file.
+const Name = "icanhazip"
+
+func init() {
+	plugin.RegisterRetriever(Name, func(cfg Config) (plugin.Retriever, error) {
+		return newRetriever(cfg, nil)
+	})
+}
