@@ -41,6 +41,20 @@ type = "icanhazip"
 # optionally with user:pass@ (percent-encode special characters).
 # proxy = "direct"
 
+[retriever.identme]
+type = "identme"
+
+# Base URL of the service; ident.me is dual-stack and replies over whichever
+# IP family the request arrives on
+# base_url = "https://ident.me"
+
+# IP family to ask for: ipv4 or ipv6.
+# family = "ipv4"
+
+# URL of a proxy to send requests through: socks5, socks5h, http or https,
+# optionally with user:pass@ (percent-encode special characters).
+# proxy = "direct"
+
 [retriever.ifconfigco]
 type = "ifconfigco"
 

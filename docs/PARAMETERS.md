@@ -11,6 +11,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 - [Retrievers](#retrievers)
   - [2ip](#retriever-2ip)
   - [icanhazip](#retriever-icanhazip)
+  - [identme](#retriever-identme)
   - [ifconfigco](#retriever-ifconfigco)
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
@@ -30,6 +31,14 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | no | `https://icanhazip.com` | Base URL of the service; icanhazip.com is dual-stack and replies over whichever IP family the request arrives on |
+| `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
+| `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
+
+### Retriever `identme`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://ident.me` | Base URL of the service; ident.me is dual-stack and replies over whichever IP family the request arrives on |
 | `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
