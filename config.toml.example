@@ -17,6 +17,16 @@ interval = "5m"
 # Retrievers: where the current address comes from.
 # ----------------------------------------------------------------------------
 
+[retriever.2ip]
+type = "2ip"
+
+# Base URL of the service; change it to use a self-hosted instance
+# base_url = "https://api.2ip.io"
+
+# URL of a proxy to send requests through: socks5, socks5h, http or https,
+# optionally with user:pass@ (percent-encode special characters).
+# proxy = "direct"
+
 [retriever.ifconfigco]
 type = "ifconfigco"
 
@@ -68,7 +78,7 @@ rr_name = "home"
 name = "home"
 
 [instance.retriever]
-ref = "ifconfigco"
+ref = "2ip"
 
 [[instance.provider]]
 ref = "regru"
