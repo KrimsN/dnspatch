@@ -9,11 +9,19 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 ## Contents
 
 - [Retrievers](#retrievers)
+  - [2ip](#retriever-2ip)
   - [ifconfigco](#retriever-ifconfigco)
 - [Providers](#providers)
   - [regru](#provider-regru)
 
 ## Retrievers
+
+### Retriever `2ip`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://api.2ip.io` | Base URL of the service; change it to use a self-hosted instance |
+| `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ### Retriever `ifconfigco`
 
