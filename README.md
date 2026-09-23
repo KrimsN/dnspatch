@@ -146,12 +146,12 @@ rr_name = "*.home"                 # override a parameter of the definition
   ref = "regru"
   ```
 
-  A retriever whose service is itself dual-stack can report both families in one call with `family = "both"` (alias `"ipv64"`), supported by `icanhazip`, `identme`, `ifconfigco` and `ipify`:
+  A retriever whose service is itself dual-stack can report both families in one call with `family = "dual"`, supported by `icanhazip`, `identme`, `ifconfigco` and `ipify`:
 
   ```toml
   [retriever.home]
   type   = "ipify"
-  family = "both"
+  family = "dual"
   ```
 
   A third or later retriever is a fallback source, tried only for the families the earlier ones did not fill; it is never called once every family already has an address. Two retrievers reporting the same family (for example, two independent sources both configured with `family = "ipv4"`) is a valid fallback chain, not a misconfiguration: the first one to succeed wins, and the others are skipped for that family.
@@ -165,10 +165,10 @@ rr_name = "*.home"                 # override a parameter of the definition
 | Kind | Type | What it does |
 |------|------|--------------|
 | retriever | `2ip` | asks [2ip.io](https://2ip.io) for the public address (IPv4 only) |
-| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4, IPv6, or both |
-| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or both |
-| retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or both |
-| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or both |
+| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4, IPv6, or dual |
+| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or dual |
+| retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or dual |
+| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
 
@@ -229,7 +229,7 @@ type Provider interface {
 
 `Addresses` carries both families at once: an invalid (zero) `V4` or `V6` means that family is not provided (a `Retriever`) or left untouched (a `Provider`), which lets one call report or update both an A and an AAAA address, or just one of them. `RecordOptions` carries options such as `TTL`, which a provider ignores when its service does not support it.
 
-Migrating a `Retriever` written against the old `GetIPAddress(ctx) (netip.Addr, error)`: return the single address in the matching field of `Addresses` (`V4` if `addr.Is4()`, `V6` otherwise) and leave the other at its zero value; a plugin that only ever handles one family keeps working unchanged. A retriever whose service is itself dual-stack can fill both fields in one call, as the four `family = "both"` retrievers built into dnspatch do.
+Migrating a `Retriever` written against the old `GetIPAddress(ctx) (netip.Addr, error)`: return the single address in the matching field of `Addresses` (`V4` if `addr.Is4()`, `V6` otherwise) and leave the other at its zero value; a plugin that only ever handles one family keeps working unchanged. A retriever whose service is itself dual-stack can fill both fields in one call, as the four `family = "dual"` retrievers built into dnspatch do.
 
 Migrating a `Provider` written against the older `SetIPAddress(ctx, addr netip.Addr) error`: write the same record for each family that is valid (`addrs.V4.IsValid()`, `addrs.V6.IsValid()`) instead of branching on `addr.Is4()`; a plugin that only ever handled one family (for example because it always got IPv4 before) keeps working unchanged as long as it ignores the family it does not expect.
 

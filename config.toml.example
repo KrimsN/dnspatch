@@ -34,8 +34,7 @@ type = "icanhazip"
 # whichever IP family the request arrives on
 # base_url = "https://icanhazip.com"
 
-# IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with
-# two requests.
+# IP family to ask for: ipv4, ipv6, or dual to fetch both with two requests.
 # family = "ipv4"
 
 # URL of a proxy to send requests through: socks5, socks5h, http or https,
@@ -49,8 +48,7 @@ type = "identme"
 # IP family the request arrives on
 # base_url = "https://ident.me"
 
-# IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with
-# two requests.
+# IP family to ask for: ipv4, ipv6, or dual to fetch both with two requests.
 # family = "ipv4"
 
 # URL of a proxy to send requests through: socks5, socks5h, http or https,
@@ -63,8 +61,7 @@ type = "ifconfigco"
 # Base URL of the service; change it to use a self-hosted instance
 # base_url = "https://ifconfig.co"
 
-# IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with
-# two requests.
+# IP family to ask for: ipv4, ipv6, or dual to fetch both with two requests.
 # family = "ipv4"
 
 # URL of a proxy to send requests through: socks5, socks5h, http or https,
@@ -78,8 +75,7 @@ type = "ipify"
 # whichever IP family the request arrives on
 # base_url = "https://api64.ipify.org"
 
-# IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with
-# two requests.
+# IP family to ask for: ipv4, ipv6, or dual to fetch both with two requests.
 # family = "ipv4"
 
 # URL of a proxy to send requests through: socks5, socks5h, http or https,

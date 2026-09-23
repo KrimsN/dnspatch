@@ -18,10 +18,8 @@ import (
 const (
 	familyIPv4 = "ipv4"
 	familyIPv6 = "ipv6"
-	// familyBoth asks for both families in one retriever; familyIPv64 is an
-	// accepted alias, normalized to familyBoth at construction.
-	familyBoth  = "both"
-	familyIPv64 = "ipv64"
+	// familyDual asks for both families in one retriever.
+	familyDual = "dual"
 
 	// maxBody caps how much of a response is read: an address is a few dozen
 	// bytes, anything longer is not what we asked for.
@@ -35,7 +33,7 @@ type retriever struct {
 	family   string
 
 	// client is used when family is ipv4 or ipv6. v4Client and v6Client are
-	// used when family is "both": one request per family, since the service
+	// used when family is "dual": one request per family, since the service
 	// has no single response carrying both addresses.
 	client             *http.Client
 	v4Client, v6Client *http.Client
@@ -43,14 +41,11 @@ type retriever struct {
 
 // newRetriever validates cfg and builds the retriever. A nil client selects
 // one that dials over the configured IP family (or one per family, for
-// "both"); tests pass their own, reused for every family it needs.
+// "dual"); tests pass their own, reused for every family it needs.
 func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 	family := strings.ToLower(cfg.Family)
-	if family == familyIPv64 {
-		family = familyBoth
-	}
-	if family != familyIPv4 && family != familyIPv6 && family != familyBoth {
-		return nil, fmt.Errorf(`family: must be "ipv4", "ipv6" or "both" (alias "ipv64"), got %q`, cfg.Family)
+	if family != familyIPv4 && family != familyIPv6 && family != familyDual {
+		return nil, fmt.Errorf(`family: must be "ipv4", "ipv6" or "dual", got %q`, cfg.Family)
 	}
 
 	if err := httpx.ValidateBaseURL(cfg.BaseURL); err != nil {
@@ -62,7 +57,7 @@ func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 		family:   family,
 	}
 
-	if family != familyBoth {
+	if family != familyDual {
 		r.client = client
 		if r.client == nil {
 			var err error
@@ -122,12 +117,12 @@ func familyTransport(family string) *http.Transport {
 }
 
 // GetAddresses asks the service for the public address(es) of the configured
-// family. For "both" it makes two requests, one per family over the
+// family. For "dual" it makes two requests, one per family over the
 // respective pinned client, and fails if either one does: a partial result
-// is not what "both" was configured for. Configure two single-family
+// is not what "dual" was configured for. Configure two single-family
 // retrievers instead for fallback across independent sources.
 func (r *retriever) GetAddresses(ctx context.Context) (plugin.Addresses, error) {
-	if r.family != familyBoth {
+	if r.family != familyDual {
 		addr, err := r.fetch(ctx, r.client, r.family)
 		if err != nil {
 			return plugin.Addresses{}, err

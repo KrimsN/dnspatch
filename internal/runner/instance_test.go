@@ -254,12 +254,12 @@ func TestTickStopsCallingRetrieversOnceEveryFamilyIsFilled(t *testing.T) {
 	}
 }
 
-func TestTickWithABothFamilyRetrieverFillsBothInOneCall(t *testing.T) {
+func TestTickWithADualFamilyRetrieverFillsBothInOneCall(t *testing.T) {
 	clock := newFakeClock()
-	both := newFakeRetriever("203.0.113.1")
-	both.setBoth("203.0.113.1", "2001:db8::1")
+	dual := newFakeRetriever("203.0.113.1")
+	dual.setDual("203.0.113.1", "2001:db8::1")
 	provider := newFakeProvider()
-	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{both}, provider)
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{dual}, provider)
 
 	if err := in.tick(context.Background()); err != nil {
 		t.Fatalf("tick: %v", err)

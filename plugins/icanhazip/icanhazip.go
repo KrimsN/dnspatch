@@ -6,9 +6,8 @@
 // https://github.com/major/icanhaz/issues/14) that silently breaks the
 // family they claim to pin. The "family" parameter pins the family on the
 // connection instead, the same way the ipify retriever does for its
-// dual-stack host; "both" (alias "ipv64") asks for both by making two
-// requests, one per family, since the service has no single response
-// carrying both addresses.
+// dual-stack host; "dual" asks for both by making two requests, one per
+// family, since the service has no single response carrying both addresses.
 //
 // By default the retriever connects directly and ignores the HTTP_PROXY and
 // HTTPS_PROXY environment variables: through a proxy the service reports the

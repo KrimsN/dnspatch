@@ -112,9 +112,9 @@ func TestGetAddresses(t *testing.T) {
 	}
 }
 
-// bothRetriever builds a family="both" retriever whose v4Client and v6Client
+// dualRetriever builds a family="dual" retriever whose v4Client and v6Client
 // each redirect to their own fake server, so the two legs can be told apart.
-func bothRetriever(t *testing.T, v4, v6 http.HandlerFunc) *retriever {
+func dualRetriever(t *testing.T, v4, v6 http.HandlerFunc) *retriever {
 	t.Helper()
 
 	v4Srv := httptest.NewServer(v4)
@@ -124,14 +124,14 @@ func bothRetriever(t *testing.T, v4, v6 http.HandlerFunc) *retriever {
 
 	return &retriever{
 		endpoint: v4Srv.URL + "/",
-		family:   familyBoth,
+		family:   familyDual,
 		v4Client: redirectTo(t, v4Srv.URL),
 		v6Client: redirectTo(t, v6Srv.URL),
 	}
 }
 
-func TestGetAddressesBoth(t *testing.T) {
-	r := bothRetriever(t, reply(200, "203.0.113.7"), reply(200, "2001:db8::1"))
+func TestGetAddressesDual(t *testing.T) {
+	r := dualRetriever(t, reply(200, "203.0.113.7"), reply(200, "2001:db8::1"))
 
 	got, err := r.GetAddresses(context.Background())
 	if err != nil {
@@ -143,8 +143,8 @@ func TestGetAddressesBoth(t *testing.T) {
 	}
 }
 
-func TestGetAddressesBothFailsIfEitherLegFails(t *testing.T) {
-	r := bothRetriever(t, reply(200, "203.0.113.7"), reply(500, "boom"))
+func TestGetAddressesDualFailsIfEitherLegFails(t *testing.T) {
+	r := dualRetriever(t, reply(200, "203.0.113.7"), reply(500, "boom"))
 
 	if _, err := r.GetAddresses(context.Background()); err == nil {
 		t.Fatal("expected an error")
@@ -196,8 +196,7 @@ func TestNewRetrieverValidation(t *testing.T) {
 		{name: "bad url with a login", cfg: Config{BaseURL: "ftp://user:hunter2@ident.me", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "unparsable url with a password", cfg: Config{BaseURL: "https://user:hunter2@ident.me/%zz", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "family is case-insensitive", cfg: Config{BaseURL: "https://ident.me", Family: "IPv6"}},
-		{name: "both is accepted", cfg: Config{BaseURL: "https://ident.me", Family: "both"}},
-		{name: "ipv64 is an alias for both", cfg: Config{BaseURL: "https://ident.me", Family: "ipv64"}},
+		{name: "dual is accepted", cfg: Config{BaseURL: "https://ident.me", Family: "dual"}},
 	}
 
 	for _, tt := range tests {

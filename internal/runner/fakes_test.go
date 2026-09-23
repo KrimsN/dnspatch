@@ -133,9 +133,9 @@ func (r *fakeRetriever) set(addr string, err error) {
 	r.addrs, r.err = singleFamily(addr), err
 }
 
-// setBoth reconfigures the retriever to report both families in one call, as
-// a family="both" plugin does.
-func (r *fakeRetriever) setBoth(v4, v6 string) {
+// setDual reconfigures the retriever to report both families in one call, as
+// a family="dual" plugin does.
+func (r *fakeRetriever) setDual(v4, v6 string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.addrs = plugin.Addresses{V4: netip.MustParseAddr(v4), V6: netip.MustParseAddr(v6)}

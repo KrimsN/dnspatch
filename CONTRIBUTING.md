@@ -186,7 +186,7 @@ Make the plugin testable without the network:
 - A retriever returns a `plugin.Addresses` with at least one valid global
   unicast field, and an error otherwise. A single-family retriever leaves the
   other field at its zero value; a retriever whose service is itself
-  dual-stack can fill both in one call (see the built-in `family = "both"`
+  dual-stack can fill both in one call (see the built-in `family = "dual"`
   retrievers for the pattern: one HTTP request per family, joined with
   `errors.Join` if either fails).
 
