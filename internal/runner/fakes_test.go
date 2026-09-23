@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 var epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -139,7 +141,12 @@ func newFakeProvider() *fakeProvider {
 	return &fakeProvider{called: make(chan netip.Addr, 1000)}
 }
 
-func (p *fakeProvider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
+func (p *fakeProvider) Update(ctx context.Context, addrs plugin.Addresses, _ plugin.RecordOptions) error {
+	addr := addrs.V4
+	if !addr.IsValid() {
+		addr = addrs.V6
+	}
+
 	p.mu.Lock()
 	p.writes = append(p.writes, addr)
 	call := len(p.writes)

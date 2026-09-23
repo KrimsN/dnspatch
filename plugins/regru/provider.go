@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/httpx"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 const (
@@ -99,8 +100,26 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 	}, nil
 }
 
-// SetIPAddress points the configured record at addr: an A record for IPv4, an
-// AAAA record for IPv6.
+// Update points the configured record(s) at addrs: an A record for V4, an
+// AAAA record for V6. Each valid family is written independently; an invalid
+// one is left untouched.
+func (p *provider) Update(ctx context.Context, addrs plugin.Addresses, _ plugin.RecordOptions) error {
+	if !addrs.V4.IsValid() && !addrs.V6.IsValid() {
+		return errors.New("no address to write")
+	}
+
+	var errs []error
+	if addrs.V4.IsValid() {
+		errs = append(errs, p.setOne(ctx, addrs.V4))
+	}
+	if addrs.V6.IsValid() {
+		errs = append(errs, p.setOne(ctx, addrs.V6))
+	}
+	return errors.Join(errs...)
+}
+
+// setOne points the configured record at addr: an A record for IPv4, an AAAA
+// record for IPv6.
 //
 // The API has no way to change a record in place, so a differing record is
 // replaced: the new one is added first and the old one removed afterwards,
@@ -111,11 +130,7 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 // wanted address and removes the others, so a failed removal heals itself. Two
 // or more records and none of them the wanted one is a state this provider did
 // not create, and it is left for the operator to sort out.
-func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
-	if !addr.IsValid() {
-		return errors.New("invalid address")
-	}
-
+func (p *provider) setOne(ctx context.Context, addr netip.Addr) error {
 	recType, addMethod := "AAAA", "zone/add_aaaa"
 	if addr.Is4() {
 		recType, addMethod = "A", "zone/add_alias"

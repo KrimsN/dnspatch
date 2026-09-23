@@ -153,8 +153,15 @@ func (in *instance) update(ctx context.Context, p *providerState, addr netip.Add
 		return nil
 	}
 
+	addrs := plugin.Addresses{}
+	if addr.Is4() {
+		addrs.V4 = addr
+	} else {
+		addrs.V6 = addr
+	}
+
 	err := in.attempt(ctx, func(ctx context.Context) error {
-		return p.provider.SetIPAddress(ctx, addr)
+		return p.provider.Update(ctx, addrs, plugin.RecordOptions{})
 	})
 	if err == nil {
 		p.last = addr

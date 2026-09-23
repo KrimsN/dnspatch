@@ -146,10 +146,23 @@ var (
 	v6 = netip.MustParseAddr("2001:db8::7")
 )
 
-func TestSetIPAddressAddsMissingRecord(t *testing.T) {
+// update calls p.Update with addr in the family it belongs to, so the tests
+// below can keep exercising one address at a time as they did before Update
+// took both families at once.
+func update(ctx context.Context, p *provider, addr netip.Addr) error {
+	addrs := plugin.Addresses{}
+	if addr.Is4() {
+		addrs.V4 = addr
+	} else {
+		addrs.V6 = addr
+	}
+	return p.Update(ctx, addrs, plugin.RecordOptions{})
+}
+
+func TestUpdateAddsMissingRecord(t *testing.T) {
 	api, srv := newFakeAPI(t)
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4); err != nil {
 		t.Fatal(err)
 	}
 
@@ -163,14 +176,14 @@ func TestSetIPAddressAddsMissingRecord(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressReplacesChangedRecord(t *testing.T) {
+func TestUpdateReplacesChangedRecord(t *testing.T) {
 	api, srv := newFakeAPI(t,
 		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"},
 		resourceRecord{Subname: "www", Rectype: "A", Content: "198.51.100.1"},
 		resourceRecord{Subname: "@", Rectype: "A", Content: "198.51.100.1"},
 	)
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,10 +208,10 @@ func TestSetIPAddressReplacesChangedRecord(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressSkipsUnchangedRecord(t *testing.T) {
+func TestUpdateSkipsUnchangedRecord(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "A", Content: "203.0.113.7"})
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records" {
@@ -206,10 +219,10 @@ func TestSetIPAddressSkipsUnchangedRecord(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressIPv6UsesAAAA(t *testing.T) {
+func TestUpdateIPv6UsesAAAA(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "A", Content: "203.0.113.7"})
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v6); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v6); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +237,42 @@ func TestSetIPAddressIPv6UsesAAAA(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressComparesAddressesNotText(t *testing.T) {
+func TestUpdateWritesBothFamiliesInOneCall(t *testing.T) {
+	api, srv := newFakeAPI(t)
+
+	addrs := plugin.Addresses{V4: v4, V6: v6}
+	if err := mustProvider(t, testConfig(srv), srv).Update(context.Background(), addrs, plugin.RecordOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records zone/add_alias zone/get_resource_records zone/add_aaaa" {
+		t.Fatalf("calls = %s", got)
+	}
+}
+
+func TestUpdateWithOneInvalidFamilyWritesOnlyTheOther(t *testing.T) {
+	api, srv := newFakeAPI(t)
+
+	addrs := plugin.Addresses{V4: v4}
+	if err := mustProvider(t, testConfig(srv), srv).Update(context.Background(), addrs, plugin.RecordOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records zone/add_alias" {
+		t.Fatalf("calls = %s", got)
+	}
+}
+
+func TestUpdateWithNoValidAddressFails(t *testing.T) {
+	_, srv := newFakeAPI(t)
+
+	err := mustProvider(t, testConfig(srv), srv).Update(context.Background(), plugin.Addresses{}, plugin.RecordOptions{})
+	if err == nil || !strings.Contains(err.Error(), "no address to write") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestUpdateComparesAddressesNotText(t *testing.T) {
 	forms := map[string]string{
 		"expanded":   "2001:0db8:0000:0000:0000:0000:0000:0007",
 		"upper case": "2001:DB8::7",
@@ -235,7 +283,7 @@ func TestSetIPAddressComparesAddressesNotText(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "AAAA", Content: content})
 
-			if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v6); err != nil {
+			if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v6); err != nil {
 				t.Fatal(err)
 			}
 			if got := strings.Join(api.methods(), " "); got != "zone/get_resource_records" {
@@ -245,11 +293,11 @@ func TestSetIPAddressComparesAddressesNotText(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressRemovesStaleIPv6RecordAsTheAPIWroteIt(t *testing.T) {
+func TestUpdateRemovesStaleIPv6RecordAsTheAPIWroteIt(t *testing.T) {
 	const stale = "2001:0db8:0000:0000:0000:0000:0000:0001"
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "AAAA", Content: stale})
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v6); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v6); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,12 +333,12 @@ func TestSameAddress(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressMatchesNamesLeniently(t *testing.T) {
+func TestUpdateMatchesNamesLeniently(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "HOME", Rectype: "A", Content: "198.51.100.1"})
 
 	cfg := testConfig(srv)
 	cfg.RRName = "Home"
-	if err := mustProvider(t, cfg, srv).SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), mustProvider(t, cfg, srv), v4); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(api.methods(), " "); !strings.HasSuffix(got, "zone/remove_record") {
@@ -298,13 +346,13 @@ func TestSetIPAddressMatchesNamesLeniently(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressApexAndWildcard(t *testing.T) {
+func TestUpdateApexAndWildcard(t *testing.T) {
 	for _, label := range []string{"@", "*"} {
 		api, srv := newFakeAPI(t)
 
 		cfg := testConfig(srv)
 		cfg.RRName = label
-		if err := mustProvider(t, cfg, srv).SetIPAddress(context.Background(), v4); err != nil {
+		if err := update(context.Background(), mustProvider(t, cfg, srv), v4); err != nil {
 			t.Fatal(err)
 		}
 		if api.calls[1].input["subdomain"] != label {
@@ -313,13 +361,13 @@ func TestSetIPAddressApexAndWildcard(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressRefusesAmbiguousRecords(t *testing.T) {
+func TestUpdateRefusesAmbiguousRecords(t *testing.T) {
 	api, srv := newFakeAPI(t,
 		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"},
 		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.2"},
 	)
 
-	err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
+	err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4)
 	if err == nil || !strings.Contains(err.Error(), "2 A records") || !strings.Contains(err.Error(), "none is 203.0.113.7") {
 		t.Fatalf("error = %v", err)
 	}
@@ -328,7 +376,7 @@ func TestSetIPAddressRefusesAmbiguousRecords(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressRemovesStaleRecordsNextToCurrentOne(t *testing.T) {
+func TestUpdateRemovesStaleRecordsNextToCurrentOne(t *testing.T) {
 	api, srv := newFakeAPI(t,
 		resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"},
 		resourceRecord{Subname: "home", Rectype: "A", Content: "203.0.113.7"},
@@ -337,7 +385,7 @@ func TestSetIPAddressRemovesStaleRecordsNextToCurrentOne(t *testing.T) {
 		resourceRecord{Subname: "home", Rectype: "AAAA", Content: "2001:db8::1"},
 	)
 
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4); err != nil {
 		t.Fatal(err)
 	}
 
@@ -356,13 +404,13 @@ func TestSetIPAddressRemovesStaleRecordsNextToCurrentOne(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressHealsAfterFailedRemoval(t *testing.T) {
+func TestUpdateHealsAfterFailedRemoval(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"})
 	p := mustProvider(t, testConfig(srv), srv)
 
 	// The add goes through and the removal fails: both records stay in the zone.
 	api.failWith["zone/remove_record"] = "try again later"
-	if err := p.SetIPAddress(context.Background(), v4); err == nil || !strings.Contains(err.Error(), "try again later") {
+	if err := update(context.Background(), p, v4); err == nil || !strings.Contains(err.Error(), "try again later") {
 		t.Fatalf("first attempt: error = %v", err)
 	}
 	if len(api.rrs) != 2 {
@@ -371,7 +419,7 @@ func TestSetIPAddressHealsAfterFailedRemoval(t *testing.T) {
 
 	// The next attempt must not be stuck on the two records.
 	delete(api.failWith, "zone/remove_record")
-	if err := p.SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), p, v4); err != nil {
 		t.Fatalf("second attempt: %v", err)
 	}
 	if len(api.rrs) != 1 || api.rrs[0].Content != "203.0.113.7" {
@@ -379,11 +427,11 @@ func TestSetIPAddressHealsAfterFailedRemoval(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressKeepsOldRecordWhenAddFails(t *testing.T) {
+func TestUpdateKeepsOldRecordWhenAddFails(t *testing.T) {
 	api, srv := newFakeAPI(t, resourceRecord{Subname: "home", Rectype: "A", Content: "198.51.100.1"})
 	api.failWith["zone/add_alias"] = "record limit reached"
 
-	err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
+	err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4)
 	if err == nil || !strings.Contains(err.Error(), "record limit reached") {
 		t.Fatalf("error = %v", err)
 	}
@@ -392,13 +440,13 @@ func TestSetIPAddressKeepsOldRecordWhenAddFails(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressErrors(t *testing.T) {
+func TestUpdateErrors(t *testing.T) {
 	t.Run("wrong password names the API error and hides the password", func(t *testing.T) {
 		_, srv := newFakeAPI(t)
 		cfg := testConfig(srv)
 		cfg.Password = "wrong-password"
 
-		err := mustProvider(t, cfg, srv).SetIPAddress(context.Background(), v4)
+		err := update(context.Background(), mustProvider(t, cfg, srv), v4)
 		if err == nil || !strings.Contains(err.Error(), "PASSWORD_AUTH_FAILED") {
 			t.Fatalf("error = %v", err)
 		}
@@ -413,7 +461,7 @@ func TestSetIPAddressErrors(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
+		err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4)
 		if err == nil || !strings.Contains(err.Error(), "502") || !strings.Contains(err.Error(), "upstream down") {
 			t.Errorf("error = %v", err)
 		}
@@ -425,7 +473,7 @@ func TestSetIPAddressErrors(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
+		err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4)
 		if err == nil || !strings.Contains(err.Error(), "not JSON") {
 			t.Errorf("error = %v", err)
 		}
@@ -435,7 +483,7 @@ func TestSetIPAddressErrors(t *testing.T) {
 		api, srv := newFakeAPI(t)
 		api.failWith["zone/get_resource_records"] = "domain is not served by REG.RU DNS"
 
-		err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), v4)
+		err := update(context.Background(), mustProvider(t, testConfig(srv), srv), v4)
 		if err == nil || !strings.Contains(err.Error(), "not served by REG.RU DNS") {
 			t.Errorf("error = %v", err)
 		}
@@ -443,13 +491,13 @@ func TestSetIPAddressErrors(t *testing.T) {
 
 	t.Run("invalid address", func(t *testing.T) {
 		_, srv := newFakeAPI(t)
-		if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(context.Background(), netip.Addr{}); err == nil {
+		if err := update(context.Background(), mustProvider(t, testConfig(srv), srv), netip.Addr{}); err == nil {
 			t.Error("expected an error")
 		}
 	})
 }
 
-func TestSetIPAddressCancelled(t *testing.T) {
+func TestUpdateCancelled(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
 	defer srv.Close()
@@ -459,7 +507,7 @@ func TestSetIPAddressCancelled(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	if err := mustProvider(t, testConfig(srv), srv).SetIPAddress(ctx, v4); err == nil {
+	if err := update(ctx, mustProvider(t, testConfig(srv), srv), v4); err == nil {
 		t.Fatal("expected an error")
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
@@ -467,7 +515,7 @@ func TestSetIPAddressCancelled(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressDoesNotFollowRedirects(t *testing.T) {
+func TestUpdateDoesNotFollowRedirects(t *testing.T) {
 	var leaked atomic.Bool
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -481,7 +529,7 @@ func TestSetIPAddressDoesNotFollowRedirects(t *testing.T) {
 	origin := httptest.NewServer(http.RedirectHandler(target.URL+"/zone/get_resource_records", http.StatusTemporaryRedirect))
 	defer origin.Close()
 
-	err := mustProvider(t, testConfig(origin), origin).SetIPAddress(context.Background(), v4)
+	err := update(context.Background(), mustProvider(t, testConfig(origin), origin), v4)
 	if err == nil || !strings.Contains(err.Error(), "307") {
 		t.Errorf("error = %v, want the redirect reported as an unexpected status", err)
 	}

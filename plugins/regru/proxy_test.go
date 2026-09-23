@@ -60,7 +60,7 @@ func TestProviderUsesProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := p.SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), p, v4); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestProviderWithoutProxyConnectsDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := p.SetIPAddress(context.Background(), v4); err != nil {
+	if err := update(context.Background(), p, v4); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,7 +112,7 @@ func TestProxyUnreachable(t *testing.T) {
 		t.Run(scheme, func(t *testing.T) {
 			cfg.Proxy = scheme + "://" + proxyUser + ":" + proxyPass + "@" + addr
 
-			err := realProvider(t, cfg).SetIPAddress(context.Background(), v4)
+			err := update(context.Background(), realProvider(t, cfg), v4)
 			if err == nil || !strings.Contains(err.Error(), "proxyconnect") {
 				t.Fatalf("error = %v, want it to name the proxy connection", err)
 			}
@@ -132,7 +132,7 @@ func TestProxyRejectsCredentials(t *testing.T) {
 	cfg, _ := proxiedConfig(t, srv)
 	cfg.Proxy = strings.Replace(cfg.Proxy, proxyPass, "wrong-pass", 1)
 
-	err := realProvider(t, cfg).SetIPAddress(context.Background(), v4)
+	err := update(context.Background(), realProvider(t, cfg), v4)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -141,7 +141,7 @@ func TestProxyRejectsCredentials(t *testing.T) {
 	}
 }
 
-func TestSetIPAddressCancelledThroughProxy(t *testing.T) {
+func TestUpdateCancelledThroughProxy(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
 	defer srv.Close()
@@ -153,7 +153,7 @@ func TestSetIPAddressCancelledThroughProxy(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	if err := realProvider(t, cfg).SetIPAddress(ctx, v4); err == nil {
+	if err := update(ctx, realProvider(t, cfg), v4); err == nil {
 		t.Fatal("expected an error")
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
