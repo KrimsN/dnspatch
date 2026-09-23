@@ -65,33 +65,28 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 
 	level, err := parseLogLevel(*logLevel, os.Getenv(envLogLevel))
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitConfig
+		return fail(stderr, err, exitConfig)
 	}
 
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
 
 	path, err := config.ResolvePath(*configPath)
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitConfig
+		return fail(stderr, err, exitConfig)
 	}
 
 	cfg, err := config.Load(path)
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitConfig
+		return fail(stderr, err, exitConfig)
 	}
 
 	instances, err := buildInstances(cfg, registry)
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitConfig
+		return fail(stderr, err, exitConfig)
 	}
 
 	if err := runner.Validate(instances); err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitConfig
+		return fail(stderr, err, exitConfig)
 	}
 
 	if *checkConfig {
@@ -102,8 +97,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 	logger.Info("starting", "version", buildVersion(), "config", path, "instances", len(instances))
 
 	if err := runner.Run(ctx, instances, runner.Options{Logger: logger}); err != nil {
-		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
-		return exitFailure
+		return fail(stderr, err, exitFailure)
 	}
 
 	logger.Info("stopped")
@@ -182,6 +176,14 @@ func buildInstances(cfg config.Config, registry *plugin.Registry) ([]runner.Inst
 	}
 
 	return instances, nil
+}
+
+// fail reports a problem unambiguously as an error, prefixed apart from
+// dnspatch's other stderr output (a plain "dnspatch: <message>" that a first-
+// time user has no successful run to compare against), and returns code.
+func fail(stderr io.Writer, err error, code int) int {
+	_, _ = fmt.Fprintln(stderr, "dnspatch: error:", err)
+	return code
 }
 
 // printConfigSummary confirms that path was read and parsed as intended: one
