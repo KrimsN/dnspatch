@@ -17,6 +17,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 - [Providers](#providers)
   - [beget](#provider-beget)
   - [regru](#provider-regru)
+  - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
 
 ## Retrievers
@@ -83,6 +84,20 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `base_url` | no | `https://api.reg.ru/api/regru2` | Base URL of the API |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `rfc2136`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `server` | yes | — | Address of the name server that accepts updates, as host or host:port. The port defaults to 53. It must be the primary (master) server of the zone or one that forwards updates to it |
+| `zone` | yes | — | Domain name of the zone the server is authoritative for, for example example.com |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `key_name` | no | — | Name of the TSIG key used to sign updates, as configured on the server. Leave empty (together with key_secret) to send unsigned updates, which only fits a server that authorizes by client address |
+| `key_secret` | no | — | Base64-encoded secret of the TSIG key, as printed by tsig-keygen |
+| `key_algorithm` | no | `hmac-sha256` | TSIG algorithm of the key: hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384 or hmac-sha512 |
+| `ttl` | no | `300` | TTL in seconds of the record this provider writes |
+| `protocol` | no | `tcp` | Transport of the update: tcp or udp. There is no fallback from one to the other |
+| `timeout` | no | `10s` | How long to wait for the server to answer an update |
 
 ### Provider `selectel`
 

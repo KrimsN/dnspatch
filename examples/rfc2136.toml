@@ -1,0 +1,27 @@
+# Updating a record on your own name server (BIND, Knot DNS, PowerDNS,
+# Technitium, ...) with RFC 2136 dynamic updates, the protocol behind
+# nsupdate. No third-party DNS service is involved.
+#
+# On the server, create a TSIG key (for BIND: tsig-keygen dnspatch-key) and
+# allow it to update the record in the zone, for example in named.conf:
+#
+#   update-policy { grant dnspatch-key name home.example.com. A AAAA; };
+#
+# Put the base64 secret it prints into the TSIG_SECRET environment variable.
+# The server must be the zone's primary (or forward updates to it) and be
+# reachable on TCP port 53 from the host dnspatch runs on.
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+type = "ifconfigco"
+
+[[instance.provider]]
+type          = "rfc2136"
+server        = "ns1.example.com"
+zone          = "example.com"
+rr_name       = "home"
+key_name      = "dnspatch-key"
+key_secret    = "${TSIG_SECRET}"
+key_algorithm = "hmac-sha256"

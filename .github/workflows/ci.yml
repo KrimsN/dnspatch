@@ -68,6 +68,39 @@ jobs:
           go-version: stable
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
+  # The unit tests of the rfc2136 provider talk to an in-process server; this
+  # job runs the same update against a real BIND, which is the reference
+  # implementation of RFC 2136 and TSIG. The test key is public and only lives
+  # in the throwaway container.
+  rfc2136:
+    name: rfc2136 (BIND 9.20)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      # named writes a journal next to the zone file, so the directory must be
+      # writable by the unprivileged user inside the container.
+      - run: |
+          cp -r plugins/rfc2136/testdata/bind "$RUNNER_TEMP/bind"
+          chmod -R a+rwX "$RUNNER_TEMP/bind"
+          docker run -d --name bind -p 15353:53/tcp -p 15353:53/udp \
+            -v "$RUNNER_TEMP/bind/named.conf:/etc/bind/named.conf:ro" \
+            -v "$RUNNER_TEMP/bind:/zones" \
+            internetsystemsconsortium/bind9@sha256:f8506cfcbc8fcb44e40b922fa74b481ba23b50f00482bf6693ff8f120709a778
+          for _ in $(seq 30); do
+            (echo > /dev/tcp/127.0.0.1/15353) 2>/dev/null && break
+            sleep 1
+          done
+          sleep 2
+      - env:
+          RFC2136_TEST_SERVER: 127.0.0.1:15353
+          RFC2136_TEST_SECRET: c2VjcmV0LXNlY3JldC1zZWNyZXQ=
+        run: go test -count=1 -v -run TestRealServer ./plugins/rfc2136
+      - if: failure()
+        run: docker logs bind
+
   # examples/*.toml are documentation, not code under test, so they are only
   # checked when they (or the parser they exercise) actually changed. On a
   # push or a workflow_call (release) there is no PR base to diff against, so
@@ -102,6 +135,7 @@ jobs:
         env:
           PASSWORD: check-config-dummy
           PROXY_URL: direct
+          TSIG_SECRET: Y2hlY2stY29uZmln
         run: |
           set -e
           for f in *.toml; do
