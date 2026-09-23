@@ -2,9 +2,7 @@
 
 Each file is a self-contained `dnspatch.toml`: copy it, replace the
 `CHANGE_ME` placeholders and the `${...}` references, and start the daemon
-with `--config`. They are parsed in CI (see
-[../internal/config/examples_test.go](../internal/config/examples_test.go)),
-so the syntax always matches the current release.
+with `--config`.
 
 | File | Shows |
 |------|-------|
