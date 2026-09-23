@@ -133,6 +133,39 @@ rr_name = "home"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.rfc2136]
+type = "rfc2136"
+
+# Address of the name server that accepts updates, as host or host:port.
+server = "ns1.example.com:53"
+
+# Domain name of the zone the server is authoritative for, for example
+# example.com
+zone = "example.com"
+
+# Record name relative to the zone: @ for the apex, * for a wildcard, or a
+# label such as home
+rr_name = "home"
+
+# Name of the TSIG key used to sign updates, as configured on the server.
+# key_name = "dnspatch-key"
+
+# Base64-encoded secret of the TSIG key, as printed by tsig-keygen
+# key_secret = "${TSIG_SECRET}"
+
+# TSIG algorithm of the key: hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384
+# or hmac-sha512
+# key_algorithm = "hmac-sha256"
+
+# TTL in seconds of the record this provider writes
+# ttl = 300
+
+# Transport of the update: tcp or udp.
+# protocol = "tcp"
+
+# How long to wait for the server to answer an update
+# timeout = "10s"
+
 [provider.selectel]
 type = "selectel"
 

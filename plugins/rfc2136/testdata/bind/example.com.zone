@@ -1,0 +1,6 @@
+$TTL 300
+@    IN SOA ns1.example.com. admin.example.com. 1 3600 600 86400 300
+@    IN NS  ns1.example.com.
+ns1  IN A   127.0.0.1
+home IN A    192.0.2.1
+home IN AAAA 2001:db8::1
