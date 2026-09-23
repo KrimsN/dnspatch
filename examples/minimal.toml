@@ -2,22 +2,21 @@
 # Start here, copy the file to dnspatch.toml, replace the placeholders, and
 # read config.toml.example (or docs/PARAMETERS.md) once you need a parameter
 # that is not shown here.
-
-[retriever.home]
-type = "ifconfigco"
-
-[provider.regru]
-type     = "regru"
-username = "CHANGE_ME"
-password = "${REGRU_PASSWORD}"
-zone     = "example.com"
-rr_name  = "home"
+#
+# The retriever is declared inline, with "type" instead of "ref": that is
+# only possible because it is used by a single instance. A retriever or
+# provider shared by more than one instance needs a named [retriever.<name>]
+# or [provider.<name>] block instead — see multi-provider.toml.
 
 [[instance]]
 name = "home"
 
 [[instance.retriever]]
-ref = "home"
+type = "ifconfigco"
 
 [[instance.provider]]
-ref = "regru"
+type     = "regru"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"

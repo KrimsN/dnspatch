@@ -183,6 +183,82 @@ func TestSameDefinitionReferencedTwice(t *testing.T) {
 	}
 }
 
+func TestInlinePluginWithoutRef(t *testing.T) {
+	cfg := mustParse(t, `
+[provider.main]
+type = "example"
+zone = "a.com"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+type       = "ifconfigco"
+verify_tls = true
+[[instance.provider]]
+ref = "main"
+`)
+
+	retriever := cfg.Instances[0].Retrievers[0]
+	if retriever.Ref != "" {
+		t.Errorf("inline retriever Ref = %q, want empty", retriever.Ref)
+	}
+
+	if retriever.Type != "ifconfigco" {
+		t.Errorf("inline retriever Type = %q, want ifconfigco", retriever.Type)
+	}
+
+	want := map[string]any{"verify_tls": true}
+	if !reflect.DeepEqual(retriever.Params, want) {
+		t.Errorf("inline retriever params = %v, want %v", retriever.Params, want)
+	}
+}
+
+func TestInlineProviderIsNotComparedForDuplicates(t *testing.T) {
+	cfg := mustParse(t, `
+[retriever.home]
+type = "ifconfigco"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+type    = "example"
+zone    = "a.com"
+rr_name = "@"
+[[instance.provider]]
+type    = "example"
+zone    = "a.com"
+rr_name = "@"
+`)
+
+	if len(cfg.Instances[0].Providers) != 2 {
+		t.Fatalf("providers = %d, want 2", len(cfg.Instances[0].Providers))
+	}
+}
+
+func TestInlinePluginDoesNotSeeAPoolDefinitionOfTheSameName(t *testing.T) {
+	cfg := mustParse(t, `
+[retriever.ifconfigco]
+type       = "ifconfigco"
+verify_tls = false
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+type = "ifconfigco"
+[[instance.provider]]
+type    = "example"
+zone    = "a.com"
+rr_name = "@"
+`)
+
+	retriever := cfg.Instances[0].Retrievers[0]
+	if _, ok := retriever.Params["verify_tls"]; ok {
+		t.Errorf("inline retriever picked up %q from an unrelated pool definition: %v", "verify_tls", retriever.Params)
+	}
+}
+
 func TestMergeSharesNoMemory(t *testing.T) {
 	newDefinition := func() map[string]any {
 		return map[string]any{
@@ -524,13 +600,13 @@ zone = "a.com"
 			wants: []string{`instance "a"`, `at least one provider is required`},
 		},
 		{
-			name: "reference without ref",
+			name: "reference without ref or type",
 			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 zone = "x.com"
 `),
-			wants: []string{`instance "a"`, `provider #1`, `"ref" is required`},
+			wants: []string{`instance "a"`, `provider #1`, `either "ref" or "type" is required`},
 		},
 		{
 			name: "bad instance interval names instance and value",
@@ -582,14 +658,34 @@ ref = "main"
 				`environment variable "DNSPATCH_TEST_SURELY_UNSET" is not set`},
 		},
 		{
-			name: "type cannot be overridden",
+			name: "ref and type cannot both be set",
 			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref  = "main"
 type = "other"
 `),
-			wants: []string{`instance "a"`, `provider "main"`, `"type" cannot be overridden`},
+			wants: []string{`instance "a"`, `provider #1`, `"ref" and "type" cannot both be set`},
+		},
+		{
+			name: "inline type must be a string",
+			doc: instance(`[[instance.retriever]]
+type = 1
+[[instance.provider]]
+ref = "main"
+`),
+			wants: []string{`instance "a"`, `retriever #1`, `"type" must be a string`},
+		},
+		{
+			name: "undefined environment variable in an inline plugin",
+			doc: instance(`[[instance.retriever]]
+type      = "ifconfigco"
+api_token = "${DNSPATCH_TEST_SURELY_UNSET}"
+[[instance.provider]]
+ref = "main"
+`),
+			wants: []string{`instance "a"`, `retriever "ifconfigco"`, `parameter "api_token"`,
+				`environment variable "DNSPATCH_TEST_SURELY_UNSET" is not set`},
 		},
 		{
 			name: "definition without type",
