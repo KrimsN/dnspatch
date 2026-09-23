@@ -31,13 +31,21 @@ type NamedProvider struct {
 	Provider plugin.Provider
 }
 
-// Instance ties one retriever to the providers it feeds and the interval on
-// which it is polled.
-type Instance struct {
+// NamedRetriever is a retriever of an instance; the name identifies it in logs.
+type NamedRetriever struct {
 	Name      string
-	Interval  time.Duration
 	Retriever plugin.Retriever
-	Providers []NamedProvider
+}
+
+// Instance ties one or more retrievers to the providers they feed and the
+// interval on which it is polled. There is at most one retriever per address
+// family: two retrievers means one for IPv4 and one for IPv6, distinguished
+// at run time by the address each returns.
+type Instance struct {
+	Name       string
+	Interval   time.Duration
+	Retrievers []NamedRetriever
+	Providers  []NamedProvider
 }
 
 // Options tune the runner; the zero value is ready to use.
@@ -78,7 +86,7 @@ func Run(ctx context.Context, instances []Instance, opts Options) error {
 
 	var wg sync.WaitGroup
 	for _, cfg := range instances {
-		in := newInstance(nameProviders(cfg), opts)
+		in := newInstance(nameRetrievers(nameProviders(cfg)), opts)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -96,9 +104,10 @@ func SignalContext(parent context.Context) (context.Context, context.CancelFunc)
 }
 
 // Validate checks that instances can be run: there is at least one, and each has
-// a positive interval, a retriever and providers. All problems are reported
-// together. Run performs the same check itself; calling Validate first lets a
-// caller tell an invalid setup apart from a failure while running.
+// a positive interval, one or two retrievers and providers. All problems are
+// reported together. Run performs the same check itself; calling Validate
+// first lets a caller tell an invalid setup apart from a failure while
+// running.
 func Validate(instances []Instance) error {
 	if len(instances) == 0 {
 		return errors.New("no instances to run")
@@ -108,8 +117,13 @@ func Validate(instances []Instance) error {
 		if in.Interval <= 0 {
 			errs = append(errs, fmt.Errorf("instance %q: interval must be positive", in.Name))
 		}
-		if in.Retriever == nil {
-			errs = append(errs, fmt.Errorf("instance %q: no retriever", in.Name))
+		if len(in.Retrievers) == 0 || len(in.Retrievers) > 2 {
+			errs = append(errs, fmt.Errorf("instance %q: must have one or two retrievers, has %d", in.Name, len(in.Retrievers)))
+		}
+		for i, r := range in.Retrievers {
+			if r.Retriever == nil {
+				errs = append(errs, fmt.Errorf("instance %q: retriever #%d is nil", in.Name, i+1))
+			}
 		}
 		if len(in.Providers) == 0 {
 			errs = append(errs, fmt.Errorf("instance %q: no providers", in.Name))
@@ -133,5 +147,18 @@ func nameProviders(cfg Instance) Instance {
 		providers[i] = p
 	}
 	cfg.Providers = providers
+	return cfg
+}
+
+// nameRetrievers gives unnamed retrievers a positional name for the logs.
+func nameRetrievers(cfg Instance) Instance {
+	retrievers := make([]NamedRetriever, len(cfg.Retrievers))
+	for i, r := range cfg.Retrievers {
+		if r.Name == "" {
+			r.Name = fmt.Sprintf("#%d", i+1)
+		}
+		retrievers[i] = r
+	}
+	cfg.Retrievers = retrievers
 	return cfg
 }

@@ -30,10 +30,10 @@ func startRun(t *testing.T, clock Clock, instances ...Instance) (stop func()) {
 
 func testInstance(name string, interval time.Duration, r *fakeRetriever, p *fakeProvider) Instance {
 	return Instance{
-		Name:      name,
-		Interval:  interval,
-		Retriever: r,
-		Providers: []NamedProvider{{Name: "p", Provider: p}},
+		Name:       name,
+		Interval:   interval,
+		Retrievers: []NamedRetriever{{Name: "r", Retriever: r}},
+		Providers:  []NamedProvider{{Name: "p", Provider: p}},
 	}
 }
 
@@ -165,7 +165,7 @@ func TestRunRejectsInvalidInstances(t *testing.T) {
 	noInterval := good
 	noInterval.Interval = 0
 	noRetriever := good
-	noRetriever.Retriever = nil
+	noRetriever.Retrievers = nil
 	noProviders := good
 	noProviders.Providers = nil
 	nilProvider := good
@@ -177,7 +177,7 @@ func TestRunRejectsInvalidInstances(t *testing.T) {
 	}{
 		"none":         {nil, "no instances"},
 		"no interval":  {[]Instance{noInterval}, "interval must be positive"},
-		"no retriever": {[]Instance{noRetriever}, "no retriever"},
+		"no retriever": {[]Instance{noRetriever}, "must have one or two retrievers"},
 		"no providers": {[]Instance{noProviders}, "no providers"},
 		"nil provider": {[]Instance{nilProvider}, "provider #1 is nil"},
 	}

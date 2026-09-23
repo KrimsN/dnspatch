@@ -45,13 +45,15 @@ type Config struct {
 	Instances []Instance
 }
 
-// Instance ties one retriever to one or more providers.
+// Instance ties one or more retrievers to one or more providers. There is at
+// most one retriever per address family: two retrievers means one for IPv4
+// and one for IPv6, distinguished at run time by the address each returns.
 type Instance struct {
 	Name string
 	// Interval is the polling interval, already resolved against the global one.
-	Interval  time.Duration
-	Retriever Plugin
-	Providers []Plugin
+	Interval   time.Duration
+	Retrievers []Plugin
+	Providers  []Plugin
 }
 
 // Plugin is a plugin type together with its final parameters: the named
@@ -66,10 +68,10 @@ type Plugin struct {
 
 // rawInstance is one [[instance]] table after its shape has been checked.
 type rawInstance struct {
-	Name      string
-	Interval  *string
-	Retriever map[string]any
-	Providers []map[string]any
+	Name       string
+	Interval   *string
+	Retrievers []map[string]any
+	Providers  []map[string]any
 }
 
 // Load reads and parses the config file at path. Problems are listed under a
@@ -259,8 +261,8 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 	}
 
 	if value, ok := table["retriever"]; ok {
-		if in.Retriever, ok = value.(map[string]any); !ok {
-			errs = append(errs, errors.New(`"retriever" must be a table: [instance.retriever]`))
+		if in.Retrievers, ok = asTables(value); !ok {
+			errs = append(errs, errors.New(`"retriever" must be an array of tables: [[instance.retriever]]`))
 		}
 	}
 
@@ -292,13 +294,20 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 		}
 	}
 
-	if in.Retriever == nil {
-		errs = append(errs, errors.New("retriever is required"))
-	} else {
-		plugin, pluginErrs := resolvePlugin("retriever", "retriever", retrievers, in.Retriever)
-		errs = append(errs, pluginErrs...)
-		inst.Retriever = plugin
+	switch {
+	case len(in.Retrievers) == 0:
+		errs = append(errs, errors.New("at least one retriever is required"))
+	case len(in.Retrievers) > 2:
+		errs = append(errs, errors.New("at most two retrievers are supported (one per address family)"))
 	}
+
+	for i, override := range in.Retrievers {
+		plugin, pluginErrs := resolvePlugin("retriever", fmt.Sprintf("retriever #%d", i+1), retrievers, override)
+		errs = append(errs, pluginErrs...)
+		inst.Retrievers = append(inst.Retrievers, plugin)
+	}
+
+	errs = append(errs, duplicateRetrieverFamilies(inst.Retrievers)...)
 
 	if len(in.Providers) == 0 {
 		errs = append(errs, errors.New("at least one provider is required"))
@@ -409,4 +418,28 @@ func duplicateProviders(providers []Plugin) []error {
 	}
 
 	return errs
+}
+
+// duplicateRetrieverFamilies reports two retrievers declared for the same
+// address family via their "family" parameter. This is an early hint for a
+// likely misconfiguration, not a guarantee: the actual family is only known
+// once a retriever returns an address at run time.
+func duplicateRetrieverFamilies(retrievers []Plugin) []error {
+	if len(retrievers) != 2 {
+		return nil
+	}
+
+	family := func(p Plugin) (string, bool) {
+		f, ok := p.Params["family"].(string)
+		return f, ok && f != ""
+	}
+
+	f1, ok1 := family(retrievers[0])
+	f2, ok2 := family(retrievers[1])
+
+	if ok1 && ok2 && f1 == f2 {
+		return []error{fmt.Errorf("retriever #1 and #2 are both configured for family %q", f1)}
+	}
+
+	return nil
 }

@@ -50,7 +50,7 @@ proxy    = %q
 
 [[instance]]
 name = "home"
-[instance.retriever]
+[[instance.retriever]]
 ref = "echo"
 [[instance.provider]]
 ref = "dns"

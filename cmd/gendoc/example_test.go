@@ -93,7 +93,7 @@ func TestExampleIsRepeatable(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(string(first), "[instance.retriever]\nref = \"a\"") {
+	if !strings.Contains(string(first), "[[instance.retriever]]\nref = \"a\"") {
 		t.Error("the instance does not use the first retriever by name")
 	}
 }
@@ -216,7 +216,10 @@ func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
 
 	in := cfg.Instances[0]
 
-	if _, err := plugin.Default.BuildRetriever(in.Retriever.Type, in.Retriever.Params); err != nil {
+	if len(in.Retrievers) != 1 {
+		t.Fatalf("got %d retrievers, want 1", len(in.Retrievers))
+	}
+	if _, err := plugin.Default.BuildRetriever(in.Retrievers[0].Type, in.Retrievers[0].Params); err != nil {
 		t.Errorf("the retriever of the example does not build: %v", err)
 	}
 
@@ -244,7 +247,7 @@ func TestExampleDefinitionsAllBuild(t *testing.T) {
 	for retriever := range retrievers {
 		for provider := range providers {
 			text := string(doc[:strings.Index(string(doc), "[[instance]]")]) +
-				"[[instance]]\nname = \"t\"\n[instance.retriever]\nref = \"" + retriever + "\"\n" +
+				"[[instance]]\nname = \"t\"\n[[instance.retriever]]\nref = \"" + retriever + "\"\n" +
 				"[[instance.provider]]\nref = \"" + provider + "\"\n"
 
 			cfg, err := config.Parse([]byte(text))
@@ -254,7 +257,7 @@ func TestExampleDefinitionsAllBuild(t *testing.T) {
 
 			in := cfg.Instances[0]
 
-			if _, err := plugin.Default.BuildRetriever(in.Retriever.Type, in.Retriever.Params); err != nil {
+			if _, err := plugin.Default.BuildRetriever(in.Retrievers[0].Type, in.Retrievers[0].Params); err != nil {
 				t.Errorf("retriever %q: %v", retriever, err)
 			}
 

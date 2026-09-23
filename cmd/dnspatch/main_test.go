@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,18 +18,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KrimsN/dnspatch/internal/config"
 	"github.com/KrimsN/dnspatch/plugin"
 )
 
 // fakeWorld plays both external services: the IP echo and the REG.RU DNS API.
-// It keeps the contents of the A records at home.example.com and counts how
-// many records the daemon has added and how often it asked for its address.
+// It keeps the contents of the A and AAAA records at home.example.com and
+// counts how many records the daemon has added and how often it asked for
+// its address.
 type fakeWorld struct {
-	mu       sync.Mutex
-	ip       string
-	contents []string
-	adds     int
-	lookups  int
+	mu        sync.Mutex
+	ip        string
+	contents  []string // A records
+	contents6 []string // AAAA records
+	adds      int
+	lookups   int
 }
 
 func (w *fakeWorld) setIP(ip string) {
@@ -41,6 +46,13 @@ func (w *fakeWorld) snapshot() (content string, adds int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return strings.Join(w.contents, ","), w.adds
+}
+
+// snapshot6 is snapshot for the AAAA records.
+func (w *fakeWorld) snapshot6() (content string, adds int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.Join(w.contents6, ","), w.adds
 }
 
 // lookupCount returns how many times the daemon has asked for its address.
@@ -61,8 +73,9 @@ func (w *fakeWorld) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		Ipaddr  string `json:"ipaddr"`
-		Content string `json:"content"`
+		Ipaddr     string `json:"ipaddr"`
+		Content    string `json:"content"`
+		RecordType string `json:"record_type"`
 	}
 	_ = json.Unmarshal([]byte(r.FormValue("input_data")), &input)
 
@@ -73,11 +86,21 @@ func (w *fakeWorld) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		for _, content := range w.contents {
 			rrs = append(rrs, map[string]string{"subname": "home", "rectype": "A", "content": content})
 		}
+		for _, content := range w.contents6 {
+			rrs = append(rrs, map[string]string{"subname": "home", "rectype": "AAAA", "content": content})
+		}
 	case "/zone/add_alias":
 		w.contents = append(w.contents, input.Ipaddr)
 		w.adds++
+	case "/zone/add_aaaa":
+		w.contents6 = append(w.contents6, input.Ipaddr)
+		w.adds++
 	case "/zone/remove_record":
-		w.contents = slices.DeleteFunc(w.contents, func(content string) bool { return content == input.Content })
+		if input.RecordType == "AAAA" {
+			w.contents6 = slices.DeleteFunc(w.contents6, func(content string) bool { return content == input.Content })
+		} else {
+			w.contents = slices.DeleteFunc(w.contents, func(content string) bool { return content == input.Content })
+		}
 	default:
 		http.NotFound(rw, r)
 		return
@@ -122,7 +145,7 @@ base_url = %[1]q
 
 [[instance]]
 name = "home"
-[instance.retriever]
+[[instance.retriever]]
 ref = "echo"
 [[instance.provider]]
 ref = "dns"
@@ -168,6 +191,99 @@ ref = "dns"
 	}
 }
 
+// ipv6Echo serves a fixed address at /ip on an IPv6-only loopback listener, so
+// a retriever configured with family = "ipv6" has something real to dial.
+type ipv6Echo struct {
+	addr string
+}
+
+func (e *ipv6Echo) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/ip" {
+		http.NotFound(rw, r)
+		return
+	}
+	_, _ = fmt.Fprint(rw, e.addr)
+}
+
+func newIPv6EchoServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback available: %v", err)
+	}
+
+	srv := &httptest.Server{Listener: listener, Config: &http.Server{Handler: h}}
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	return srv
+}
+
+func TestDaemonWritesBothFamiliesFromTwoRetrievers(t *testing.T) {
+	world := &fakeWorld{ip: "203.0.113.7"}
+	srv := httptest.NewServer(world)
+	defer srv.Close()
+
+	echo6 := &ipv6Echo{addr: "2001:db8::1"}
+	srv6 := newIPv6EchoServer(t, echo6)
+
+	path := writeConfig(t, fmt.Sprintf(`
+interval = "1s"
+
+[retriever.v4]
+type     = "ifconfigco"
+family   = "ipv4"
+base_url = %[1]q
+
+[retriever.v6]
+type     = "ifconfigco"
+family   = "ipv6"
+base_url = %[2]q
+
+[provider.dns]
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+base_url = %[1]q
+
+[[instance]]
+name = "home"
+[[instance.retriever]]
+ref = "v4"
+[[instance.retriever]]
+ref = "v6"
+[[instance.provider]]
+ref = "dns"
+`, srv.URL, srv6.URL))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan int, 1)
+	go func() {
+		done <- run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, plugin.Default)
+	}()
+
+	waitFor(t, "both records written", func() bool {
+		v4, _ := world.snapshot()
+		v6, _ := world.snapshot6()
+		return v4 == "203.0.113.7" && v6 == "2001:db8::1"
+	})
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != exitOK {
+			t.Errorf("exit code = %d, want %d", code, exitOK)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not stop after the context was cancelled")
+	}
+}
+
 func TestBadConfigExitsWithConfigCode(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -183,7 +299,7 @@ type = "ifconfigco"
 type = "nosuch"
 [[instance]]
 name = "x"
-[instance.retriever]
+[[instance.retriever]]
 ref = "echo"
 [[instance.provider]]
 ref = "dns"
@@ -202,7 +318,7 @@ zone = "example.com"
 rr_name = "home"
 [[instance]]
 name = "x"
-[instance.retriever]
+[[instance.retriever]]
 ref = "echo"
 [[instance.provider]]
 ref = "dns"
@@ -222,7 +338,7 @@ zone     = "example.com"
 rr_name  = "home"
 [[instance]]
 name = "x"
-[instance.retriever]
+[[instance.retriever]]
 ref = "echo"
 [[instance.provider]]
 ref = "dns"
@@ -245,6 +361,78 @@ ref = "dns"
 				t.Errorf("stderr = %q, want it to name the instance and contain %q", stderr.String(), tt.wantErr)
 			}
 		})
+	}
+}
+
+type fakeRetrieverConfig struct {
+	Family string `toml:"family"`
+}
+
+type fakeRetriever struct{ family string }
+
+func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
+	if r.family == "ipv6" {
+		return netip.MustParseAddr("2001:db8::1"), nil
+	}
+	return netip.MustParseAddr("203.0.113.1"), nil
+}
+
+type fakeProviderStub struct{}
+
+func (fakeProviderStub) Update(context.Context, plugin.Addresses, plugin.RecordOptions) error {
+	return nil
+}
+
+func TestBuildInstancesWiresUpToTwoRetrieversPerInstance(t *testing.T) {
+	registry := plugin.NewRegistry()
+	plugin.RegisterRetrieverIn(registry, "fake", func(cfg fakeRetrieverConfig) (plugin.Retriever, error) {
+		return &fakeRetriever{family: cfg.Family}, nil
+	})
+	plugin.RegisterProviderIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Provider, error) {
+		return fakeProviderStub{}, nil
+	})
+
+	cfg, err := config.Parse([]byte(`
+[retriever.v4]
+type   = "fake"
+family = "ipv4"
+[retriever.v6]
+type   = "fake"
+family = "ipv6"
+[provider.main]
+type = "fake"
+
+[[instance]]
+name = "dual"
+[[instance.retriever]]
+ref = "v4"
+[[instance.retriever]]
+ref = "v6"
+[[instance.provider]]
+ref = "main"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	instances, err := buildInstances(cfg, registry)
+	if err != nil {
+		t.Fatalf("buildInstances: %v", err)
+	}
+
+	if len(instances) != 1 || len(instances[0].Retrievers) != 2 {
+		t.Fatalf("instances = %+v, want 1 instance with 2 retrievers", instances)
+	}
+
+	names := []string{instances[0].Retrievers[0].Name, instances[0].Retrievers[1].Name}
+	if !slices.Equal(names, []string{"v4", "v6"}) {
+		t.Errorf("retriever names = %v, want [v4 v6]", names)
+	}
+
+	addr0, _ := instances[0].Retrievers[0].Retriever.GetIPAddress(context.Background())
+	addr1, _ := instances[0].Retrievers[1].Retriever.GetIPAddress(context.Background())
+	if !addr0.Is4() || addr1.Is4() {
+		t.Errorf("addresses = %v (v4), %v (v6); families were not wired to the right retriever", addr0, addr1)
 	}
 }
 

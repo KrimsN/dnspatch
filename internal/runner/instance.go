@@ -22,22 +22,24 @@ type providerState struct {
 	name     string
 	provider plugin.Provider
 
-	// last is the address most recently written successfully. It is the zero
-	// value after a failed write, when the record's content is unknown.
-	last netip.Addr
+	// lastV4 and lastV6 are the addresses most recently written successfully,
+	// per family. Each is the zero value after a failed write or before a
+	// family has ever been sent, when that part of the record is unknown.
+	lastV4, lastV6 netip.Addr
 	// failures counts consecutive failed writes.
 	failures int
 	// next is the earliest moment the provider may be tried again.
 	next time.Time
 }
 
-// instance polls one retriever and keeps its providers up to date.
+// instance polls one or two retrievers, one per address family, and keeps its
+// providers up to date.
 type instance struct {
-	name      string
-	interval  time.Duration
-	timeout   time.Duration
-	retriever plugin.Retriever
-	providers []*providerState
+	name       string
+	interval   time.Duration
+	timeout    time.Duration
+	retrievers []NamedRetriever
+	providers  []*providerState
 
 	clock   Clock
 	log     *slog.Logger
@@ -52,15 +54,15 @@ func newInstance(cfg Instance, opts Options) *instance {
 		providers[i] = &providerState{name: p.Name, provider: p.Provider}
 	}
 	return &instance{
-		name:      cfg.Name,
-		interval:  cfg.Interval,
-		timeout:   opts.AttemptTimeout,
-		retriever: cfg.Retriever,
-		providers: providers,
-		clock:     opts.Clock,
-		log:       log,
-		backoff:   newBackoff(cfg.Interval),
-		jitter:    rand.Int64N,
+		name:       cfg.Name,
+		interval:   cfg.Interval,
+		timeout:    opts.AttemptTimeout,
+		retrievers: cfg.Retrievers,
+		providers:  providers,
+		clock:      opts.Clock,
+		log:        log,
+		backoff:    newBackoff(cfg.Interval),
+		jitter:     rand.Int64N,
 	}
 }
 
@@ -73,15 +75,17 @@ type intervalAdvisor interface {
 }
 
 // warnShortInterval logs a warning when the polling interval is shorter than
-// the retriever's service asks for.
+// a retriever's service asks for.
 func (in *instance) warnShortInterval() {
-	advisor, ok := in.retriever.(intervalAdvisor)
-	if !ok {
-		return
-	}
-	if advised := advisor.RecommendedInterval(); in.interval < advised {
-		in.log.Warn("interval is shorter than the retriever's service allows, requests may be rejected or the address blocked",
-			"interval", in.interval, "recommended", advised)
+	for _, r := range in.retrievers {
+		advisor, ok := r.Retriever.(intervalAdvisor)
+		if !ok {
+			continue
+		}
+		if advised := advisor.RecommendedInterval(); in.interval < advised {
+			in.log.Warn("interval is shorter than the retriever's service allows, requests may be rejected or the address blocked",
+				"retriever", r.Name, "interval", in.interval, "recommended", advised)
+		}
 	}
 }
 
@@ -104,82 +108,128 @@ func (in *instance) run(ctx context.Context) {
 	in.log.Info("instance stopped")
 }
 
-// tick fetches the current address and writes it to every provider that
-// needs it. Providers are visited independently: a failure of one does not
-// stop the others, and all failures are returned joined.
+// tick fetches the current address of every retriever and writes the result
+// to every provider that needs it. Retrievers and providers are each visited
+// independently: a failure of one does not stop the others, and all failures
+// are returned joined.
 func (in *instance) tick(ctx context.Context) error {
 	start := in.clock.Now()
 
-	var addr netip.Addr
-	err := in.attempt(ctx, func(ctx context.Context) (err error) {
-		addr, err = in.retriever.GetIPAddress(ctx)
-		return err
-	})
-	if err == nil && !addr.IsValid() {
-		err = errors.New("retriever returned an invalid address")
-	}
-	if err != nil {
-		if ctx.Err() != nil {
-			in.log.Info("retrieving address interrupted")
-			return nil
-		}
-		in.log.Warn("retrieving address failed", "err", err)
-		return fmt.Errorf("retriever: %w", err)
+	addrs, errs := in.retrieve(ctx)
+	if !addrs.V4.IsValid() && !addrs.V6.IsValid() {
+		return errors.Join(errs...)
 	}
 
-	var errs []error
 	for _, p := range in.providers {
 		if ctx.Err() != nil {
 			break
 		}
-		if err := in.update(ctx, p, addr, start); err != nil {
+		if err := in.update(ctx, p, addrs, start); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// update writes addr to one provider unless it already holds it or is still
-// backing off. The tick start, not the end of the attempt, anchors the next
-// allowed attempt so a slow attempt does not eat into the retry delay.
-func (in *instance) update(ctx context.Context, p *providerState, addr netip.Addr, start time.Time) error {
+// retrieve fetches the current address from every retriever. A failing
+// retriever is logged and skipped; the others are still tried. Two
+// retrievers reporting the same address family is a configuration mistake:
+// it is logged and neither address is returned, so providers are left alone
+// for this tick.
+func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
+	var addrs plugin.Addresses
+
+	var errs []error
+	for _, r := range in.retrievers {
+		if ctx.Err() != nil {
+			break
+		}
+
+		var addr netip.Addr
+		err := in.attempt(ctx, func(ctx context.Context) (err error) {
+			addr, err = r.Retriever.GetIPAddress(ctx)
+			return err
+		})
+		if err == nil && !addr.IsValid() {
+			err = errors.New("retriever returned an invalid address")
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				in.log.Info("retrieving address interrupted", "retriever", r.Name)
+				continue
+			}
+			in.log.Warn("retrieving address failed", "retriever", r.Name, "err", err)
+			errs = append(errs, fmt.Errorf("retriever %q: %w", r.Name, err))
+			continue
+		}
+
+		if addr.Is4() {
+			if addrs.V4.IsValid() {
+				in.log.Warn("two retrievers reported an ipv4 address, skipping this tick", "retriever", r.Name)
+				return plugin.Addresses{}, errs
+			}
+			addrs.V4 = addr
+		} else {
+			if addrs.V6.IsValid() {
+				in.log.Warn("two retrievers reported an ipv6 address, skipping this tick", "retriever", r.Name)
+				return plugin.Addresses{}, errs
+			}
+			addrs.V6 = addr
+		}
+	}
+
+	return addrs, errs
+}
+
+// update writes the families of addrs that changed to one provider, unless
+// none changed or the provider is still backing off. The tick start, not the
+// end of the attempt, anchors the next allowed attempt so a slow attempt does
+// not eat into the retry delay.
+func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.Addresses, start time.Time) error {
 	log := in.log.With("provider", p.name)
-	if p.last == addr {
-		log.Debug("address unchanged, skipping", "addr", addr)
+
+	toSend := plugin.Addresses{}
+	if addrs.V4.IsValid() && addrs.V4 != p.lastV4 {
+		toSend.V4 = addrs.V4
+	}
+	if addrs.V6.IsValid() && addrs.V6 != p.lastV6 {
+		toSend.V6 = addrs.V6
+	}
+	if !toSend.V4.IsValid() && !toSend.V6.IsValid() {
+		log.Debug("address unchanged, skipping", "addrs", addrs)
 		return nil
 	}
 	if start.Before(p.next) {
-		log.Debug("backing off, skipping", "addr", addr, "retry_at", p.next)
+		log.Debug("backing off, skipping", "addrs", toSend, "retry_at", p.next)
 		return nil
-	}
-
-	addrs := plugin.Addresses{}
-	if addr.Is4() {
-		addrs.V4 = addr
-	} else {
-		addrs.V6 = addr
 	}
 
 	err := in.attempt(ctx, func(ctx context.Context) error {
-		return p.provider.Update(ctx, addrs, plugin.RecordOptions{})
+		return p.provider.Update(ctx, toSend, plugin.RecordOptions{})
 	})
 	if err == nil {
-		p.last = addr
+		if toSend.V4.IsValid() {
+			p.lastV4 = toSend.V4
+		}
+		if toSend.V6.IsValid() {
+			p.lastV6 = toSend.V6
+		}
 		p.failures = 0
 		p.next = time.Time{}
-		log.Info("address updated", "addr", addr)
+		log.Info("address updated", "addrs", toSend)
 		return nil
 	}
 	if ctx.Err() != nil {
-		log.Info("update interrupted", "addr", addr)
+		log.Info("update interrupted", "addrs", toSend)
 		return nil
 	}
 
-	p.last = netip.Addr{}
+	p.lastV4 = netip.Addr{}
+	p.lastV6 = netip.Addr{}
 	p.failures++
 	delay := in.backoff.delay(p.failures, in.jitter)
 	p.next = start.Add(delay)
-	log.Warn("update failed", "addr", addr, "err", err, "failures", p.failures, "retry_in", delay)
+	log.Warn("update failed", "addrs", toSend, "err", err, "failures", p.failures, "retry_in", delay)
 	return fmt.Errorf("provider %q: %w", p.name, err)
 }
 

@@ -134,11 +134,19 @@ func buildInstances(cfg config.Config, registry *plugin.Registry) ([]runner.Inst
 	for _, in := range cfg.Instances {
 		built := runner.Instance{Name: in.Name, Interval: in.Interval}
 
-		retriever, err := registry.BuildRetriever(in.Retriever.Type, in.Retriever.Params)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
+		for _, r := range in.Retrievers {
+			retriever, err := registry.BuildRetriever(r.Type, r.Params)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
+				continue
+			}
+
+			name := r.Ref
+			if name == "" {
+				name = r.Type
+			}
+			built.Retrievers = append(built.Retrievers, runner.NamedRetriever{Name: name, Retriever: retriever})
 		}
-		built.Retriever = retriever
 
 		for _, p := range in.Providers {
 			provider, err := registry.BuildProvider(p.Type, p.Params)
