@@ -1,0 +1,27 @@
+# A provider whose API only accepts requests from a fixed address, reached
+# through a proxy on a host with that address. The retriever stays direct: it
+# must report the address of THIS host, not the proxy's.
+#
+# Every provider and every reference to it can set its own "proxy", so
+# different zones can leave through different hosts; "proxy = direct" means
+# no proxy at all, whatever HTTP_PROXY and HTTPS_PROXY say.
+
+[retriever.home]
+type = "ifconfigco"
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+proxy    = "${PROXY_URL}"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "home"
+
+[[instance.provider]]
+ref = "regru"

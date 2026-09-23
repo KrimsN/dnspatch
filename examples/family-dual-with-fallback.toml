@@ -1,0 +1,43 @@
+# A fallback chain across three retrievers of different roles. icanhazip is
+# itself dual-stack, so "family = dual" tries to fill both A and AAAA in one
+# call; it is tried first. Only the families it does NOT fill are then asked
+# from ipify (pinned to ipv6) and ifconfigco (pinned to ipv4) — a retriever
+# pinned to a family that is already filled is skipped without being called.
+#
+# If icanhazip succeeds for both families, ipify and ifconfigco are never
+# called. If it fails outright, ipify is tried for IPv6 and ifconfigco for
+# IPv4.
+
+[retriever.icanhazip]
+type   = "icanhazip"
+family = "dual"
+
+[retriever.ipify]
+type   = "ipify"
+family = "ipv6"
+
+[retriever.ifconfigco]
+type   = "ifconfigco"
+family = "ipv4"
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "icanhazip"
+
+[[instance.retriever]]
+ref = "ipify"
+
+[[instance.retriever]]
+ref = "ifconfigco"
+
+[[instance.provider]]
+ref = "regru"
