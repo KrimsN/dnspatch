@@ -141,8 +141,8 @@ func (p *provider) setOne(ctx context.Context, addr netip.Addr) error {
 
 	var existing []record
 	if raw, ok := all[recType]; ok {
-		if err := json.Unmarshal(raw, &existing); err != nil {
-			return fmt.Errorf("dns/getData: %s records: not a record list: %w", recType, err)
+		if unmarshalErr := json.Unmarshal(raw, &existing); unmarshalErr != nil {
+			return fmt.Errorf("dns/getData: %s records: not a record list: %w", recType, unmarshalErr)
 		}
 	}
 

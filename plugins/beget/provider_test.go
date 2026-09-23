@@ -470,7 +470,7 @@ func TestUpdateUnreachableDoesNotLeakPassword(t *testing.T) {
 }
 
 func TestUpdateDoesNotFollowRedirects(t *testing.T) {
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "should not be reached", http.StatusTeapot)
 	}))
 	defer target.Close()
