@@ -188,7 +188,7 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 		if in.done(addrs) {
 			break
 		}
-		if !in.couldHelp(r, addrs) {
+		if !in.retrieverIsNeeded(r, addrs) {
 			continue
 		}
 
@@ -235,11 +235,12 @@ func (in *instance) done(addrs plugin.Addresses) bool {
 	return (!in.needV4 || addrs.V4.IsValid()) && (!in.needV6 || addrs.V6.IsValid())
 }
 
-// couldHelp reports whether r might still fill a family that addrs is
-// missing: a family-pinned retriever (ipv4 or ipv6) only helps its own,
-// unfilled family; one declared "dual", or with no family hint at all,
-// might help with either.
-func (in *instance) couldHelp(r NamedRetriever, addrs plugin.Addresses) bool {
+// retrieverIsNeeded reports whether r should still be called: whether it
+// might fill a family that addrs is missing and the instance actually wants.
+// A family-pinned retriever (ipv4 or ipv6) is needed only for its own,
+// unfilled, wanted family; one declared "dual", or with no family hint at
+// all, is needed as long as either family is still missing.
+func (in *instance) retrieverIsNeeded(r NamedRetriever, addrs plugin.Addresses) bool {
 	switch r.Family {
 	case familyIPv4:
 		return in.needV4 && !addrs.V4.IsValid()
