@@ -203,6 +203,34 @@ rr_name = "home"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.yandexcloud]
+type = "yandexcloud"
+
+# Authorized key of the service account as JSON, the file that yc iam key
+# create writes.
+key = "${YANDEX_CLOUD_KEY}"
+
+# ID of the DNS zone, shown in the Cloud DNS console or by yc dns zone list
+zone_id = "dns1234567890abcdefgh"
+
+# Record name relative to the zone: @ for the apex, * for a wildcard, or a
+# label such as home
+rr_name = "home"
+
+# TTL in seconds for a record this provider creates; an existing record keeps
+# its own TTL
+# ttl = 300
+
+# URL of the IAM API endpoint that exchanges a signed JWT for an IAM token
+# iam_url = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
+
+# Base URL of the Cloud DNS API
+# base_url = "https://dns.api.cloud.yandex.net/dns/v1"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 # ----------------------------------------------------------------------------
 # Instances: each one ties one or two retrievers to the providers it updates.
 # ----------------------------------------------------------------------------

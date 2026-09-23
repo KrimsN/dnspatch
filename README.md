@@ -209,6 +209,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `rfc2136` | sets the `A` or `AAAA` record on your own name server (BIND, Knot DNS, PowerDNS, Technitium, ...) with RFC 2136 dynamic updates, signed with TSIG |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
+| provider | `yandexcloud` | sets the `A` or `AAAA` record of a zone hosted at [Yandex Cloud DNS](https://yandex.cloud/en/services/dns), authenticating as a service account with an authorized key |
 
 ### Proxies
 
