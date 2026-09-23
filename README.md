@@ -72,7 +72,7 @@ Things to know before running it in a container:
 go install github.com/KrimsN/dnspatch/cmd/dnspatch@latest
 ```
 
-Requires Go 1.24 or newer.
+Requires Go 1.25 or newer.
 
 ## Quick start
 
