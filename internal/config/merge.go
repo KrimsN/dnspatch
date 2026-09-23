@@ -15,24 +15,33 @@ import (
 // stray "${" that starts a malformed one.
 var envReference = regexp.MustCompile(`\$(?:\$\{|\{(?:file:[^}]+\}|([A-Za-z_]\w*)\})?)`)
 
-// resolvePlugin merges the definition named by override["ref"] with the
-// override and expands environment references. kind is "retriever" or
-// "provider"; where locates the reference in the instance for error messages.
-// Neither the definition nor the override is modified, and the result shares
-// no memory with either.
+// resolvePlugin resolves an instance override into a Plugin, either by
+// merging the definition named by override["ref"] with the override, or,
+// when override sets "type" instead, by taking the override as the plugin's
+// only parameters. kind is "retriever" or "provider"; where locates the
+// reference in the instance for error messages. Neither the definition nor
+// the override is modified, and the result shares no memory with either.
 func resolvePlugin(kind, where string, pool map[string]map[string]any, override map[string]any) (Plugin, []error) {
 	ref, _ := override["ref"].(string)
-	if ref == "" {
-		return Plugin{}, []error{fmt.Errorf(`%s: "ref" is required and must be a string`, where)}
-	}
+	_, hasType := override["type"]
 
+	switch {
+	case ref != "" && hasType:
+		return Plugin{}, []error{fmt.Errorf(`%s: "ref" and "type" cannot both be set`, where)}
+	case ref != "":
+		return resolvePluginByRef(kind, where, pool, ref, override)
+	case hasType:
+		return resolvePluginInline(kind, where, override)
+	default:
+		return Plugin{}, []error{fmt.Errorf(`%s: either "ref" or "type" is required`, where)}
+	}
+}
+
+// resolvePluginByRef merges the definition named by ref with override.
+func resolvePluginByRef(kind, where string, pool map[string]map[string]any, ref string, override map[string]any) (Plugin, []error) {
 	definition, ok := pool[ref]
 	if !ok {
 		return Plugin{}, []error{fmt.Errorf("%s: ref %q is not defined (%s)", where, ref, definedNames(kind, pool))}
-	}
-
-	if _, ok := override["type"]; ok {
-		return Plugin{}, []error{fmt.Errorf(`%s: %s %q: "type" cannot be overridden`, where, kind, ref)}
 	}
 
 	merged := make(map[string]any, len(definition)+len(override))
@@ -58,6 +67,37 @@ func resolvePlugin(kind, where string, pool map[string]map[string]any, override 
 	typ, _ := definition["type"].(string)
 
 	return Plugin{Ref: ref, Type: typ, Params: params}, nil
+}
+
+// resolvePluginInline builds a Plugin straight from an instance override
+// that sets "type" instead of "ref": parameters come only from the override,
+// with no pool definition to merge in, so nothing is shared with another
+// instance.
+func resolvePluginInline(kind, where string, override map[string]any) (Plugin, []error) {
+	typ, ok := override["type"].(string)
+	if !ok || typ == "" {
+		return Plugin{}, []error{fmt.Errorf(`%s: "type" must be a string`, where)}
+	}
+
+	merged := make(map[string]any, len(override))
+
+	for key, value := range override {
+		if key != "type" {
+			merged[key] = value
+		}
+	}
+
+	params, paramErrs := expandMap(merged, "")
+	if len(paramErrs) > 0 {
+		errs := make([]error, len(paramErrs))
+		for i, err := range paramErrs {
+			errs[i] = fmt.Errorf("%s %q: %w", kind, typ, err)
+		}
+
+		return Plugin{}, errs
+	}
+
+	return Plugin{Type: typ, Params: params}, nil
 }
 
 // expandMap returns a deep copy of params with environment references

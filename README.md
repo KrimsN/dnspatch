@@ -101,9 +101,6 @@ A configuration has three parts: definitions of retrievers, definitions of provi
 ```toml
 interval = "5m"                    # default for every instance, at least 1s
 
-[retriever.ifconfigco]
-type = "ifconfigco"
-
 [provider.regru]
 type     = "regru"
 username = "my-login"
@@ -115,7 +112,7 @@ rr_name  = "home"
 name = "home"
 
 [[instance.retriever]]
-ref = "ifconfigco"
+type = "ifconfigco"                # inline: not shared, so no [retriever.<name>] block
 
 [[instance.provider]]
 ref = "regru"
@@ -125,7 +122,9 @@ ref     = "regru"
 rr_name = "*.home"                 # override a parameter of the definition
 ```
 
-- An instance points at definitions with `ref`. Parameters written next to a `ref` override the definition, except `type`. This is how one provider account serves several records.
+- An instance points at a definition with `ref`, or declares the plugin inline with `type`. `ref` and `type` are mutually exclusive.
+  - `ref` names a `[retriever.<name>]` or `[provider.<name>]` block; parameters written next to `ref` override the definition, except `type`. This is how one provider account serves several records, or one retriever definition serves several instances.
+  - `type` builds the plugin from the instance table alone, with no definition to merge in. Use it for a retriever or provider that only one instance needs — most retrievers, and any provider not shared across records.
 - An instance accepts one or more `[[instance.retriever]]` tables, polled in order until every address family is filled: which family a retriever reports is decided by the address it actually returns, not by configuration. Dual-stack (one A and one AAAA record from the same instance) needs two retrievers, one per family, for example two `ifconfigco` retrievers with `family = "ipv4"` and `family = "ipv6"`:
 
   ```toml

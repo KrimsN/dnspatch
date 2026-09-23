@@ -61,7 +61,8 @@ type Instance struct {
 // definition overlaid with the instance override. The service keys "type"
 // and "ref" are not part of Params, and environment references are expanded.
 type Plugin struct {
-	// Ref is the name of the definition the plugin was built from.
+	// Ref is the name of the definition the plugin was built from, or empty
+	// for a plugin declared inline with "type" instead of "ref".
 	Ref    string
 	Type   string
 	Params map[string]any
@@ -395,7 +396,9 @@ func definedNames(kind string, pool map[string]map[string]any) string {
 // duplicateProviders reports providers of one instance that were built from
 // the same definition and ended up with the same parameters: they would write
 // the same record twice on every tick. A provider that overrides a parameter,
-// such as the zone, is a different one.
+// such as the zone, is a different one. A provider declared inline (no Ref)
+// is never flagged: it does not name a shared definition, so there is nothing
+// to compare it against.
 func duplicateProviders(providers []Plugin) []error {
 	var errs []error
 
