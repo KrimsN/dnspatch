@@ -1,6 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"net/netip"
 	"reflect"
 	"regexp"
@@ -201,9 +206,7 @@ func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, ref := range regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`).FindAllStringSubmatch(string(doc), -1) {
-		t.Setenv(ref[1], "value")
-	}
+	setExampleEnv(t, doc)
 
 	cfg, err := config.Parse(doc)
 	if err != nil {
@@ -240,9 +243,7 @@ func TestExampleDefinitionsAllBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, ref := range regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`).FindAllStringSubmatch(string(doc), -1) {
-		t.Setenv(ref[1], "value")
-	}
+	setExampleEnv(t, doc)
 
 	for retriever := range retrievers {
 		for provider := range providers {
@@ -274,4 +275,44 @@ func TestTOMLStringEscapesControlCharacters(t *testing.T) {
 	if strings.ContainsRune(got, 7) || !strings.Contains(got, "u0007") {
 		t.Errorf("tomlString of a control character = %q, want an escape", got)
 	}
+}
+
+// setExampleEnv defines every environment variable the example refers to. Most
+// are secrets whose value is never inspected; a service account key is parsed
+// when the provider is built, so its variable gets a well-formed one.
+func setExampleEnv(t *testing.T, doc []byte) {
+	t.Helper()
+
+	for _, ref := range regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`).FindAllStringSubmatch(string(doc), -1) {
+		t.Setenv(ref[1], "value")
+	}
+
+	if strings.Contains(string(doc), "${YANDEX_CLOUD_KEY}") {
+		t.Setenv("YANDEX_CLOUD_KEY", authorizedKeyJSON(t))
+	}
+}
+
+func authorizedKeyJSON(t *testing.T) string {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := json.Marshal(map[string]string{
+		"id":                 "key-id",
+		"service_account_id": "account-id",
+		"private_key":        "PLEASE DO NOT REMOVE THIS LINE!\n" + string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(out)
 }

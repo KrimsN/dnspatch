@@ -19,6 +19,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [regru](#provider-regru)
   - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
+  - [yandexcloud](#provider-yandexcloud)
 
 ## Retrievers
 
@@ -112,4 +113,16 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `ttl` | no | `60` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL. Selectel accepts 60 to 604800 |
 | `auth_url` | no | `https://cloud.api.selcloud.ru/identity/v3` | Base URL of the identity (Keystone) API used to obtain a project IAM token |
 | `base_url` | no | `https://api.selectel.ru/domains/v2` | Base URL of the DNS Hosting API |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `yandexcloud`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `key` | yes | — | Authorized key of the service account as JSON, the file that yc iam key create writes. The account needs the dns.editor role on the folder of the zone |
+| `zone_id` | yes | — | ID of the DNS zone, shown in the Cloud DNS console or by yc dns zone list |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `ttl` | no | `300` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL |
+| `iam_url` | no | `https://iam.api.cloud.yandex.net/iam/v1/tokens` | URL of the IAM API endpoint that exchanges a signed JWT for an IAM token |
+| `base_url` | no | `https://dns.api.cloud.yandex.net/dns/v1` | Base URL of the Cloud DNS API |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
