@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/KrimsN/dnspatch/internal/config"
 	"github.com/KrimsN/dnspatch/internal/runner"
@@ -145,7 +146,12 @@ func buildInstances(cfg config.Config, registry *plugin.Registry) ([]runner.Inst
 			if name == "" {
 				name = r.Type
 			}
-			built.Retrievers = append(built.Retrievers, runner.NamedRetriever{Name: name, Retriever: retriever})
+			family, _ := r.Params["family"].(string)
+			built.Retrievers = append(built.Retrievers, runner.NamedRetriever{
+				Name:      name,
+				Retriever: retriever,
+				Family:    strings.ToLower(family),
+			})
 		}
 
 		for _, p := range in.Providers {

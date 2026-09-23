@@ -31,18 +31,26 @@ type NamedProvider struct {
 	Provider plugin.Provider
 }
 
-// NamedRetriever is a retriever of an instance; the name identifies it in logs.
+// NamedRetriever is a retriever of an instance; the name identifies it in
+// logs. Family is a hint taken from the retriever's own "family" plugin
+// parameter, when it has one: "ipv4", "ipv6" or "dual". Empty means the
+// retriever's family is not known ahead of time (it has no such parameter,
+// or none was set) and it is treated like "dual" — a candidate for whichever
+// family is still missing, decided by the address it actually returns.
 type NamedRetriever struct {
 	Name      string
 	Retriever plugin.Retriever
+	Family    string
 }
 
 // Instance ties one or more retrievers to the providers they feed and the
 // interval on which it is polled. Retrievers are polled in order, one after
-// the other, until every address family has been filled or the list is
-// exhausted: the first retriever to report a family wins it, and later
-// retrievers reporting the same family are a redundant fallback source, not
-// an error.
+// the other, until every address family that any of them can provide has
+// been filled, or the list is exhausted: the first retriever to report a
+// family wins it, and later retrievers reporting the same family are a
+// redundant fallback source, not an error. A family no retriever declares
+// (via its Family hint) is never polled for at all: for example, an instance
+// whose retrievers are all family="ipv4" never looks for an IPv6 address.
 type Instance struct {
 	Name       string
 	Interval   time.Duration

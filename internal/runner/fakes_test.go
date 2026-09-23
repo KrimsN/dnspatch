@@ -109,6 +109,11 @@ type fakeRetriever struct {
 	addrs plugin.Addresses
 	err   error
 	calls int
+
+	// family is the NamedRetriever.Family hint newTestInstanceMulti wires it
+	// up with; empty (the default) means "unknown", same as a real retriever
+	// with no family parameter.
+	family string
 }
 
 // singleFamily builds the Addresses a real single-family retriever would
@@ -155,6 +160,13 @@ func (r *fakeRetriever) callCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.calls
+}
+
+// withFamily sets the NamedRetriever.Family hint newTestInstanceMulti wires
+// r up with, as if it had been configured with that "family" parameter.
+func (r *fakeRetriever) withFamily(family string) *fakeRetriever {
+	r.family = family
+	return r
 }
 
 // fakeProvider records every write and fails or blocks on demand.
@@ -217,10 +229,12 @@ func newTestInstance(clock Clock, interval time.Duration, r *fakeRetriever, prov
 
 // newTestInstanceMulti builds an instance with any number of retrievers, in
 // the given order, on a fake clock with silent logging and no random jitter.
+// Each retriever's Family hint comes from fakeRetriever.withFamily, or is
+// empty (unknown) if that was never called.
 func newTestInstanceMulti(clock Clock, interval time.Duration, retrievers []*fakeRetriever, providers ...*fakeProvider) *instance {
 	cfg := Instance{Name: "test", Interval: interval}
 	for i, r := range retrievers {
-		cfg.Retrievers = append(cfg.Retrievers, NamedRetriever{Name: string(rune('r' + i)), Retriever: r})
+		cfg.Retrievers = append(cfg.Retrievers, NamedRetriever{Name: string(rune('r' + i)), Retriever: r, Family: r.family})
 	}
 	for i, p := range providers {
 		cfg.Providers = append(cfg.Providers, NamedProvider{Name: string(rune('a' + i)), Provider: p})

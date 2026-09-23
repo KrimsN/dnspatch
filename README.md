@@ -155,6 +155,39 @@ rr_name = "*.home"                 # override a parameter of the definition
   ```
 
   A third or later retriever is a fallback source, tried only for the families the earlier ones did not fill; it is never called once every family already has an address. Two retrievers reporting the same family (for example, two independent sources both configured with `family = "ipv4"`) is a valid fallback chain, not a misconfiguration: the first one to succeed wins, and the others are skipped for that family.
+
+  The retriever's own `family` parameter also tells the instance which families to even look for: an instance whose retrievers are all `family = "ipv4"` never tries to retrieve an IPv6 address, and a retriever pinned to a family that is already filled (by an earlier one, `dual` or otherwise) is skipped without being called. This also builds a fallback chain per family out of retrievers with different roles, for example:
+
+  ```toml
+  [retriever.icanhazip]
+  type   = "icanhazip"
+  family = "dual"
+
+  [retriever.ipify]
+  type   = "ipify"
+  family = "ipv6"
+
+  [retriever.ifconfigco]
+  type   = "ifconfigco"
+  family = "ipv4"
+
+  [[instance]]
+  name = "home"
+
+  [[instance.retriever]]
+  ref = "icanhazip"
+
+  [[instance.retriever]]
+  ref = "ipify"
+
+  [[instance.retriever]]
+  ref = "ifconfigco"
+
+  [[instance.provider]]
+  ref = "regru"
+  ```
+
+  Here `icanhazip` is tried first for both families; if it succeeds, `ipify` and `ifconfigco` are never called. If it fails, `ipify` is tried for IPv6 and `ifconfigco` for IPv4. Only a retriever type that has its own `family` parameter (`icanhazip`, `identme`, `ifconfigco`, `ipify`) can be pinned this way; one that does not, such as `2ip`, is always treated like `dual`: a candidate for whichever family is still missing, decided by the address it actually returns, exactly as before this parameter existed.
 - `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
 - `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
 - Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.
