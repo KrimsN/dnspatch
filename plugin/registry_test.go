@@ -21,7 +21,9 @@ type fakeProvider struct {
 	cfg fakeConfig
 }
 
-func (p *fakeProvider) SetIPAddress(context.Context, netip.Addr) error { return nil }
+func (p *fakeProvider) Update(context.Context, plugin.Addresses, plugin.RecordOptions) error {
+	return nil
+}
 
 type fakeRetriever struct {
 	cfg fakeConfig

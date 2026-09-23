@@ -89,7 +89,7 @@ Go before treating such a finding as yours.
 
 A plugin is a package under `plugins/` with a configuration struct and a
 constructor. The steps below use a provider; a retriever differs only in the
-interface it implements (`GetIPAddress` instead of `SetIPAddress`) and in the
+interface it implements (`GetIPAddress` instead of `Update`) and in the
 `RegisterRetriever` call. `plugins/regru` (provider) and `plugins/ifconfigco`
 (retriever) are complete examples to copy from.
 
@@ -163,7 +163,7 @@ name twice panics at start-up. Add a blank import of the package to
 
 Every network call a plugin makes must be bound to the `ctx` it receives, for
 example with `http.NewRequestWithContext(ctx, ...)`. The runner puts a deadline
-(30 seconds by default) on every `GetIPAddress` and `SetIPAddress` call and
+(30 seconds by default) on every `GetIPAddress` and `Update` call and
 cancels the context on shutdown; a plugin that ignores `ctx` can stall its
 instance indefinitely. An HTTP client field on the plugin is fine for tests
 against `httptest`, but it must not replace the context.
@@ -177,10 +177,12 @@ Make the plugin testable without the network:
   `httptest.Server`. Never hard-code the host of the service.
 - Cap the size of a response you read (`io.LimitReader`) and close bodies.
 - Do not put secrets into error messages or logs. That includes proxy URLs.
-- A provider decides the record type from the address: `addr.Is4()` is an `A`
-  record, anything else `AAAA`. Writing a record that already holds the address
-  must succeed and change nothing: after a restart the daemon writes to every
-  provider without knowing what it wrote before.
+- A provider decides the record type from the field of `plugin.Addresses`:
+  `V4` is an `A` record, `V6` an `AAAA` record. An invalid (zero) field means
+  that family is not touched — at least one of the two is always valid.
+  Writing a record that already holds the address must succeed and change
+  nothing: after a restart the daemon writes to every provider without
+  knowing what it wrote before.
 - A retriever returns a valid global unicast address, and an error otherwise.
 
 ### 5. Test it

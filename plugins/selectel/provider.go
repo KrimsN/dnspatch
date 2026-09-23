@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/httpx"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 const (
@@ -126,8 +127,32 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 	}, nil
 }
 
-// SetIPAddress points the configured record at addr: an A record for IPv4, an
-// AAAA record for IPv6.
+// Update points the configured record(s) at addrs: an A record for V4, an
+// AAAA record for V6. Each valid family is written independently; an invalid
+// one is left untouched. opts.TTL, when positive, overrides the configured
+// TTL for records this call creates.
+func (p *provider) Update(ctx context.Context, addrs plugin.Addresses, opts plugin.RecordOptions) error {
+	if !addrs.V4.IsValid() && !addrs.V6.IsValid() {
+		return errors.New("no address to write")
+	}
+
+	ttl := p.ttl
+	if opts.TTL > 0 {
+		ttl = int(opts.TTL.Seconds())
+	}
+
+	var errs []error
+	if addrs.V4.IsValid() {
+		errs = append(errs, p.setOne(ctx, addrs.V4, ttl))
+	}
+	if addrs.V6.IsValid() {
+		errs = append(errs, p.setOne(ctx, addrs.V6, ttl))
+	}
+	return errors.Join(errs...)
+}
+
+// setOne points the configured record at addr: an A record for IPv4, an AAAA
+// record for IPv6.
 //
 // A record set in Selectel DNS Hosting holds every record of one name and
 // type as a single object, so replacing its content is one atomic call: there
@@ -138,11 +163,7 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 // the wanted address, this refuses to guess which one to replace, the same
 // way it would if two separate records existed on a provider that models them
 // that way.
-func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
-	if !addr.IsValid() {
-		return errors.New("invalid address")
-	}
-
+func (p *provider) setOne(ctx context.Context, addr netip.Addr, ttl int) error {
 	recType := "AAAA"
 	if addr.Is4() {
 		recType = "A"
@@ -159,7 +180,7 @@ func (p *provider) SetIPAddress(ctx context.Context, addr netip.Addr) error {
 	}
 
 	if existing == nil {
-		return p.createRRSet(ctx, zoneID, recType, addr)
+		return p.createRRSet(ctx, zoneID, recType, addr, ttl)
 	}
 
 	current := false
@@ -259,10 +280,10 @@ func (p *provider) findRRSet(ctx context.Context, zoneID, recType string) (*rrse
 }
 
 // createRRSet adds a new record set holding a single record.
-func (p *provider) createRRSet(ctx context.Context, zoneID, recType string, addr netip.Addr) error {
+func (p *provider) createRRSet(ctx context.Context, zoneID, recType string, addr netip.Addr, ttl int) error {
 	body := map[string]any{
 		"name":    p.fqdn(),
-		"ttl":     p.ttl,
+		"ttl":     ttl,
 		"type":    recType,
 		"records": []record{{Content: addr.String()}},
 	}

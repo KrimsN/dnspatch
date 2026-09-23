@@ -186,12 +186,17 @@ type Retriever interface {
 	GetIPAddress(ctx context.Context) (netip.Addr, error)
 }
 
+type Addresses struct{ V4, V6 netip.Addr }
+type RecordOptions struct{ TTL time.Duration }
+
 type Provider interface {
-	SetIPAddress(ctx context.Context, addr netip.Addr) error
+	Update(ctx context.Context, addrs Addresses, opts RecordOptions) error
 }
 ```
 
-Addresses are passed as `netip.Addr`, so providers pick the record type themselves: `A` for IPv4, `AAAA` for IPv6.
+`Addresses` carries both families at once: an invalid (zero) `V4` or `V6` means that family is left untouched, which lets one call update an A and an AAAA record together, or just one of them. `RecordOptions` carries options such as `TTL`, which a provider ignores when its service does not support it.
+
+Migrating a plugin written against the old `SetIPAddress(ctx, addr netip.Addr) error`: write the same record for each family that is valid (`addrs.V4.IsValid()`, `addrs.V6.IsValid()`) instead of branching on `addr.Is4()`; a plugin that only ever handled one family (for example because it always got IPv4 before) keeps working unchanged as long as it ignores the family it does not expect.
 
 A plugin is a configuration struct plus a constructor; struct tags declare the parameters and feed the generated reference. The step-by-step guide is in [CONTRIBUTING.md](CONTRIBUTING.md#writing-a-plugin).
 

@@ -23,6 +23,7 @@ package plugin
 import (
 	"context"
 	"net/netip"
+	"time"
 )
 
 // Retriever reports the current public IP address of the machine.
@@ -34,11 +35,27 @@ type Retriever interface {
 	GetIPAddress(ctx context.Context) (netip.Addr, error)
 }
 
+// Addresses carries the address of each family to write. An invalid field
+// (the zero netip.Addr) means that family is not touched: an existing record
+// of that type is left as it is. At least one field must be valid.
+type Addresses struct {
+	V4, V6 netip.Addr
+}
+
+// RecordOptions carries options that apply to a write, independent of the
+// address itself. The zero value means "use the provider's own default for
+// every option"; a provider that cannot honour an option ignores it.
+type RecordOptions struct {
+	// TTL overrides the provider's configured TTL when positive. A provider
+	// whose service does not support setting a TTL ignores it.
+	TTL time.Duration
+}
+
 // Provider writes an IP address to a DNS record.
 //
-// The record type is derived from the address: addr.Is4() means an A record,
-// anything else means AAAA. Implementations must respect ctx and abort any
-// network call when it is cancelled.
+// The record type is derived from the address family: V4 means an A record,
+// V6 means AAAA. Implementations must respect ctx and abort any network call
+// when it is cancelled.
 type Provider interface {
-	SetIPAddress(ctx context.Context, addr netip.Addr) error
+	Update(ctx context.Context, addrs Addresses, opts RecordOptions) error
 }
