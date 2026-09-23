@@ -84,6 +84,8 @@ dnspatch --config dnspatch.toml
 
 Without `--config` the daemon uses `$DNSPATCH_CONFIG`, then `./dnspatch.toml`, then `/etc/dnspatch/config.toml`. `dnspatch --version` prints the version.
 
+`dnspatch --check-config` validates the config and exits without starting the daemon (exit code 0 and a summary of every instance's retrievers and providers on success, code 2 and the problem on failure) — useful in a systemd `ExecStartPre` or after hand-editing the file, and it confirms the config was read the way it was written, not just that it parses.
+
 [examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file — each with its own README entry explaining what it shows.
 
 Logs go to stderr at the `info` level. `--log-level debug` (or `DNSPATCH_LOG_LEVEL=debug`; the flag wins) also shows why a provider was skipped: the address is unchanged, or the provider is backing off after a failure. Other levels are `warn` and `error`.

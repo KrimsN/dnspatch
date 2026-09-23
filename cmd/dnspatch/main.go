@@ -49,6 +49,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 	configPath := flags.String("config", "", "path to the config file (default: $"+config.EnvPath+", ./dnspatch.toml, /etc/dnspatch/config.toml)")
 	logLevel := flags.String("log-level", "", "log level: debug, info, warn or error (default: $"+envLogLevel+", then info)")
 	showVersion := flags.Bool("version", false, "print the version and exit")
+	checkConfig := flags.Bool("check-config", false, "validate the config and exit without starting the daemon")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -91,6 +92,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry 
 	if err := runner.Validate(instances); err != nil {
 		_, _ = fmt.Fprintln(stderr, "dnspatch:", err)
 		return exitConfig
+	}
+
+	if *checkConfig {
+		printConfigSummary(stdout, path, instances)
+		return exitOK
 	}
 
 	logger.Info("starting", "version", buildVersion(), "config", path, "instances", len(instances))
@@ -176,6 +182,44 @@ func buildInstances(cfg config.Config, registry *plugin.Registry) ([]runner.Inst
 	}
 
 	return instances, nil
+}
+
+// printConfigSummary confirms that path was read and parsed as intended: one
+// line per instance naming its interval and the retrievers and providers it
+// resolved to, so the user can tell the parsed config apart from a typo that
+// silently fell back to a default (an empty ref, a misspelled family, ...).
+func printConfigSummary(stdout io.Writer, path string, instances []runner.Instance) {
+	_, _ = fmt.Fprintf(stdout, "dnspatch: config OK: %s (%d instance(s))\n", path, len(instances))
+
+	for _, in := range instances {
+		_, _ = fmt.Fprintf(stdout, "  %s: interval=%s retrievers=%s providers=%s\n",
+			in.Name, in.Interval, describeRetrievers(in.Retrievers), describeProviders(in.Providers))
+	}
+}
+
+// describeRetrievers renders an instance's retrievers as "name(family)",
+// omitting the family when it was not set.
+func describeRetrievers(retrievers []runner.NamedRetriever) string {
+	names := make([]string, len(retrievers))
+	for i, r := range retrievers {
+		if r.Family == "" {
+			names[i] = r.Name
+		} else {
+			names[i] = fmt.Sprintf("%s(%s)", r.Name, r.Family)
+		}
+	}
+
+	return "[" + strings.Join(names, ", ") + "]"
+}
+
+// describeProviders renders an instance's providers by name.
+func describeProviders(providers []runner.NamedProvider) string {
+	names := make([]string, len(providers))
+	for i, p := range providers {
+		names[i] = p.Name
+	}
+
+	return "[" + strings.Join(names, ", ") + "]"
 }
 
 // buildVersion reports the version set at build time, falling back to the

@@ -541,6 +541,111 @@ ref = "regru"
 	}
 }
 
+func TestCheckConfigValidatesWithoutStartingTheDaemon(t *testing.T) {
+	world := &fakeWorld{ip: "203.0.113.7"}
+	srv := httptest.NewServer(world)
+	defer srv.Close()
+
+	path := writeConfig(t, fmt.Sprintf(`
+interval = "1s"
+
+[retriever.echo]
+type     = "ifconfigco"
+base_url = %[1]q
+
+[provider.dns]
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+base_url = %[1]q
+
+[[instance]]
+name = "home"
+[[instance.retriever]]
+ref = "echo"
+[[instance.provider]]
+ref = "dns"
+`, srv.URL))
+
+	var stdout bytes.Buffer
+
+	code := run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, plugin.Default)
+	if code != exitOK {
+		t.Errorf("exit code = %d, want %d", code, exitOK)
+	}
+
+	if got := stdout.String(); !strings.Contains(got, path) ||
+		!strings.Contains(got, `home: interval=1s retrievers=[echo] providers=[dns]`) {
+		t.Errorf("stdout = %q, want it to name the config path and describe instance %q", got, "home")
+	}
+
+	// runner.Run never started: nothing was looked up or written.
+	if world.lookupCount() != 0 {
+		t.Errorf("lookups = %d, want 0: --check-config must not start the daemon", world.lookupCount())
+	}
+}
+
+func TestCheckConfigReportsTheRetrieverFamilyHint(t *testing.T) {
+	registry := plugin.NewRegistry()
+	plugin.RegisterRetrieverIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Retriever, error) {
+		return &fakeRetriever{}, nil
+	})
+	plugin.RegisterProviderIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Provider, error) {
+		return fakeProviderStub{}, nil
+	})
+
+	path := writeConfig(t, `
+[retriever.v4]
+type   = "fake"
+family = "ipv4"
+[provider.main]
+type = "fake"
+
+[[instance]]
+name = "dual"
+[[instance.retriever]]
+ref = "v4"
+[[instance.provider]]
+ref = "main"
+`)
+
+	var stdout bytes.Buffer
+
+	code := run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, registry)
+	if code != exitOK {
+		t.Errorf("exit code = %d, want %d", code, exitOK)
+	}
+
+	if got := stdout.String(); !strings.Contains(got, "retrievers=[v4(ipv4)]") {
+		t.Errorf("stdout = %q, want it to include the family hint", got)
+	}
+}
+
+func TestCheckConfigExitsWithConfigCodeOnAnInvalidConfig(t *testing.T) {
+	var stderr bytes.Buffer
+
+	path := writeConfig(t, `
+[provider.dns]
+type = "nosuch"
+[[instance]]
+name = "x"
+[[instance.retriever]]
+ref = "echo"
+[[instance.provider]]
+ref = "dns"
+`)
+
+	code := run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, plugin.Default)
+	if code != exitConfig {
+		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	}
+	if !strings.Contains(stderr.String(), `instance "x"`) {
+		t.Errorf("stderr = %q, want it to name the invalid instance", stderr.String())
+	}
+}
+
 func TestMissingConfigFile(t *testing.T) {
 	var stderr bytes.Buffer
 
