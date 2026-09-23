@@ -14,7 +14,7 @@ A dynamic DNS daemon in Go: it watches your public IP address and patches your D
 - Several independent instances in one process: track more than one site, update more than one provider.
 - Retrievers and providers are plugins. The plugin contract is a public Go package, so you can add your own without forking.
 
-> **Versioning.** dnspatch follows [semantic versioning](https://semver.org), and it is in the `v0.x` series on purpose: the plugin contract has not been proven by many plugins yet. Until `v1.0.0`, a minor release (`v0.1` to `v0.2`) may change the public API of the `plugin` package and the configuration format; patch releases will not. Breaking changes are called out in the release notes and described in the [migration guide](docs/MIGRATION.md). Pin the version you tested.
+> **Versioning.** dnspatch follows [semantic versioning](https://semver.org), and it is in the `v0.x` series on purpose: the plugin contract has not been proven by many plugins yet. Until `v1.0.0`, a minor release (`v0.1` to `v0.2`) may change the public API of the `plugin` package and the configuration format; patch releases will not. Breaking changes are called out in the release notes and described in the [migration guides](docs/migrations/). Pin the version you tested.
 
 ## Install
 
