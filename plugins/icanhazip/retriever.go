@@ -2,6 +2,7 @@ package icanhazip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,11 +12,16 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/httpx"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 const (
 	familyIPv4 = "ipv4"
 	familyIPv6 = "ipv6"
+	// familyBoth asks for both families in one retriever; familyIPv64 is an
+	// accepted alias, normalized to familyBoth at construction.
+	familyBoth  = "both"
+	familyIPv64 = "ipv64"
 
 	// maxBody caps how much of a response is read: an address is a few dozen
 	// bytes, anything longer is not what we asked for.
@@ -27,40 +33,65 @@ const (
 type retriever struct {
 	endpoint string
 	family   string
-	client   *http.Client
+
+	// client is used when family is ipv4 or ipv6. v4Client and v6Client are
+	// used when family is "both": one request per family, since the service
+	// has no single response carrying both addresses.
+	client             *http.Client
+	v4Client, v6Client *http.Client
 }
 
 // newRetriever validates cfg and builds the retriever. A nil client selects
-// one that dials over the configured IP family; tests pass their own.
+// one that dials over the configured IP family (or one per family, for
+// "both"); tests pass their own, reused for every family it needs.
 func newRetriever(cfg Config, client *http.Client) (*retriever, error) {
 	family := strings.ToLower(cfg.Family)
-	if family != familyIPv4 && family != familyIPv6 {
-		return nil, fmt.Errorf(`family: must be "ipv4" or "ipv6", got %q`, cfg.Family)
+	if family == familyIPv64 {
+		family = familyBoth
+	}
+	if family != familyIPv4 && family != familyIPv6 && family != familyBoth {
+		return nil, fmt.Errorf(`family: must be "ipv4", "ipv6" or "both" (alias "ipv64"), got %q`, cfg.Family)
 	}
 
 	if err := httpx.ValidateBaseURL(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("base_url: %w", err)
 	}
 
+	r := &retriever{
+		endpoint: strings.TrimRight(cfg.BaseURL, "/") + "/",
+		family:   family,
+	}
+
+	if family != familyBoth {
+		r.client = client
+		if r.client == nil {
+			var err error
+			if r.client, err = newClient(cfg.Proxy, family); err != nil {
+				return nil, err
+			}
+		}
+		return r, nil
+	}
+
+	r.v4Client, r.v6Client = client, client
 	if client == nil {
 		var err error
-		if client, err = newClient(cfg.Proxy, family); err != nil {
+		if r.v4Client, err = newClient(cfg.Proxy, familyIPv4); err != nil {
+			return nil, err
+		}
+		if r.v6Client, err = newClient(cfg.Proxy, familyIPv6); err != nil {
 			return nil, err
 		}
 	}
 
-	return &retriever{
-		endpoint: strings.TrimRight(cfg.BaseURL, "/") + "/",
-		family:   family,
-		client:   client,
-	}, nil
+	return r, nil
 }
 
 // newClient builds the client the retriever uses. Without a proxy, that is
 // direct or empty, the connection is pinned to the IP family. With one, the
 // connection to the proxy is left alone, since the family that matters is the
-// one the proxy connects to the service over, and the reply check in parse is
-// what enforces the family.
+// one the proxy connects to the service over, and the reply check in
+// parseAddr is what enforces the family.
 func newClient(proxy, family string) (*http.Client, error) {
 	if strings.TrimSpace(proxy) == "" || httpx.IsDirect(proxy) {
 		return &http.Client{Timeout: requestTimeout, Transport: familyTransport(family)}, nil
@@ -90,16 +121,41 @@ func familyTransport(family string) *http.Transport {
 	return transport
 }
 
-// GetIPAddress asks the service for the public address of the configured
-// family.
-func (r *retriever) GetIPAddress(ctx context.Context) (netip.Addr, error) {
+// GetAddresses asks the service for the public address(es) of the configured
+// family. For "both" it makes two requests, one per family over the
+// respective pinned client, and fails if either one does: a partial result
+// is not what "both" was configured for. Configure two single-family
+// retrievers instead for fallback across independent sources.
+func (r *retriever) GetAddresses(ctx context.Context) (plugin.Addresses, error) {
+	if r.family != familyBoth {
+		addr, err := r.fetch(ctx, r.client, r.family)
+		if err != nil {
+			return plugin.Addresses{}, err
+		}
+		if r.family == familyIPv4 {
+			return plugin.Addresses{V4: addr}, nil
+		}
+		return plugin.Addresses{V6: addr}, nil
+	}
+
+	v4, errV4 := r.fetch(ctx, r.v4Client, familyIPv4)
+	v6, errV6 := r.fetch(ctx, r.v6Client, familyIPv6)
+	if errV4 != nil || errV6 != nil {
+		return plugin.Addresses{}, errors.Join(errV4, errV6)
+	}
+	return plugin.Addresses{V4: v4, V6: v6}, nil
+}
+
+// fetch asks the service, over client, for the public address of family and
+// checks the reply matches it.
+func (r *retriever) fetch(ctx context.Context, client *http.Client, family string) (netip.Addr, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.endpoint, nil)
 	if err != nil {
 		return netip.Addr{}, err
 	}
 	req.Header.Set("Accept", "text/plain")
 
-	resp, err := r.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return netip.Addr{}, err
 	}
@@ -114,11 +170,11 @@ func (r *retriever) GetIPAddress(ctx context.Context) (netip.Addr, error) {
 		return netip.Addr{}, fmt.Errorf("unexpected status %s: %s", resp.Status, httpx.Snippet(body))
 	}
 
-	return r.parse(body)
+	return parseAddr(body, family)
 }
 
-// parse turns a response body into an address of the configured family.
-func (r *retriever) parse(body []byte) (netip.Addr, error) {
+// parseAddr turns a response body into an address of the given family.
+func parseAddr(body []byte, family string) (netip.Addr, error) {
 	text := strings.TrimSpace(string(body))
 
 	addr, err := netip.ParseAddr(text)
@@ -131,8 +187,8 @@ func (r *retriever) parse(body []byte) (netip.Addr, error) {
 		return netip.Addr{}, fmt.Errorf("response %s is not a global unicast address", addr)
 	}
 
-	if want4 := r.family == familyIPv4; addr.Is4() != want4 {
-		return netip.Addr{}, fmt.Errorf("response %s is not an %s address", addr, r.family)
+	if want4 := family == familyIPv4; addr.Is4() != want4 {
+		return netip.Addr{}, fmt.Errorf("response %s is not an %s address", addr, family)
 	}
 
 	return addr, nil

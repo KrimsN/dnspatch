@@ -102,27 +102,59 @@ func (t *fakeTimer) Stop() bool {
 	return was
 }
 
-// fakeRetriever returns a configurable address or error.
+// fakeRetriever returns a configurable Addresses or error, and counts how
+// many times it was called so a test can check the fallback early exit.
 type fakeRetriever struct {
-	mu   sync.Mutex
-	addr netip.Addr
-	err  error
+	mu    sync.Mutex
+	addrs plugin.Addresses
+	err   error
+	calls int
+}
+
+// singleFamily builds the Addresses a real single-family retriever would
+// return for addr: V4 or V6, whichever addr belongs to.
+func singleFamily(addr string) plugin.Addresses {
+	a := netip.MustParseAddr(addr)
+	if a.Is4() {
+		return plugin.Addresses{V4: a}
+	}
+	return plugin.Addresses{V6: a}
 }
 
 func newFakeRetriever(addr string) *fakeRetriever {
-	return &fakeRetriever{addr: netip.MustParseAddr(addr)}
+	return &fakeRetriever{addrs: singleFamily(addr)}
 }
 
+// set reconfigures the retriever to report a single address, as if it only
+// ever handled one family.
 func (r *fakeRetriever) set(addr string, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.addr, r.err = netip.MustParseAddr(addr), err
+	r.addrs, r.err = singleFamily(addr), err
 }
 
-func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
+// setBoth reconfigures the retriever to report both families in one call, as
+// a family="both" plugin does.
+func (r *fakeRetriever) setBoth(v4, v6 string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.addr, r.err
+	r.addrs = plugin.Addresses{V4: netip.MustParseAddr(v4), V6: netip.MustParseAddr(v6)}
+	r.err = nil
+}
+
+func (r *fakeRetriever) GetAddresses(context.Context) (plugin.Addresses, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls++
+	return r.addrs, r.err
+}
+
+// callCount reports how many times GetAddresses was called, to check that
+// the fallback loop stops calling retrievers once every family is filled.
+func (r *fakeRetriever) callCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
 }
 
 // fakeProvider records every write and fails or blocks on demand.
@@ -183,8 +215,8 @@ func newTestInstance(clock Clock, interval time.Duration, r *fakeRetriever, prov
 	return newTestInstanceMulti(clock, interval, []*fakeRetriever{r}, providers...)
 }
 
-// newTestInstanceMulti builds an instance with one or two retrievers on a
-// fake clock with silent logging and no random jitter.
+// newTestInstanceMulti builds an instance with any number of retrievers, in
+// the given order, on a fake clock with silent logging and no random jitter.
 func newTestInstanceMulti(clock Clock, interval time.Duration, retrievers []*fakeRetriever, providers ...*fakeProvider) *instance {
 	cfg := Instance{Name: "test", Interval: interval}
 	for i, r := range retrievers {

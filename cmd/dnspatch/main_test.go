@@ -370,11 +370,11 @@ type fakeRetrieverConfig struct {
 
 type fakeRetriever struct{ family string }
 
-func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
+func (r *fakeRetriever) GetAddresses(context.Context) (plugin.Addresses, error) {
 	if r.family == "ipv6" {
-		return netip.MustParseAddr("2001:db8::1"), nil
+		return plugin.Addresses{V6: netip.MustParseAddr("2001:db8::1")}, nil
 	}
-	return netip.MustParseAddr("203.0.113.1"), nil
+	return plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1")}, nil
 }
 
 type fakeProviderStub struct{}
@@ -429,10 +429,10 @@ ref = "main"
 		t.Errorf("retriever names = %v, want [v4 v6]", names)
 	}
 
-	addr0, _ := instances[0].Retrievers[0].Retriever.GetIPAddress(context.Background())
-	addr1, _ := instances[0].Retrievers[1].Retriever.GetIPAddress(context.Background())
-	if !addr0.Is4() || addr1.Is4() {
-		t.Errorf("addresses = %v (v4), %v (v6); families were not wired to the right retriever", addr0, addr1)
+	addrs0, _ := instances[0].Retrievers[0].Retriever.GetAddresses(context.Background())
+	addrs1, _ := instances[0].Retrievers[1].Retriever.GetAddresses(context.Background())
+	if !addrs0.V4.IsValid() || !addrs1.V6.IsValid() {
+		t.Errorf("addresses = %+v (v4), %+v (v6); families were not wired to the right retriever", addrs0, addrs1)
 	}
 }
 

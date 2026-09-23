@@ -2,7 +2,9 @@
 //
 // api64.ipify.org is dual-stack: the address it reports depends on which IP
 // family the request arrives over. The "family" parameter pins the family
-// instead of leaving it to the operating system.
+// instead of leaving it to the operating system; "both" (alias "ipv64") asks
+// for both by making two requests, one per family, since the service has no
+// single response carrying both addresses.
 //
 // By default the retriever connects directly and ignores the HTTP_PROXY and
 // HTTPS_PROXY environment variables: through a proxy the service reports the

@@ -26,13 +26,14 @@ import (
 	"time"
 )
 
-// Retriever reports the current public IP address of the machine.
+// Retriever reports the current public IP address(es) of the machine.
 //
-// The returned address must be valid; returning an invalid netip.Addr is an
-// error on the retriever's side. Implementations must respect ctx and abort
-// any network call when it is cancelled.
+// The returned Addresses must have at least one valid field; a retriever that
+// only ever discovers one family (the common case) leaves the other at its
+// zero value. Implementations must respect ctx and abort any network call
+// when it is cancelled.
 type Retriever interface {
-	GetIPAddress(ctx context.Context) (netip.Addr, error)
+	GetAddresses(ctx context.Context) (Addresses, error)
 }
 
 // Addresses carries the address of each family to write. An invalid field

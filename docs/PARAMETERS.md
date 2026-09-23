@@ -32,7 +32,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | no | `https://icanhazip.com` | Base URL of the service; icanhazip.com is dual-stack and replies over whichever IP family the request arrives on |
-| `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
+| `family` | no | `ipv4` | IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with two requests. Without a proxy each request is sent over its family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of the right family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ### Retriever `identme`
@@ -40,7 +40,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | no | `https://ident.me` | Base URL of the service; ident.me is dual-stack and replies over whichever IP family the request arrives on |
-| `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
+| `family` | no | `ipv4` | IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with two requests. Without a proxy each request is sent over its family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of the right family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ### Retriever `ifconfigco`
@@ -48,7 +48,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | no | `https://ifconfig.co` | Base URL of the service; change it to use a self-hosted instance |
-| `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
+| `family` | no | `ipv4` | IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with two requests. Without a proxy each request is sent over its family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of the right family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ### Retriever `ipify`
@@ -56,7 +56,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | no | `https://api64.ipify.org` | Base URL of the service; api64.ipify.org is dual-stack and replies over whichever IP family the request arrives on |
-| `family` | no | `ipv4` | IP family to ask for: ipv4 or ipv6. Without a proxy the request is sent over that family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of this family |
+| `family` | no | `ipv4` | IP family to ask for: ipv4, ipv6, or both (alias ipv64) to fetch both with two requests. Without a proxy each request is sent over its family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of the right family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ## Providers

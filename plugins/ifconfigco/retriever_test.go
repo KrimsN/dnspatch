@@ -5,12 +5,40 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/KrimsN/dnspatch/plugin"
 )
+
+// roundTripFunc lets a test build an http.Client whose RoundTrip is a plain
+// function, to redirect a request to a specific test server regardless of
+// the endpoint the retriever thinks it is calling.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// redirectTo builds a client that sends every request to target instead of
+// the URL's own host, so two clients can each be pinned to a different fake
+// server standing in for a different address family.
+func redirectTo(t *testing.T, target string) *http.Client {
+	t.Helper()
+
+	u, err := url.Parse(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		clone := req.Clone(req.Context())
+		clone.URL.Scheme = u.Scheme
+		clone.URL.Host = u.Host
+		clone.Host = u.Host
+		return http.DefaultTransport.RoundTrip(clone)
+	})}
+}
 
 func newTestRetriever(t *testing.T, family string, handler http.HandlerFunc) *retriever {
 	t.Helper()
@@ -33,7 +61,7 @@ func reply(status int, body string) http.HandlerFunc {
 	}
 }
 
-func TestGetIPAddress(t *testing.T) {
+func TestGetAddresses(t *testing.T) {
 	tests := []struct {
 		name    string
 		family  string
@@ -42,8 +70,8 @@ func TestGetIPAddress(t *testing.T) {
 		want    string
 		wantErr string
 	}{
-		{name: "ipv4", family: "ipv4", status: 200, body: "203.0.113.7\n", want: "203.0.113.7"},
-		{name: "ipv6", family: "ipv6", status: 200, body: "2001:db8::1\n", want: "2001:db8::1"},
+		{name: "ipv4", family: "ipv4", status: 200, body: "203.0.113.7", want: "203.0.113.7"},
+		{name: "ipv6", family: "ipv6", status: 200, body: "2001:db8::1", want: "2001:db8::1"},
 		{name: "mapped ipv4 is unwrapped", family: "ipv4", status: 200, body: "::ffff:203.0.113.7", want: "203.0.113.7"},
 		{name: "error status", family: "ipv4", status: 429, body: "slow down", wantErr: "429"},
 		{name: "html instead of address", family: "ipv4", status: 200, body: "<html>oops</html>", wantErr: "not an IP address"},
@@ -59,7 +87,7 @@ func TestGetIPAddress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newTestRetriever(t, tt.family, reply(tt.status, tt.body))
 
-			got, err := r.GetIPAddress(context.Background())
+			got, err := r.GetAddresses(context.Background())
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
@@ -69,14 +97,61 @@ func TestGetIPAddress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != netip.MustParseAddr(tt.want) {
-				t.Errorf("got %s, want %s", got, tt.want)
+
+			want := netip.MustParseAddr(tt.want)
+			var wantAddrs plugin.Addresses
+			if want.Is4() {
+				wantAddrs.V4 = want
+			} else {
+				wantAddrs.V6 = want
+			}
+			if got != wantAddrs {
+				t.Errorf("got %+v, want %+v", got, wantAddrs)
 			}
 		})
 	}
 }
 
-func TestGetIPAddressRequest(t *testing.T) {
+// bothRetriever builds a family="both" retriever whose v4Client and v6Client
+// each redirect to their own fake server, so the two legs can be told apart.
+func bothRetriever(t *testing.T, v4, v6 http.HandlerFunc) *retriever {
+	t.Helper()
+
+	v4Srv := httptest.NewServer(v4)
+	t.Cleanup(v4Srv.Close)
+	v6Srv := httptest.NewServer(v6)
+	t.Cleanup(v6Srv.Close)
+
+	return &retriever{
+		endpoint: v4Srv.URL + "/ip",
+		family:   familyBoth,
+		v4Client: redirectTo(t, v4Srv.URL),
+		v6Client: redirectTo(t, v6Srv.URL),
+	}
+}
+
+func TestGetAddressesBoth(t *testing.T) {
+	r := bothRetriever(t, reply(200, "203.0.113.7"), reply(200, "2001:db8::1"))
+
+	got, err := r.GetAddresses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.7"), V6: netip.MustParseAddr("2001:db8::1")}
+	if got != want {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestGetAddressesBothFailsIfEitherLegFails(t *testing.T) {
+	r := bothRetriever(t, reply(200, "203.0.113.7"), reply(500, "boom"))
+
+	if _, err := r.GetAddresses(context.Background()); err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestGetAddressesRequest(t *testing.T) {
 	var path, method string
 
 	r := newTestRetriever(t, "ipv4", func(w http.ResponseWriter, req *http.Request) {
@@ -84,7 +159,7 @@ func TestGetIPAddressRequest(t *testing.T) {
 		_, _ = w.Write([]byte("203.0.113.7"))
 	})
 
-	if _, err := r.GetIPAddress(context.Background()); err != nil {
+	if _, err := r.GetAddresses(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if method != http.MethodGet || path != "/ip" {
@@ -92,7 +167,7 @@ func TestGetIPAddressRequest(t *testing.T) {
 	}
 }
 
-func TestGetIPAddressCancelled(t *testing.T) {
+func TestGetAddressesCancelled(t *testing.T) {
 	release := make(chan struct{})
 	r := newTestRetriever(t, "ipv4", func(http.ResponseWriter, *http.Request) { <-release })
 	defer close(release)
@@ -101,7 +176,7 @@ func TestGetIPAddressCancelled(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, err := r.GetIPAddress(ctx)
+	_, err := r.GetAddresses(ctx)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -116,11 +191,13 @@ func TestNewRetrieverValidation(t *testing.T) {
 		cfg     Config
 		wantErr string
 	}{
-		{name: "bad family", cfg: Config{BaseURL: "https://ifconfig.co", Family: "both"}, wantErr: "family"},
+		{name: "bad family", cfg: Config{BaseURL: "https://ifconfig.co", Family: "carrier-pigeon"}, wantErr: "family"},
 		{name: "bad url", cfg: Config{BaseURL: "ifconfig.co", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "bad url with a login", cfg: Config{BaseURL: "ftp://user:hunter2@ifconfig.co", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "unparsable url with a password", cfg: Config{BaseURL: "https://user:hunter2@ifconfig.co/%zz", Family: "ipv4"}, wantErr: "base_url"},
 		{name: "family is case-insensitive", cfg: Config{BaseURL: "https://ifconfig.co", Family: "IPv6"}},
+		{name: "both is accepted", cfg: Config{BaseURL: "https://ifconfig.co", Family: "both"}},
+		{name: "ipv64 is an alias for both", cfg: Config{BaseURL: "https://ifconfig.co", Family: "ipv64"}},
 	}
 
 	for _, tt := range tests {

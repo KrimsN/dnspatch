@@ -696,38 +696,6 @@ ref = "main"
 			wants: []string{`instance "a"`, `"retriever" must be an array of tables`},
 		},
 		{
-			name: "more than two retrievers",
-			doc: header + `
-[[instance]]
-name = "a"
-[[instance.retriever]]
-ref = "home"
-[[instance.retriever]]
-ref = "home"
-[[instance.retriever]]
-ref = "home"
-[[instance.provider]]
-ref = "main"
-`,
-			wants: []string{`instance "a"`, `at most two retrievers are supported`},
-		},
-		{
-			name: "two retrievers configured for the same family",
-			doc: header + `
-[[instance]]
-name = "a"
-[[instance.retriever]]
-ref = "home"
-family = "ipv4"
-[[instance.retriever]]
-ref = "home"
-family = "ipv4"
-[[instance.provider]]
-ref = "main"
-`,
-			wants: []string{`instance "a"`, `retriever #1 and #2 are both configured for family "ipv4"`},
-		},
-		{
 			name: "instance provider written as a table",
 			doc: header + `
 [[instance]]
@@ -990,6 +958,44 @@ ref = "main"
 	}
 	if retrievers[0].Params["family"] != "ipv4" || retrievers[1].Params["family"] != "ipv6" {
 		t.Errorf("retriever families = %v, %v; want ipv4, ipv6", retrievers[0].Params["family"], retrievers[1].Params["family"])
+	}
+}
+
+func TestMoreThanTwoRetrieversAreAllowed(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.retriever]]
+ref = "home"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if got := len(cfg.Instances[0].Retrievers); got != 3 {
+		t.Fatalf("retrievers = %d, want 3: a fallback chain longer than two is allowed", got)
+	}
+}
+
+func TestTwoRetrieversOfTheSameFamilyAreAllowed(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+family = "ipv4"
+[[instance.retriever]]
+ref = "home"
+family = "ipv4"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if got := len(cfg.Instances[0].Retrievers); got != 2 {
+		t.Fatalf("retrievers = %d, want 2: a fallback source for the same family is not a misconfiguration", got)
 	}
 }
 

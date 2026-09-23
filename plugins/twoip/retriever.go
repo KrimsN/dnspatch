@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/httpx"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 // maxBody caps how much of a response is read: the JSON body is a few
@@ -67,8 +68,18 @@ type lookupResponse struct {
 	Error string `json:"error"`
 }
 
-// GetIPAddress asks the service for the public IPv4 address of this host.
-func (r *retriever) GetIPAddress(ctx context.Context) (netip.Addr, error) {
+// GetAddresses asks the service for the public IPv4 address of this host.
+// The service has no IPv6 endpoint, so Addresses.V6 is always left invalid.
+func (r *retriever) GetAddresses(ctx context.Context) (plugin.Addresses, error) {
+	addr, err := r.getIPAddress(ctx)
+	if err != nil {
+		return plugin.Addresses{}, err
+	}
+	return plugin.Addresses{V4: addr}, nil
+}
+
+// getIPAddress asks the service for the public IPv4 address of this host.
+func (r *retriever) getIPAddress(ctx context.Context) (netip.Addr, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.endpoint, nil)
 	if err != nil {
 		return netip.Addr{}, err

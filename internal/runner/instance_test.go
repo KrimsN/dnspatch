@@ -197,7 +197,7 @@ func TestTickWithOneRetrieverFailingStillUpdatesTheOtherFamily(t *testing.T) {
 	}
 }
 
-func TestTickWithBothRetrieversReturningTheSameFamilySkipsProviders(t *testing.T) {
+func TestTickWithRedundantRetrieverOfTheSameFamilyKeepsTheFirst(t *testing.T) {
 	clock := newFakeClock()
 	v4a, v4b := newFakeRetriever("203.0.113.1"), newFakeRetriever("203.0.113.2")
 	provider := newFakeProvider()
@@ -207,8 +207,67 @@ func TestTickWithBothRetrieversReturningTheSameFamilySkipsProviders(t *testing.T
 		t.Fatalf("tick: %v", err)
 	}
 
-	if got := provider.count(); got != 0 {
-		t.Errorf("provider called %d times, want 0: a duplicate family must not reach it", got)
+	// Neither retriever ever fills V6, so both are called every tick (the
+	// loop only stops early once every family is filled); v4b's redundant
+	// address is a fallback source for v4a, not an error, and is ignored.
+	if got := provider.count(); got != 1 {
+		t.Fatalf("provider called %d times, want 1", got)
+	}
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1")}
+	if got := provider.updates[0]; got != want {
+		t.Errorf("addrs sent = %+v, want the first retriever's address: %+v", got, want)
+	}
+}
+
+func TestTickFallsBackToTheNextRetrieverOnFailure(t *testing.T) {
+	clock := newFakeClock()
+	failing := newFakeRetriever("203.0.113.1")
+	failing.set("203.0.113.1", errBoom)
+	fallback := newFakeRetriever("203.0.113.9")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{failing, fallback}, provider)
+
+	err := in.tick(context.Background())
+	if !errors.Is(err, errBoom) {
+		t.Fatalf("tick error = %v, want it to wrap %v", err, errBoom)
+	}
+
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.9")}
+	if got := provider.updates[0]; got != want {
+		t.Errorf("addrs sent = %+v, want the fallback retriever's address: %+v", got, want)
+	}
+}
+
+func TestTickStopsCallingRetrieversOnceEveryFamilyIsFilled(t *testing.T) {
+	clock := newFakeClock()
+	v4, v6 := newFakeRetriever("203.0.113.1"), newFakeRetriever("2001:db8::1")
+	unused := newFakeRetriever("203.0.113.9")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{v4, v6, unused}, provider)
+
+	if err := in.tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	if got := unused.callCount(); got != 0 {
+		t.Errorf("third retriever called %d times, want 0: both families were already filled", got)
+	}
+}
+
+func TestTickWithABothFamilyRetrieverFillsBothInOneCall(t *testing.T) {
+	clock := newFakeClock()
+	both := newFakeRetriever("203.0.113.1")
+	both.setBoth("203.0.113.1", "2001:db8::1")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{both}, provider)
+
+	if err := in.tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1"), V6: netip.MustParseAddr("2001:db8::1")}
+	if got := provider.updates[0]; got != want {
+		t.Errorf("addrs sent = %+v, want %+v", got, want)
 	}
 }
 
@@ -320,7 +379,7 @@ func TestRetrieverErrorSkipsProvidersAndRecovers(t *testing.T) {
 func TestRetrieverInvalidAddressIsAnError(t *testing.T) {
 	provider := newFakeProvider()
 	retriever := newFakeRetriever("203.0.113.1")
-	retriever.addr = netip.Addr{}
+	retriever.addrs = plugin.Addresses{}
 	in := newTestInstance(newFakeClock(), testInterval, retriever, provider)
 
 	if err := in.tick(context.Background()); err == nil {

@@ -89,7 +89,7 @@ Go before treating such a finding as yours.
 
 A plugin is a package under `plugins/` with a configuration struct and a
 constructor. The steps below use a provider; a retriever differs only in the
-interface it implements (`GetIPAddress` instead of `Update`) and in the
+interface it implements (`GetAddresses` instead of `Update`) and in the
 `RegisterRetriever` call. `plugins/regru` (provider) and `plugins/ifconfigco`
 (retriever) are complete examples to copy from.
 
@@ -163,7 +163,7 @@ name twice panics at start-up. Add a blank import of the package to
 
 Every network call a plugin makes must be bound to the `ctx` it receives, for
 example with `http.NewRequestWithContext(ctx, ...)`. The runner puts a deadline
-(30 seconds by default) on every `GetIPAddress` and `Update` call and
+(30 seconds by default) on every `GetAddresses` and `Update` call and
 cancels the context on shutdown; a plugin that ignores `ctx` can stall its
 instance indefinitely. An HTTP client field on the plugin is fine for tests
 against `httptest`, but it must not replace the context.
@@ -183,7 +183,12 @@ Make the plugin testable without the network:
   Writing a record that already holds the address must succeed and change
   nothing: after a restart the daemon writes to every provider without
   knowing what it wrote before.
-- A retriever returns a valid global unicast address, and an error otherwise.
+- A retriever returns a `plugin.Addresses` with at least one valid global
+  unicast field, and an error otherwise. A single-family retriever leaves the
+  other field at its zero value; a retriever whose service is itself
+  dual-stack can fill both in one call (see the built-in `family = "both"`
+  retrievers for the pattern: one HTTP request per family, joined with
+  `errors.Join` if either fails).
 
 ### 5. Test it
 

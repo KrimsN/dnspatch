@@ -32,8 +32,8 @@ type providerState struct {
 	next time.Time
 }
 
-// instance polls one or two retrievers, one per address family, and keeps its
-// providers up to date.
+// instance polls one or more retrievers, in order, until every address
+// family is filled, and keeps its providers up to date.
 type instance struct {
 	name       string
 	interval   time.Duration
@@ -131,14 +131,14 @@ func (in *instance) tick(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// retrieve fetches the current address from every retriever, one after the
-// other, so two retrievers can together take up to 2x the per-attempt
-// timeout in the worst case. A failing retriever is logged and skipped; the
-// others are still tried. Two retrievers reporting the same address family is
-// a configuration mistake: it is logged and neither address is returned, so
-// providers are left alone for this tick. That case is not turned into an
-// error, since tick's return value is only used for logging; look at the log
-// for the warning, not at the returned error, to detect it.
+// retrieve fetches addresses from the retrievers in order, one after the
+// other, until every family is filled or the list is exhausted: a retriever
+// is not even called once both families already have an address, so N
+// retrievers take up to N times the per-attempt timeout only in the worst
+// case where every family stays unfilled until the last one. A failing
+// retriever is logged and skipped; the others are still tried. A retriever
+// reporting a family that an earlier one already filled is a redundant
+// fallback source, not an error: its value for that family is ignored.
 func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 	var addrs plugin.Addresses
 
@@ -147,14 +147,17 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 		if ctx.Err() != nil {
 			break
 		}
+		if addrs.V4.IsValid() && addrs.V6.IsValid() {
+			break
+		}
 
-		var addr netip.Addr
+		var got plugin.Addresses
 		err := in.attempt(ctx, func(ctx context.Context) (err error) {
-			addr, err = r.Retriever.GetIPAddress(ctx)
+			got, err = r.Retriever.GetAddresses(ctx)
 			return err
 		})
-		if err == nil && !addr.IsValid() {
-			err = errors.New("retriever returned an invalid address")
+		if err == nil && !got.V4.IsValid() && !got.V6.IsValid() {
+			err = errors.New("retriever returned no valid address")
 		}
 		if err != nil {
 			if ctx.Err() != nil {
@@ -166,18 +169,19 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 			continue
 		}
 
-		if addr.Is4() {
+		if got.V4.IsValid() {
 			if addrs.V4.IsValid() {
-				in.log.Warn("two retrievers reported an ipv4 address, skipping this tick", "retriever", r.Name)
-				return plugin.Addresses{}, errs
+				in.log.Debug("ipv4 address already filled by an earlier retriever, ignoring", "retriever", r.Name)
+			} else {
+				addrs.V4 = got.V4
 			}
-			addrs.V4 = addr
-		} else {
+		}
+		if got.V6.IsValid() {
 			if addrs.V6.IsValid() {
-				in.log.Warn("two retrievers reported an ipv6 address, skipping this tick", "retriever", r.Name)
-				return plugin.Addresses{}, errs
+				in.log.Debug("ipv6 address already filled by an earlier retriever, ignoring", "retriever", r.Name)
+			} else {
+				addrs.V6 = got.V6
 			}
-			addrs.V6 = addr
 		}
 	}
 

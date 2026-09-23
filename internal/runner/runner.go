@@ -38,9 +38,11 @@ type NamedRetriever struct {
 }
 
 // Instance ties one or more retrievers to the providers they feed and the
-// interval on which it is polled. There is at most one retriever per address
-// family: two retrievers means one for IPv4 and one for IPv6, distinguished
-// at run time by the address each returns.
+// interval on which it is polled. Retrievers are polled in order, one after
+// the other, until every address family has been filled or the list is
+// exhausted: the first retriever to report a family wins it, and later
+// retrievers reporting the same family are a redundant fallback source, not
+// an error.
 type Instance struct {
 	Name       string
 	Interval   time.Duration
@@ -104,10 +106,10 @@ func SignalContext(parent context.Context) (context.Context, context.CancelFunc)
 }
 
 // Validate checks that instances can be run: there is at least one, and each has
-// a positive interval, one or two retrievers and providers. All problems are
-// reported together. Run performs the same check itself; calling Validate
-// first lets a caller tell an invalid setup apart from a failure while
-// running.
+// a positive interval, at least one retriever and at least one provider. All
+// problems are reported together. Run performs the same check itself; calling
+// Validate first lets a caller tell an invalid setup apart from a failure
+// while running.
 func Validate(instances []Instance) error {
 	if len(instances) == 0 {
 		return errors.New("no instances to run")
@@ -117,8 +119,8 @@ func Validate(instances []Instance) error {
 		if in.Interval <= 0 {
 			errs = append(errs, fmt.Errorf("instance %q: interval must be positive", in.Name))
 		}
-		if len(in.Retrievers) == 0 || len(in.Retrievers) > 2 {
-			errs = append(errs, fmt.Errorf("instance %q: must have one or two retrievers, has %d", in.Name, len(in.Retrievers)))
+		if len(in.Retrievers) == 0 {
+			errs = append(errs, fmt.Errorf("instance %q: no retrievers", in.Name))
 		}
 		for i, r := range in.Retrievers {
 			if r.Retriever == nil {
