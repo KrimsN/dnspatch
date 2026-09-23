@@ -100,8 +100,7 @@ jobs:
       - if: steps.changed.outputs.run == 'true'
         working-directory: examples
         env:
-          REGRU_PASSWORD: check-config-dummy
-          SELECTEL_PASSWORD: check-config-dummy
+          PASSWORD: check-config-dummy
           PROXY_URL: direct
         run: |
           set -e

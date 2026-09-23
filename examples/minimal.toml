@@ -8,13 +8,6 @@
 # provider shared by more than one instance needs a named [retriever.<name>]
 # or [provider.<name>] block instead — see multi-provider.toml.
 
-[provider.regru]
-type     = "regru"
-username = "CHANGE_ME"
-password = "${REGRU_PASSWORD}"
-zone     = "example.com"
-rr_name  = "home"
-
 [[instance]]
 name = "home"
 
@@ -22,4 +15,8 @@ name = "home"
 type = "ifconfigco"
 
 [[instance.provider]]
-ref = "regru"
+type     = "regru"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"

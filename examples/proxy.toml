@@ -12,7 +12,7 @@ type = "ifconfigco"
 [provider.regru]
 type     = "regru"
 username = "CHANGE_ME"
-password = "${REGRU_PASSWORD}"
+password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
 proxy    = "${PROXY_URL}"
