@@ -423,7 +423,8 @@ func duplicateProviders(providers []Plugin) []error {
 // duplicateRetrieverFamilies reports two retrievers declared for the same
 // address family via their "family" parameter. This is an early hint for a
 // likely misconfiguration, not a guarantee: the actual family is only known
-// once a retriever returns an address at run time.
+// once a retriever returns an address at run time, and a value that is not
+// an exact match, such as "IPv4", is not caught here.
 func duplicateRetrieverFamilies(retrievers []Plugin) []error {
 	if len(retrievers) != 2 {
 		return nil

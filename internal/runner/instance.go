@@ -131,11 +131,14 @@ func (in *instance) tick(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// retrieve fetches the current address from every retriever. A failing
-// retriever is logged and skipped; the others are still tried. Two
-// retrievers reporting the same address family is a configuration mistake:
-// it is logged and neither address is returned, so providers are left alone
-// for this tick.
+// retrieve fetches the current address from every retriever, one after the
+// other, so two retrievers can together take up to 2x the per-attempt
+// timeout in the worst case. A failing retriever is logged and skipped; the
+// others are still tried. Two retrievers reporting the same address family is
+// a configuration mistake: it is logged and neither address is returned, so
+// providers are left alone for this tick. That case is not turned into an
+// error, since tick's return value is only used for logging; look at the log
+// for the warning, not at the returned error, to detect it.
 func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 	var addrs plugin.Addresses
 
