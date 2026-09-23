@@ -149,7 +149,7 @@ rr_name = "*.home"                 # override a parameter of the definition
   ref = "regru"
   ```
 
-  A retriever whose service is itself dual-stack can report both families in one call with `family = "dual"`, supported by `icanhazip`, `identme`, `ifconfigco` and `ipify`:
+  A retriever whose service is itself dual-stack can report both families in one call with `family = "dual"`, supported by `icanhazip`, `identme`, `ifconfigco`, `ipify` and `interface`:
 
   ```toml
   [retriever.home]
@@ -190,7 +190,7 @@ rr_name = "*.home"                 # override a parameter of the definition
   ref = "regru"
   ```
 
-  Here `icanhazip` is tried first for both families; if it succeeds, `ipify` and `ifconfigco` are never called. If it fails, `ipify` is tried for IPv6 and `ifconfigco` for IPv4. Only a retriever type that has its own `family` parameter (`icanhazip`, `identme`, `ifconfigco`, `ipify`) can be pinned this way; one that does not, such as `2ip`, is always treated like `dual`: a candidate for whichever family is still missing, decided by the address it actually returns, exactly as before this parameter existed.
+  Here `icanhazip` is tried first for both families; if it succeeds, `ipify` and `ifconfigco` are never called. If it fails, `ipify` is tried for IPv6 and `ifconfigco` for IPv4. Only a retriever type that has its own `family` parameter (`icanhazip`, `identme`, `ifconfigco`, `ipify`, `interface`) can be pinned this way; one that does not, such as `2ip`, is always treated like `dual`: a candidate for whichever family is still missing, decided by the address it actually returns, exactly as before this parameter existed.
 - `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
 - `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
 - Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.
@@ -205,6 +205,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 | retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or dual |
 | retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or dual |
 | retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
+| retriever | `interface` | reads the address from a local network interface, with no external service; public addresses only, the lowest one if several, narrowed by `network` (see [examples/interface-ipv6.toml](examples/interface-ipv6.toml)) |
 | provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `rfc2136` | sets the `A` or `AAAA` record on your own name server (BIND, Knot DNS, PowerDNS, Technitium, ...) with RFC 2136 dynamic updates, signed with TSIG |

@@ -13,6 +13,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [icanhazip](#retriever-icanhazip)
   - [identme](#retriever-identme)
   - [ifconfigco](#retriever-ifconfigco)
+  - [interface](#retriever-interface)
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
   - [beget](#provider-beget)
@@ -53,6 +54,14 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `base_url` | no | `https://ifconfig.co` | Base URL of the service; change it to use a self-hosted instance |
 | `family` | no | `ipv4` | IP family to ask for: ipv4, ipv6, or dual to fetch both with two requests. Without a proxy each request is sent over its family; with a proxy the family of the connection is up to the proxy, and the reply is only checked to be of the right family |
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
+
+### Retriever `interface`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `name` | yes | — | Name of the network interface to read, for example eth0, wan or Ethernet. Of the addresses on it, only public ones are considered: loopback, link-local, private (10/8, 172.16/12, 192.168/16, fc00::/7) and shared CGNAT (100.64/10) addresses are skipped. If several remain, the numerically lowest one is used, so the choice is stable; narrow it down with network |
+| `family` | no | `ipv6` | IP family to read: ipv4, ipv6, or dual to read both. dual fails when the interface has no suitable address of either family |
+| `network` | no | — | Optional CIDR prefix, for example 2001:db8:1234::/64: only addresses inside it are considered. Use it to pick one of several prefixes on the interface, such as a delegated prefix, or to tell a stable address from a temporary one |
 
 ### Retriever `ipify`
 

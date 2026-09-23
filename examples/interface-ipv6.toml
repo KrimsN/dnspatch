@@ -1,0 +1,35 @@
+# Reading the IPv6 address from a network interface instead of asking an
+# external service. The address is already on the interface, so nothing
+# leaves the host to find it out.
+#
+# Typical for a home router or server behind an ISP that hands out a
+# delegated prefix (DHCPv6-PD): the interface holds an address from that
+# prefix, and the prefix changes when the ISP renumbers you.
+#
+# Of the addresses on the interface, only public ones count: link-local
+# (fe80::/10), unique local (fc00::/7) and loopback are skipped. If several
+# public addresses remain, for example a stable one and privacy (temporary)
+# ones, the numerically lowest is used; the operating system does not tell
+# them apart, so pin the choice with "network" when it matters.
+
+[retriever.lan]
+type    = "interface"
+name    = "eth0"                 # "wan", "br0" on OpenWrt; "Ethernet" on Windows
+family  = "ipv6"                 # the default for this retriever
+network = "2001:db8:1234::/64"   # optional: only addresses inside this prefix
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "lan"
+
+[[instance.provider]]
+ref = "regru"

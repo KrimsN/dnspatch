@@ -68,6 +68,20 @@ type = "ifconfigco"
 # optionally with user:pass@ (percent-encode special characters).
 # proxy = "direct"
 
+[retriever.interface]
+type = "interface"
+
+# Name of the network interface to read, for example eth0, wan or Ethernet.
+name = "CHANGE_ME"
+
+# IP family to read: ipv4, ipv6, or dual to read both. dual fails when the
+# interface has no suitable address of either family
+# family = "ipv6"
+
+# Optional CIDR prefix, for example 2001:db8:1234::/64: only addresses inside
+# it are considered.
+# network = ""
+
 [retriever.ipify]
 type = "ipify"
 
