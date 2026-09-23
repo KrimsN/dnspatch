@@ -137,6 +137,81 @@ func TestTickRewritesAfterFailedWriteEvenIfAddressReverts(t *testing.T) {
 	}
 }
 
+func TestTickWithTwoRetrieversSendsBothFamiliesInOneCall(t *testing.T) {
+	clock := newFakeClock()
+	v4, v6 := newFakeRetriever("203.0.113.1"), newFakeRetriever("2001:db8::1")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{v4, v6}, provider)
+
+	if err := in.tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	if got := provider.count(); got != 1 {
+		t.Fatalf("provider called %d times, want 1", got)
+	}
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1"), V6: netip.MustParseAddr("2001:db8::1")}
+	if got := provider.updates[0]; got != want {
+		t.Errorf("addrs sent = %+v, want %+v", got, want)
+	}
+}
+
+func TestTickWithTwoRetrieversSendsOnlyTheChangedFamily(t *testing.T) {
+	clock := newFakeClock()
+	v4, v6 := newFakeRetriever("203.0.113.1"), newFakeRetriever("2001:db8::1")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{v4, v6}, provider)
+
+	_ = in.tick(context.Background())
+	v6.set("2001:db8::2", nil)
+	clock.Advance(testInterval)
+	_ = in.tick(context.Background())
+
+	if got := provider.count(); got != 2 {
+		t.Fatalf("provider called %d times, want 2", got)
+	}
+	want := plugin.Addresses{V6: netip.MustParseAddr("2001:db8::2")}
+	if got := provider.updates[1]; got != want {
+		t.Errorf("second call addrs = %+v, want %+v (v4 unchanged, must be left out)", got, want)
+	}
+}
+
+func TestTickWithOneRetrieverFailingStillUpdatesTheOtherFamily(t *testing.T) {
+	clock := newFakeClock()
+	v4, v6 := newFakeRetriever("203.0.113.1"), newFakeRetriever("2001:db8::1")
+	v6.set("2001:db8::1", errBoom)
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{v4, v6}, provider)
+
+	err := in.tick(context.Background())
+	if !errors.Is(err, errBoom) {
+		t.Fatalf("tick error = %v, want it to wrap %v", err, errBoom)
+	}
+
+	if got := provider.count(); got != 1 {
+		t.Fatalf("provider called %d times, want 1", got)
+	}
+	want := plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1")}
+	if got := provider.updates[0]; got != want {
+		t.Errorf("addrs sent = %+v, want only v4: %+v", got, want)
+	}
+}
+
+func TestTickWithBothRetrieversReturningTheSameFamilySkipsProviders(t *testing.T) {
+	clock := newFakeClock()
+	v4a, v4b := newFakeRetriever("203.0.113.1"), newFakeRetriever("203.0.113.2")
+	provider := newFakeProvider()
+	in := newTestInstanceMulti(clock, testInterval, []*fakeRetriever{v4a, v4b}, provider)
+
+	if err := in.tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	if got := provider.count(); got != 0 {
+		t.Errorf("provider called %d times, want 0: a duplicate family must not reach it", got)
+	}
+}
+
 func TestBackoffSkipsTicksAndGapsGrow(t *testing.T) {
 	clock := newFakeClock()
 	provider := newFakeProvider()
@@ -197,10 +272,10 @@ func TestJitterSeparatesInstances(t *testing.T) {
 		provider.fail = func(int) error { return errBoom }
 		// Built the way Run builds it, with the production jitter source.
 		in := newInstance(Instance{
-			Name:      "test",
-			Interval:  testInterval,
-			Retriever: newFakeRetriever("203.0.113.1"),
-			Providers: []NamedProvider{{Name: "p", Provider: provider}},
+			Name:       "test",
+			Interval:   testInterval,
+			Retrievers: []NamedRetriever{{Name: "r", Retriever: newFakeRetriever("203.0.113.1")}},
+			Providers:  []NamedProvider{{Name: "p", Provider: provider}},
 		}, Options{Logger: discardLogger(), Clock: clock, AttemptTimeout: DefaultAttemptTimeout})
 
 		var retryIn []time.Duration
@@ -320,10 +395,10 @@ func TestWarnShortInterval(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			in := newInstance(Instance{
-				Name:      "homelab",
-				Interval:  tt.interval,
-				Retriever: tt.retriever,
-				Providers: []NamedProvider{{Name: "a", Provider: newFakeProvider()}},
+				Name:       "homelab",
+				Interval:   tt.interval,
+				Retrievers: []NamedRetriever{{Name: "r", Retriever: tt.retriever}},
+				Providers:  []NamedProvider{{Name: "a", Provider: newFakeProvider()}},
 			}, Options{Logger: slog.New(slog.NewTextHandler(&buf, nil)), Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
 
 			in.warnShortInterval()
@@ -345,10 +420,10 @@ func TestLogsIdentifyInstanceAndProvider(t *testing.T) {
 	provider := newFakeProvider()
 	provider.fail = func(int) error { return errBoom }
 	in := newInstance(Instance{
-		Name:      "homelab",
-		Interval:  testInterval,
-		Retriever: newFakeRetriever("203.0.113.1"),
-		Providers: []NamedProvider{{Name: "example", Provider: provider}},
+		Name:       "homelab",
+		Interval:   testInterval,
+		Retrievers: []NamedRetriever{{Name: "r", Retriever: newFakeRetriever("203.0.113.1")}},
+		Providers:  []NamedProvider{{Name: "example", Provider: provider}},
 	}, Options{Logger: log, Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
 
 	_ = in.tick(context.Background())

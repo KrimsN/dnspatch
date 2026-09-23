@@ -129,6 +129,8 @@ func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
 type fakeProvider struct {
 	mu     sync.Mutex
 	writes []netip.Addr
+	// updates records every call's full Addresses, for dual-stack tests.
+	updates []plugin.Addresses
 	// fail is consulted with the 1-based call number; a non-nil result is
 	// returned to the runner.
 	fail func(call int) error
@@ -149,6 +151,7 @@ func (p *fakeProvider) Update(ctx context.Context, addrs plugin.Addresses, _ plu
 
 	p.mu.Lock()
 	p.writes = append(p.writes, addr)
+	p.updates = append(p.updates, addrs)
 	call := len(p.writes)
 	fail, block := p.fail, p.block
 	p.mu.Unlock()
@@ -174,10 +177,19 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// newTestInstance builds an instance on a fake clock with silent logging and
-// no random jitter.
+// newTestInstance builds a single-retriever instance on a fake clock with
+// silent logging and no random jitter.
 func newTestInstance(clock Clock, interval time.Duration, r *fakeRetriever, providers ...*fakeProvider) *instance {
-	cfg := Instance{Name: "test", Interval: interval, Retriever: r}
+	return newTestInstanceMulti(clock, interval, []*fakeRetriever{r}, providers...)
+}
+
+// newTestInstanceMulti builds an instance with one or two retrievers on a
+// fake clock with silent logging and no random jitter.
+func newTestInstanceMulti(clock Clock, interval time.Duration, retrievers []*fakeRetriever, providers ...*fakeProvider) *instance {
+	cfg := Instance{Name: "test", Interval: interval}
+	for i, r := range retrievers {
+		cfg.Retrievers = append(cfg.Retrievers, NamedRetriever{Name: string(rune('r' + i)), Retriever: r})
+	}
 	for i, p := range providers {
 		cfg.Providers = append(cfg.Providers, NamedProvider{Name: string(rune('a' + i)), Provider: p})
 	}

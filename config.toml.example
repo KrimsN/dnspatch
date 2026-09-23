@@ -148,7 +148,7 @@ rr_name = "home"
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
 # ----------------------------------------------------------------------------
-# Instances: each one ties a retriever to the providers it updates.
+# Instances: each one ties one or two retrievers to the providers it updates.
 # ----------------------------------------------------------------------------
 
 # Add more [[instance.provider]] tables to update several providers. Parameters
@@ -156,8 +156,10 @@ rr_name = "home"
 [[instance]]
 name = "home"
 
-[instance.retriever]
+[[instance.retriever]]
 ref = "2ip"
 
+# A second [[instance.retriever]] table adds a retriever for the other address
+# family; each instance accepts one or two retrievers, one per family.
 [[instance.provider]]
 ref = "regru"

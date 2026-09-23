@@ -110,7 +110,7 @@ rr_name  = "home"
 [[instance]]
 name = "home"
 
-[instance.retriever]
+[[instance.retriever]]
 ref = "ifconfigco"
 
 [[instance.provider]]
@@ -122,6 +122,29 @@ rr_name = "*.home"                 # override a parameter of the definition
 ```
 
 - An instance points at definitions with `ref`. Parameters written next to a `ref` override the definition, except `type`. This is how one provider account serves several records.
+- An instance accepts one or two `[[instance.retriever]]` tables: one for a single address family, or two for dual-stack (one A and one AAAA record from the same instance). With two, each retriever must report a different family; which is which is decided by the address actually returned, not by configuration. For example, two `ifconfigco` retrievers with `family = "ipv4"` and `family = "ipv6"`:
+
+  ```toml
+  [retriever.v4]
+  type   = "ifconfigco"
+  family = "ipv4"
+
+  [retriever.v6]
+  type   = "ifconfigco"
+  family = "ipv6"
+
+  [[instance]]
+  name = "home"
+
+  [[instance.retriever]]
+  ref = "v4"
+
+  [[instance.retriever]]
+  ref = "v6"
+
+  [[instance.provider]]
+  ref = "regru"
+  ```
 - `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
 - `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
 - Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.

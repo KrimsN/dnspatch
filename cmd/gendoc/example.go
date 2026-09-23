@@ -146,7 +146,7 @@ func exampleValue(p param) (string, error) {
 
 // writeInstance writes an instance using the first retriever and provider.
 func writeInstance(b *strings.Builder, retrieverNames, providerNames []string) {
-	writeBanner(b, "Instances: each one ties a retriever to the providers it updates.")
+	writeBanner(b, "Instances: each one ties one or two retrievers to the providers it updates.")
 
 	if len(retrieverNames) == 0 || len(providerNames) == 0 {
 		b.WriteString("# No retriever or no provider is registered, so there is no instance to show.\n")
@@ -157,7 +157,9 @@ func writeInstance(b *strings.Builder, retrieverNames, providerNames []string) {
 	b.WriteString("# set next to a ref override the definition, for example another zone.\n")
 	b.WriteString("[[instance]]\n")
 	b.WriteString("name = \"home\"\n\n")
-	fmt.Fprintf(b, "[instance.retriever]\nref = %s\n\n", tomlString(retrieverNames[0]))
+	fmt.Fprintf(b, "[[instance.retriever]]\nref = %s\n\n", tomlString(retrieverNames[0]))
+	b.WriteString("# A second [[instance.retriever]] table adds a retriever for the other address\n")
+	b.WriteString("# family; each instance accepts one or two retrievers, one per family.\n")
 	fmt.Fprintf(b, "[[instance.provider]]\nref = %s\n", tomlString(providerNames[0]))
 }
 

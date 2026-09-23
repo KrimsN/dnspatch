@@ -88,8 +88,11 @@ func TestFullExampleParses(t *testing.T) {
 		t.Errorf("instance order = %q, %q; want homelab, office", homelab.Name, office.Name)
 	}
 
-	if homelab.Retriever.Type != "ifconfigco" || len(homelab.Retriever.Params) != 0 {
-		t.Errorf("homelab retriever = %+v", homelab.Retriever)
+	if len(homelab.Retrievers) != 1 {
+		t.Fatalf("homelab has %d retrievers, want 1", len(homelab.Retrievers))
+	}
+	if homelab.Retrievers[0].Type != "ifconfigco" || len(homelab.Retrievers[0].Params) != 0 {
+		t.Errorf("homelab retriever = %+v", homelab.Retrievers[0])
 	}
 
 	if len(homelab.Providers) != 3 {
@@ -133,7 +136,7 @@ func TestOverrideWinsAndRestIsInherited(t *testing.T) {
 		"verify_tls": true, // overridden: the definition says false
 		"api_token":  "local-secret",
 	}
-	if got := office.Retriever.Params; !reflect.DeepEqual(got, wantRetriever) {
+	if got := office.Retrievers[0].Params; !reflect.DeepEqual(got, wantRetriever) {
 		t.Errorf("office retriever params = %v, want %v", got, wantRetriever)
 	}
 
@@ -152,7 +155,7 @@ func TestServiceKeysAreStripped(t *testing.T) {
 	cfg := loadFull(t)
 
 	for _, inst := range cfg.Instances {
-		for _, plugin := range append([]Plugin{inst.Retriever}, inst.Providers...) {
+		for _, plugin := range append(append([]Plugin{}, inst.Retrievers...), inst.Providers...) {
 			for _, key := range []string{"type", "ref"} {
 				if _, ok := plugin.Params[key]; ok {
 					t.Errorf("instance %q plugin %q: params contain %q", inst.Name, plugin.Ref, key)
@@ -234,7 +237,7 @@ opts = { a = 1, b = 2 }
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref  = "main"
@@ -261,7 +264,7 @@ func TestIntervals(t *testing.T) {
 	custom := mustParse(t, `interval = "1m"`+header+`
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -291,7 +294,7 @@ number = 5
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -327,7 +330,7 @@ password = "${file:`+filepath.ToSlash(path)+`}"
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -349,7 +352,7 @@ type     = "example"
 password = "${file:` + filepath.ToSlash(path) + `}"
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -367,7 +370,7 @@ func TestEnvExpansionInOverride(t *testing.T) {
 	cfg := mustParse(t, header+`
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref  = "main"
@@ -390,7 +393,7 @@ type = "example"
 [[instance]]
 name = "${NAME}"
 interval = "${NAME}"
-[instance.retriever]
+[[instance.retriever]]
 ref = "${NAME}"
 [[instance.provider]]
 ref = "${NAME}"
@@ -418,7 +421,7 @@ name = "${TOKEN}"
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -438,7 +441,7 @@ api_token = "${DNSPATCH_TEST_SURELY_UNSET}"
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -457,7 +460,7 @@ func TestErrors(t *testing.T) {
 	}{
 		{
 			name: "unknown provider ref lists the defined ones",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "mian"
@@ -466,12 +469,12 @@ ref = "mian"
 		},
 		{
 			name: "unknown retriever ref lists the defined ones",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "nope"
 [[instance.provider]]
 ref = "main"
 `),
-			wants: []string{`instance "a"`, `retriever: ref "nope" is not defined`, `defined: home`},
+			wants: []string{`instance "a"`, `retriever #1: ref "nope" is not defined`, `defined: home`},
 		},
 		{
 			name: "no providers are defined at all",
@@ -480,7 +483,7 @@ ref = "main"
 type = "ifconfigco"
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -490,11 +493,11 @@ ref = "main"
 		{
 			name:  "instance without a retriever",
 			doc:   instance("[[instance.provider]]\nref = \"main\"\n"),
-			wants: []string{`instance "a"`, `retriever is required`},
+			wants: []string{`instance "a"`, `at least one retriever is required`},
 		},
 		{
 			name: "provider repeated with the same parameters",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -505,7 +508,7 @@ ref = "main"
 		},
 		{
 			name: "provider repeated with an override that changes nothing",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -517,12 +520,12 @@ zone = "a.com"
 		},
 		{
 			name:  "instance without providers",
-			doc:   instance("[instance.retriever]\nref = \"home\"\n"),
+			doc:   instance("[[instance.retriever]]\nref = \"home\"\n"),
 			wants: []string{`instance "a"`, `at least one provider is required`},
 		},
 		{
 			name: "reference without ref",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 zone = "x.com"
@@ -535,7 +538,7 @@ zone = "x.com"
 [[instance]]
 name = "a"
 interval = "5x"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -553,7 +556,7 @@ ref = "main"
 [[instance]]
 name = "a"
 interval = "0s"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -570,7 +573,7 @@ type = "example"
 opts = { token = "${DNSPATCH_TEST_SURELY_UNSET}" }
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -580,7 +583,7 @@ ref = "main"
 		},
 		{
 			name: "type cannot be overridden",
-			doc: instance(`[instance.retriever]
+			doc: instance(`[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref  = "main"
@@ -601,14 +604,14 @@ zone = "a.com"
 			doc: header + `
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
 
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -617,7 +620,7 @@ ref = "main"
 		},
 		{
 			name:  "instance without a name",
-			doc:   header + "\n[[instance]]\n[instance.retriever]\nref = \"home\"\n[[instance.provider]]\nref = \"main\"\n",
+			doc:   header + "\n[[instance]]\n[[instance.retriever]]\nref = \"home\"\n[[instance.provider]]\nref = \"main\"\n",
 			wants: []string{`instance #1`, `"name" is required`},
 		},
 		{
@@ -635,7 +638,7 @@ ref = "main"
 			doc: header + `
 [[instance]]
 name = "first"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -643,7 +646,7 @@ ref = "main"
 [[instance]]
 name = "second"
 interva = "1m"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -657,7 +660,7 @@ ref = "home"
 [[instance.provider]]
 ref = "main"
 `),
-			wants: []string{`instance "a"`, `unknown key "retreiver"`, `retriever is required`},
+			wants: []string{`instance "a"`, `unknown key "retreiver"`, `at least one retriever is required`},
 		},
 		{
 			name:  "definition written as an array of tables",
@@ -678,26 +681,58 @@ retriever = "home"
 [[instance.provider]]
 ref = "main"
 `,
-			wants: []string{`instance "a"`, `"retriever" must be a table`},
+			wants: []string{`instance "a"`, `"retriever" must be an array of tables`},
 		},
 		{
-			name: "instance retriever written as an array of tables",
+			name: "instance retriever written as a single table",
+			doc: header + `
+[[instance]]
+name = "a"
+[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`,
+			wants: []string{`instance "a"`, `"retriever" must be an array of tables`},
+		},
+		{
+			name: "more than two retrievers",
 			doc: header + `
 [[instance]]
 name = "a"
 [[instance.retriever]]
 ref = "home"
+[[instance.retriever]]
+ref = "home"
+[[instance.retriever]]
+ref = "home"
 [[instance.provider]]
 ref = "main"
 `,
-			wants: []string{`instance "a"`, `"retriever" must be a table`},
+			wants: []string{`instance "a"`, `at most two retrievers are supported`},
+		},
+		{
+			name: "two retrievers configured for the same family",
+			doc: header + `
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+family = "ipv4"
+[[instance.retriever]]
+ref = "home"
+family = "ipv4"
+[[instance.provider]]
+ref = "main"
+`,
+			wants: []string{`instance "a"`, `retriever #1 and #2 are both configured for family "ipv4"`},
 		},
 		{
 			name: "instance provider written as a table",
 			doc: header + `
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [instance.provider]
 ref = "main"
@@ -715,7 +750,7 @@ ref = "main"
 [[instance]]
 name = "a"
 interval = 30
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -748,7 +783,7 @@ b = "${TOKEN"
 c = "${}"
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -767,7 +802,7 @@ a = "${DNSPATCH_TEST_UNSET_ONE}"
 b = ["x", "${DNSPATCH_TEST_UNSET_TWO}"]
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"
@@ -785,7 +820,7 @@ type = "example"
 type = "example"
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "gone"
@@ -815,7 +850,7 @@ interval = "bad"
 ref = "gone"
 `)
 
-	wantContains(t, msg, `invalid interval "bad"`, `retriever is required`, `ref "gone" is not defined`)
+	wantContains(t, msg, `invalid interval "bad"`, `at least one retriever is required`, `ref "gone" is not defined`)
 }
 
 func TestLoadMissingFile(t *testing.T) {
@@ -927,11 +962,34 @@ func TestProxyParameterExpandedAndOverridden(t *testing.T) {
 	}
 
 	// A retriever gets a proxy only when the file names one.
-	if _, ok := cfg.Instances[0].Retriever.Params["proxy"]; ok {
+	if _, ok := cfg.Instances[0].Retrievers[0].Params["proxy"]; ok {
 		t.Error("the retriever without a proxy parameter was given one")
 	}
-	if got := cfg.Instances[1].Retriever.Params["proxy"]; got != "socks5://other.example.net:1080" {
+	if got := cfg.Instances[1].Retrievers[0].Params["proxy"]; got != "socks5://other.example.net:1080" {
 		t.Errorf("retriever override: proxy = %q", got)
+	}
+}
+
+func TestTwoRetrieversOfDifferentFamiliesAreAllowed(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+family = "ipv4"
+[[instance.retriever]]
+ref = "home"
+family = "ipv6"
+[[instance.provider]]
+ref = "main"
+`)
+
+	retrievers := cfg.Instances[0].Retrievers
+	if len(retrievers) != 2 {
+		t.Fatalf("retrievers = %d, want 2", len(retrievers))
+	}
+	if retrievers[0].Params["family"] != "ipv4" || retrievers[1].Params["family"] != "ipv6" {
+		t.Errorf("retriever families = %v, %v; want ipv4, ipv6", retrievers[0].Params["family"], retrievers[1].Params["family"])
 	}
 }
 
@@ -939,7 +997,7 @@ func TestProvidersOfOneDefinitionWithDifferentParametersAreAllowed(t *testing.T)
 	cfg := mustParse(t, header+`
 [[instance]]
 name = "a"
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 [[instance.provider]]
 ref = "main"

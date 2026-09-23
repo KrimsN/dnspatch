@@ -23,7 +23,7 @@ proxy    = "${PROXY_URL}"
 [[instance]]
 name = "home"
 
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 
 # Uses the proxy of the definition.
@@ -46,7 +46,7 @@ proxy   = "direct"
 name = "vps"
 
 # The definition's proxy, replaced for this reference.
-[instance.retriever]
+[[instance.retriever]]
 ref   = "via-vps"
 proxy = "socks5://other.example.net:1080"
 

@@ -25,12 +25,12 @@ api_key = "literal $${NOT_EXPANDED}"
 zone    = "example.org"
 rr_name = "*"
 
-# An instance ties one retriever to one or more providers.
+# An instance ties one or two retrievers to one or more providers.
 [[instance]]
 name     = "homelab"
 interval = "30s"
 
-[instance.retriever]
+[[instance.retriever]]
 ref = "home"
 
 [[instance.provider]]
@@ -49,7 +49,7 @@ ref = "example-alt"
 [[instance]]
 name = "office"
 
-[instance.retriever]
+[[instance.retriever]]
 ref = "office"
 verify_tls = true
 
