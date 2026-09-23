@@ -1,0 +1,23 @@
+# The smallest working config: one retriever, one provider, one instance.
+# Start here, copy the file to dnspatch.toml, replace the placeholders, and
+# read config.toml.example (or docs/PARAMETERS.md) once you need a parameter
+# that is not shown here.
+
+[retriever.home]
+type = "ifconfigco"
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "home"
+
+[[instance.provider]]
+ref = "regru"

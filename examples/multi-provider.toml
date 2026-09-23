@@ -1,0 +1,54 @@
+# Several instances and providers in one process: two independent sites,
+# each on its own polling interval, one of them writing to two zones at
+# two different DNS hosts.
+
+interval = "5m"
+
+[retriever.home]
+type = "ifconfigco"
+
+[retriever.office]
+type     = "ifconfigco"
+base_url = "https://10.0.0.1"
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+
+[provider.selectel]
+type         = "selectel"
+account_id   = "CHANGE_ME"
+username     = "CHANGE_ME"
+password     = "${SELECTEL_PASSWORD}"
+project_name = "CHANGE_ME"
+zone         = "example.net"
+rr_name      = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "home"
+
+# Update both DNS hosts from the same address.
+[[instance.provider]]
+ref = "regru"
+
+[[instance.provider]]
+ref = "selectel"
+
+[[instance]]
+name     = "office"
+interval = "1m"
+
+[[instance.retriever]]
+ref = "office"
+
+# Same regru definition, a different zone for this instance.
+[[instance.provider]]
+ref     = "regru"
+zone    = "example.org"
+rr_name = "office"

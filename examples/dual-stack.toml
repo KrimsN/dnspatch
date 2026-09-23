@@ -1,0 +1,31 @@
+# One instance, one A record and one AAAA record: two retrievers, one per
+# family. Which family a retriever reports is decided by the address it
+# actually returns, not by this file, so the "family" parameter here only
+# tells the retriever which address to ask the service for.
+
+[retriever.v4]
+type   = "ifconfigco"
+family = "ipv4"
+
+[retriever.v6]
+type   = "ifconfigco"
+family = "ipv6"
+
+[provider.regru]
+type     = "regru"
+username = "CHANGE_ME"
+password = "${REGRU_PASSWORD}"
+zone     = "example.com"
+rr_name  = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "v4"
+
+[[instance.retriever]]
+ref = "v6"
+
+[[instance.provider]]
+ref = "regru"
