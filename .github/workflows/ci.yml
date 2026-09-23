@@ -68,6 +68,49 @@ jobs:
           go-version: stable
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
+  # examples/*.toml are documentation, not code under test, so they are only
+  # checked when they (or the parser they exercise) actually changed. On a
+  # push or a workflow_call (release) there is no PR base to diff against, so
+  # the step runs unconditionally there — that's cheap and rare enough not to
+  # matter.
+  examples:
+    name: check examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: changed
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD -- examples | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.run == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - if: steps.changed.outputs.run == 'true'
+        run: go build -o /tmp/dnspatch ./cmd/dnspatch
+      # Run from inside examples/ so secrets-from-files.toml's relative
+      # "./secrets/..." path resolves; the other files don't care about cwd.
+      - if: steps.changed.outputs.run == 'true'
+        working-directory: examples
+        env:
+          REGRU_PASSWORD: check-config-dummy
+          SELECTEL_PASSWORD: check-config-dummy
+          PROXY_URL: direct
+        run: |
+          set -e
+          for f in *.toml; do
+            echo "::group::$f"
+            /tmp/dnspatch --config "$f" --check-config
+            echo "::endgroup::"
+          done
+
   image:
     name: docker build
     runs-on: ubuntu-latest
