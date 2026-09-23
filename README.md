@@ -52,7 +52,17 @@ The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch)
 Things to know before running it in a container:
 
 - **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${REGRU_PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
-- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets.
+- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets. Docker/Swarm and Kubernetes secrets avoid this: they are mounted as files, not environment variables. Write `password = "${file:/run/secrets/regru_password}"` instead, and add the secret to `compose.yml`:
+
+  ```yaml
+  services:
+    dnspatch:
+      secrets:
+        - regru_password
+  secrets:
+    regru_password:
+      file: ./secrets/regru_password.txt
+  ```
 - **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
 - **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
 
@@ -113,6 +123,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 
 - An instance points at definitions with `ref`. Parameters written next to a `ref` override the definition, except `type`. This is how one provider account serves several records.
 - `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
+- `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
 - Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.
 - Every parameter of every plugin is described in [docs/PARAMETERS.md](docs/PARAMETERS.md).
 

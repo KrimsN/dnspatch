@@ -311,6 +311,56 @@ ref = "main"
 	}
 }
 
+func TestFileExpansion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(path, []byte("s3cret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := mustParse(t, `
+[retriever.home]
+type = "ifconfigco"
+
+[provider.main]
+type     = "example"
+password = "${file:`+filepath.ToSlash(path)+`}"
+
+[[instance]]
+name = "a"
+[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if got := cfg.Instances[0].Providers[0].Params["password"]; got != "s3cret" {
+		t.Errorf("password = %v, want s3cret (trailing newline must be trimmed)", got)
+	}
+}
+
+func TestFileExpansionMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "does-not-exist")
+
+	_, err := Parse([]byte(`
+[retriever.home]
+type = "ifconfigco"
+[provider.main]
+type     = "example"
+password = "${file:` + filepath.ToSlash(path) + `}"
+[[instance]]
+name = "a"
+[instance.retriever]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`))
+	if err == nil {
+		t.Fatal("Parse succeeded, want error")
+	}
+
+	wantContains(t, err.Error(), `parameter "password"`, "reading secret file")
+}
+
 func TestEnvExpansionInOverride(t *testing.T) {
 	t.Setenv("ZONE", "b.com")
 
@@ -704,7 +754,7 @@ ref = "home"
 ref = "main"
 `,
 			wants: []string{`instance "a"`, `provider "main"`, `parameter "a"`, `parameter "b"`, `parameter "c"`,
-				`malformed environment reference`},
+				`malformed reference`},
 		},
 		{
 			name: "every missing variable is reported",

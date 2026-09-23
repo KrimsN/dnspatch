@@ -7,11 +7,13 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
 )
 
-// envReference matches, in order of preference: the escape "$${", a valid
-// reference "${NAME}" and a stray "${" that starts a malformed one.
-var envReference = regexp.MustCompile(`\$\$\{|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$\{`)
+// envReference matches, in order of preference: the escape "$${", a file
+// reference "${file:PATH}", a valid environment reference "${NAME}" and a
+// stray "${" that starts a malformed one.
+var envReference = regexp.MustCompile(`\$(?:\$\{|\{(?:file:[^}]+\}|([A-Za-z_]\w*)\})?)`)
 
 // resolvePlugin merges the definition named by override["ref"] with the
 // override and expands environment references. kind is "retriever" or
@@ -113,22 +115,33 @@ func expandValue(value any, path string) (any, []error) {
 	}
 }
 
-// expandString replaces "${NAME}" with the value of the environment variable
-// and "$${" with a literal "${". An unset variable and a malformed reference
-// are errors; a variable set to the empty string is not.
+// expandString replaces "${NAME}" with the value of the environment
+// variable, "${file:PATH}" with the trimmed contents of the file (for
+// Docker/Kubernetes secrets mounted as files), and "$${" with a literal
+// "${". An unset variable, an unreadable file and a malformed reference are
+// errors; a variable set to the empty string is not.
 func expandString(s string) (string, error) {
 	var problem error
 
 	expanded := envReference.ReplaceAllStringFunc(s, func(match string) string {
-		switch match {
-		case "$${":
+		switch {
+		case match == "$${":
 			return "${"
-		case "${":
+		case match == "${":
 			if problem == nil {
 				problem = errMalformedReference
 			}
 
 			return match
+		case strings.HasPrefix(match, "${file:"):
+			path := match[len("${file:") : len(match)-1]
+
+			value, err := readSecretFile(path)
+			if err != nil && problem == nil {
+				problem = err
+			}
+
+			return value
 		}
 
 		name := match[2 : len(match)-1]
@@ -148,7 +161,19 @@ func expandString(s string) (string, error) {
 	return expanded, nil
 }
 
-var errMalformedReference = errors.New(`malformed environment reference: expected "${NAME}", write "$${" for a literal "${"`)
+// readSecretFile reads a secret from path, trimming a single trailing
+// newline (with an optional preceding carriage return) so a file written
+// with "echo" does not carry it into the parameter value.
+func readSecretFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("reading secret file %q: %w", path, err)
+	}
+
+	return strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r"), nil
+}
+
+var errMalformedReference = errors.New(`malformed reference: expected "${NAME}" or "${file:PATH}", write "$${" for a literal "${"`)
 
 func joinPath(prefix, key string) string {
 	if prefix == "" {
