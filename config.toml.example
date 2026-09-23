@@ -86,6 +86,29 @@ type = "ipify"
 # Providers: where the address is published.
 # ----------------------------------------------------------------------------
 
+[provider.beget]
+type = "beget"
+
+# Beget account login used for API calls
+login = "CHANGE_ME"
+
+# Beget account password
+password = "${BEGET_PASSWORD}"
+
+# Domain name of the zone, for example example.com
+zone = "example.com"
+
+# Record name relative to the zone: @ for the apex, * for a wildcard, or a
+# label such as home
+rr_name = "home"
+
+# Base URL of the API
+# base_url = "https://api.beget.com/api"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.regru]
 type = "regru"
 
@@ -162,4 +185,4 @@ ref = "2ip"
 # A second [[instance.retriever]] table adds a retriever for the other address
 # family; each instance accepts one or two retrievers, one per family.
 [[instance.provider]]
-ref = "regru"
+ref = "beget"

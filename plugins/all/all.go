@@ -7,6 +7,7 @@ package all
 
 import (
 	// Built-in plugins register themselves in init.
+	_ "github.com/KrimsN/dnspatch/plugins/beget"
 	_ "github.com/KrimsN/dnspatch/plugins/icanhazip"
 	_ "github.com/KrimsN/dnspatch/plugins/identme"
 	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"

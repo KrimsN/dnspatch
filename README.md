@@ -206,6 +206,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 | retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or dual |
 | retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or dual |
 | retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
+| provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
 

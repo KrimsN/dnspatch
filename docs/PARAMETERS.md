@@ -15,6 +15,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [ifconfigco](#retriever-ifconfigco)
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
+  - [beget](#provider-beget)
   - [regru](#provider-regru)
   - [selectel](#provider-selectel)
 
@@ -60,6 +61,17 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `proxy` | no | `direct` | URL of a proxy to send requests through: socks5, socks5h, http or https, optionally with user:pass@ (percent-encode special characters). The default, direct, connects without a proxy and ignores the proxy environment variables. Behind a proxy the service reports the address the proxy connects from, not the address of this host, so set it only when that is the address you want |
 
 ## Providers
+
+### Provider `beget`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `login` | yes | — | Beget account login used for API calls |
+| `password` | yes | — | Beget account password |
+| `zone` | yes | — | Domain name of the zone, for example example.com |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `base_url` | no | `https://api.beget.com/api` | Base URL of the API |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `regru`
 
