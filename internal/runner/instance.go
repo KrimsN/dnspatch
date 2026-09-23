@@ -16,6 +16,15 @@ import (
 // time, as opposed to one interrupted by shutdown.
 var errAttemptTimeout = errors.New("attempt timed out")
 
+// Recognized values of NamedRetriever.Family. Anything else, including
+// empty, is treated like familyDual: a retriever that might report either
+// family, decided at run time by the address it returns.
+const (
+	familyIPv4 = "ipv4"
+	familyIPv6 = "ipv6"
+	familyDual = "dual"
+)
+
 // providerState is what an instance remembers about one provider. It lives in
 // memory only.
 type providerState struct {
@@ -32,14 +41,20 @@ type providerState struct {
 	next time.Time
 }
 
-// instance polls one or two retrievers, one per address family, and keeps its
-// providers up to date.
+// instance polls one or more retrievers, in order, until every address
+// family any of them can provide is filled, and keeps its providers up to
+// date.
 type instance struct {
 	name       string
 	interval   time.Duration
 	timeout    time.Duration
 	retrievers []NamedRetriever
 	providers  []*providerState
+
+	// needV4 and needV6 say whether any retriever might supply that family,
+	// based on their Family hints; a family neither can provide is never
+	// polled for. Computed once, since the retriever list does not change.
+	needV4, needV6 bool
 
 	clock   Clock
 	log     *slog.Logger
@@ -53,17 +68,38 @@ func newInstance(cfg Instance, opts Options) *instance {
 	for i, p := range cfg.Providers {
 		providers[i] = &providerState{name: p.Name, provider: p.Provider}
 	}
+	needV4, needV6 := neededFamilies(cfg.Retrievers)
 	return &instance{
 		name:       cfg.Name,
 		interval:   cfg.Interval,
 		timeout:    opts.AttemptTimeout,
 		retrievers: cfg.Retrievers,
 		providers:  providers,
+		needV4:     needV4,
+		needV6:     needV6,
 		clock:      opts.Clock,
 		log:        log,
 		backoff:    newBackoff(cfg.Interval),
 		jitter:     rand.Int64N,
 	}
+}
+
+// neededFamilies reports which address families at least one retriever might
+// supply, going by its Family hint. A retriever whose family is unknown
+// (empty, or not one of the recognized values) might report either, exactly
+// like one declared "dual".
+func neededFamilies(retrievers []NamedRetriever) (needV4, needV6 bool) {
+	for _, r := range retrievers {
+		switch r.Family {
+		case familyIPv4:
+			needV4 = true
+		case familyIPv6:
+			needV6 = true
+		default: // familyDual, or an unknown/unset hint
+			needV4, needV6 = true, true
+		}
+	}
+	return needV4, needV6
 }
 
 // intervalAdvisor is implemented by retrievers whose service asks not to be
@@ -131,14 +167,16 @@ func (in *instance) tick(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// retrieve fetches the current address from every retriever, one after the
-// other, so two retrievers can together take up to 2x the per-attempt
-// timeout in the worst case. A failing retriever is logged and skipped; the
-// others are still tried. Two retrievers reporting the same address family is
-// a configuration mistake: it is logged and neither address is returned, so
-// providers are left alone for this tick. That case is not turned into an
-// error, since tick's return value is only used for logging; look at the log
-// for the warning, not at the returned error, to detect it.
+// retrieve fetches addresses from the retrievers in order, one after the
+// other, until every family any of them can provide is filled, or the list
+// is exhausted. A retriever is skipped without being called at all once the
+// family (or families) it could help with are already filled, or were never
+// needed in the first place (instance.needV4/needV6): for example, an
+// instance whose retrievers are all family="ipv4" never even tries for an
+// IPv6 address. A failing retriever is logged and skipped; the others are
+// still tried. A retriever reporting a family that an earlier one already
+// filled is a redundant fallback source, not an error: its value for that
+// family is ignored.
 func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 	var addrs plugin.Addresses
 
@@ -147,14 +185,20 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 		if ctx.Err() != nil {
 			break
 		}
+		if in.done(addrs) {
+			break
+		}
+		if !in.retrieverIsNeeded(r, addrs) {
+			continue
+		}
 
-		var addr netip.Addr
+		var got plugin.Addresses
 		err := in.attempt(ctx, func(ctx context.Context) (err error) {
-			addr, err = r.Retriever.GetIPAddress(ctx)
+			got, err = r.Retriever.GetAddresses(ctx)
 			return err
 		})
-		if err == nil && !addr.IsValid() {
-			err = errors.New("retriever returned an invalid address")
+		if err == nil && !got.V4.IsValid() && !got.V6.IsValid() {
+			err = errors.New("retriever returned no valid address")
 		}
 		if err != nil {
 			if ctx.Err() != nil {
@@ -166,22 +210,45 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 			continue
 		}
 
-		if addr.Is4() {
+		if got.V4.IsValid() {
 			if addrs.V4.IsValid() {
-				in.log.Warn("two retrievers reported an ipv4 address, skipping this tick", "retriever", r.Name)
-				return plugin.Addresses{}, errs
+				in.log.Debug("ipv4 address already filled by an earlier retriever, ignoring", "retriever", r.Name)
+			} else {
+				addrs.V4 = got.V4
 			}
-			addrs.V4 = addr
-		} else {
+		}
+		if got.V6.IsValid() {
 			if addrs.V6.IsValid() {
-				in.log.Warn("two retrievers reported an ipv6 address, skipping this tick", "retriever", r.Name)
-				return plugin.Addresses{}, errs
+				in.log.Debug("ipv6 address already filled by an earlier retriever, ignoring", "retriever", r.Name)
+			} else {
+				addrs.V6 = got.V6
 			}
-			addrs.V6 = addr
 		}
 	}
 
 	return addrs, errs
+}
+
+// done reports whether every family the instance needs is already filled in
+// addrs, so no further retriever needs to be called this tick.
+func (in *instance) done(addrs plugin.Addresses) bool {
+	return (!in.needV4 || addrs.V4.IsValid()) && (!in.needV6 || addrs.V6.IsValid())
+}
+
+// retrieverIsNeeded reports whether r should still be called: whether it
+// might fill a family that addrs is missing and the instance actually wants.
+// A family-pinned retriever (ipv4 or ipv6) is needed only for its own,
+// unfilled, wanted family; one declared "dual", or with no family hint at
+// all, is needed as long as either family is still missing.
+func (in *instance) retrieverIsNeeded(r NamedRetriever, addrs plugin.Addresses) bool {
+	switch r.Family {
+	case familyIPv4:
+		return in.needV4 && !addrs.V4.IsValid()
+	case familyIPv6:
+		return in.needV6 && !addrs.V6.IsValid()
+	default:
+		return (in.needV4 && !addrs.V4.IsValid()) || (in.needV6 && !addrs.V6.IsValid())
+	}
 }
 
 // update writes the families of addrs that changed to one provider, unless

@@ -103,12 +103,17 @@ func TestRetrieverThroughProxy(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got, err := r.GetIPAddress(context.Background())
+			got, err := r.GetAddresses(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != netip.MustParseAddr(tt.want) {
-				t.Errorf("got %s, want %s", got, tt.want)
+			want := netip.MustParseAddr(tt.want)
+			gotAddr := got.V4
+			if want.Is6() {
+				gotAddr = got.V6
+			}
+			if gotAddr != want {
+				t.Errorf("got %+v, want %s", got, tt.want)
 			}
 			if targets := proxy.Targets(); len(targets) != 1 || targets[0] != serviceHost+":80" {
 				t.Errorf("proxy targets = %v", targets)
@@ -129,7 +134,7 @@ func TestRetrieverProxyStillChecksFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.GetIPAddress(context.Background()); err == nil || !strings.Contains(err.Error(), "not an ipv4 address") {
+	if _, err := r.GetAddresses(context.Background()); err == nil || !strings.Contains(err.Error(), "not an ipv4 address") {
 		t.Errorf("error = %v, want the wrong family reported", err)
 	}
 }
@@ -145,7 +150,7 @@ func TestRetrieverWithoutProxyIgnoresRunningOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.GetIPAddress(context.Background()); err != nil {
+	if _, err := r.GetAddresses(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if targets := proxy.Targets(); len(targets) != 0 {

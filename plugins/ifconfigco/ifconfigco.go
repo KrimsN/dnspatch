@@ -2,7 +2,11 @@
 //
 // The service is dual-stack, so the address it reports depends on which IP
 // family the request arrives over. The "family" parameter pins the family
-// instead of leaving it to the operating system.
+// instead of leaving it to the operating system; "dual" asks for both by
+// making two requests, one per family, since the service has no single
+// response carrying both addresses. Both requests happen within the same
+// poll, so the one-request-per-minute limit below is still respected as long
+// as the polling interval is.
 //
 // By default the retriever connects directly and ignores the HTTP_PROXY and
 // HTTPS_PROXY environment variables: through a proxy the service reports the

@@ -177,7 +177,7 @@ func TestRunRejectsInvalidInstances(t *testing.T) {
 	}{
 		"none":         {nil, "no instances"},
 		"no interval":  {[]Instance{noInterval}, "interval must be positive"},
-		"no retriever": {[]Instance{noRetriever}, "must have one or two retrievers"},
+		"no retriever": {[]Instance{noRetriever}, "no retrievers"},
 		"no providers": {[]Instance{noProviders}, "no providers"},
 		"nil provider": {[]Instance{nilProvider}, "provider #1 is nil"},
 	}
@@ -188,6 +188,19 @@ func TestRunRejectsInvalidInstances(t *testing.T) {
 				t.Errorf("Run error = %v, want it to contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateAllowsMoreThanTwoRetrievers(t *testing.T) {
+	in := testInstance("many", time.Minute, newFakeRetriever("203.0.113.1"), newFakeProvider())
+	in.Retrievers = []NamedRetriever{
+		{Name: "r1", Retriever: newFakeRetriever("203.0.113.1")},
+		{Name: "r2", Retriever: newFakeRetriever("203.0.113.2")},
+		{Name: "r3", Retriever: newFakeRetriever("203.0.113.3")},
+	}
+
+	if err := Validate([]Instance{in}); err != nil {
+		t.Errorf("Validate() = %v, want nil: more than two retrievers is a fallback chain, not an error", err)
 	}
 }
 

@@ -31,16 +31,26 @@ type NamedProvider struct {
 	Provider plugin.Provider
 }
 
-// NamedRetriever is a retriever of an instance; the name identifies it in logs.
+// NamedRetriever is a retriever of an instance; the name identifies it in
+// logs. Family is a hint taken from the retriever's own "family" plugin
+// parameter, when it has one: "ipv4", "ipv6" or "dual". Empty means the
+// retriever's family is not known ahead of time (it has no such parameter,
+// or none was set) and it is treated like "dual" — a candidate for whichever
+// family is still missing, decided by the address it actually returns.
 type NamedRetriever struct {
 	Name      string
 	Retriever plugin.Retriever
+	Family    string
 }
 
 // Instance ties one or more retrievers to the providers they feed and the
-// interval on which it is polled. There is at most one retriever per address
-// family: two retrievers means one for IPv4 and one for IPv6, distinguished
-// at run time by the address each returns.
+// interval on which it is polled. Retrievers are polled in order, one after
+// the other, until every address family that any of them can provide has
+// been filled, or the list is exhausted: the first retriever to report a
+// family wins it, and later retrievers reporting the same family are a
+// redundant fallback source, not an error. A family no retriever declares
+// (via its Family hint) is never polled for at all: for example, an instance
+// whose retrievers are all family="ipv4" never looks for an IPv6 address.
 type Instance struct {
 	Name       string
 	Interval   time.Duration
@@ -104,10 +114,10 @@ func SignalContext(parent context.Context) (context.Context, context.CancelFunc)
 }
 
 // Validate checks that instances can be run: there is at least one, and each has
-// a positive interval, one or two retrievers and providers. All problems are
-// reported together. Run performs the same check itself; calling Validate
-// first lets a caller tell an invalid setup apart from a failure while
-// running.
+// a positive interval, at least one retriever and at least one provider. All
+// problems are reported together. Run performs the same check itself; calling
+// Validate first lets a caller tell an invalid setup apart from a failure
+// while running.
 func Validate(instances []Instance) error {
 	if len(instances) == 0 {
 		return errors.New("no instances to run")
@@ -117,8 +127,8 @@ func Validate(instances []Instance) error {
 		if in.Interval <= 0 {
 			errs = append(errs, fmt.Errorf("instance %q: interval must be positive", in.Name))
 		}
-		if len(in.Retrievers) == 0 || len(in.Retrievers) > 2 {
-			errs = append(errs, fmt.Errorf("instance %q: must have one or two retrievers, has %d", in.Name, len(in.Retrievers)))
+		if len(in.Retrievers) == 0 {
+			errs = append(errs, fmt.Errorf("instance %q: no retrievers", in.Name))
 		}
 		for i, r := range in.Retrievers {
 			if r.Retriever == nil {

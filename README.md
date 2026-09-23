@@ -122,7 +122,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 ```
 
 - An instance points at definitions with `ref`. Parameters written next to a `ref` override the definition, except `type`. This is how one provider account serves several records.
-- An instance accepts one or two `[[instance.retriever]]` tables: one for a single address family, or two for dual-stack (one A and one AAAA record from the same instance). With two, each retriever must report a different family; which is which is decided by the address actually returned, not by configuration. For example, two `ifconfigco` retrievers with `family = "ipv4"` and `family = "ipv6"`:
+- An instance accepts one or more `[[instance.retriever]]` tables, polled in order until every address family is filled: which family a retriever reports is decided by the address it actually returns, not by configuration. Dual-stack (one A and one AAAA record from the same instance) needs two retrievers, one per family, for example two `ifconfigco` retrievers with `family = "ipv4"` and `family = "ipv6"`:
 
   ```toml
   [retriever.v4]
@@ -145,6 +145,49 @@ rr_name = "*.home"                 # override a parameter of the definition
   [[instance.provider]]
   ref = "regru"
   ```
+
+  A retriever whose service is itself dual-stack can report both families in one call with `family = "dual"`, supported by `icanhazip`, `identme`, `ifconfigco` and `ipify`:
+
+  ```toml
+  [retriever.home]
+  type   = "ipify"
+  family = "dual"
+  ```
+
+  A third or later retriever is a fallback source, tried only for the families the earlier ones did not fill; it is never called once every family already has an address. Two retrievers reporting the same family (for example, two independent sources both configured with `family = "ipv4"`) is a valid fallback chain, not a misconfiguration: the first one to succeed wins, and the others are skipped for that family.
+
+  The retriever's own `family` parameter also tells the instance which families to even look for: an instance whose retrievers are all `family = "ipv4"` never tries to retrieve an IPv6 address, and a retriever pinned to a family that is already filled (by an earlier one, `dual` or otherwise) is skipped without being called. This also builds a fallback chain per family out of retrievers with different roles, for example:
+
+  ```toml
+  [retriever.icanhazip]
+  type   = "icanhazip"
+  family = "dual"
+
+  [retriever.ipify]
+  type   = "ipify"
+  family = "ipv6"
+
+  [retriever.ifconfigco]
+  type   = "ifconfigco"
+  family = "ipv4"
+
+  [[instance]]
+  name = "home"
+
+  [[instance.retriever]]
+  ref = "icanhazip"
+
+  [[instance.retriever]]
+  ref = "ipify"
+
+  [[instance.retriever]]
+  ref = "ifconfigco"
+
+  [[instance.provider]]
+  ref = "regru"
+  ```
+
+  Here `icanhazip` is tried first for both families; if it succeeds, `ipify` and `ifconfigco` are never called. If it fails, `ipify` is tried for IPv6 and `ifconfigco` for IPv4. Only a retriever type that has its own `family` parameter (`icanhazip`, `identme`, `ifconfigco`, `ipify`) can be pinned this way; one that does not, such as `2ip`, is always treated like `dual`: a candidate for whichever family is still missing, decided by the address it actually returns, exactly as before this parameter existed.
 - `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
 - `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
 - Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.
@@ -155,10 +198,10 @@ rr_name = "*.home"                 # override a parameter of the definition
 | Kind | Type | What it does |
 |------|------|--------------|
 | retriever | `2ip` | asks [2ip.io](https://2ip.io) for the public address (IPv4 only) |
-| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4 or IPv6 |
-| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4 or IPv6 |
-| retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4 or IPv6 |
-| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4 or IPv6 |
+| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4, IPv6, or dual |
+| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or dual |
+| retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or dual |
+| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
 
@@ -185,7 +228,7 @@ dnspatch is built around three concepts:
 
 - **Retriever** — reports your current public IP address
 - **Provider** — writes that address to a DNS record
-- **Instance** — ties one retriever to one or more providers and polls on its own interval
+- **Instance** — ties one or more retrievers to one or more providers and polls on its own interval
 
 Instances run independently, so several sites or networks can be tracked at once.
 
@@ -206,7 +249,7 @@ The `plugin` package is public on purpose. Writing a retriever or a provider mea
 
 ```go
 type Retriever interface {
-	GetIPAddress(ctx context.Context) (netip.Addr, error)
+	GetAddresses(ctx context.Context) (Addresses, error)
 }
 
 type Addresses struct{ V4, V6 netip.Addr }
@@ -217,9 +260,11 @@ type Provider interface {
 }
 ```
 
-`Addresses` carries both families at once: an invalid (zero) `V4` or `V6` means that family is left untouched, which lets one call update an A and an AAAA record together, or just one of them. `RecordOptions` carries options such as `TTL`, which a provider ignores when its service does not support it.
+`Addresses` carries both families at once: an invalid (zero) `V4` or `V6` means that family is not provided (a `Retriever`) or left untouched (a `Provider`), which lets one call report or update both an A and an AAAA address, or just one of them. `RecordOptions` carries options such as `TTL`, which a provider ignores when its service does not support it.
 
-Migrating a plugin written against the old `SetIPAddress(ctx, addr netip.Addr) error`: write the same record for each family that is valid (`addrs.V4.IsValid()`, `addrs.V6.IsValid()`) instead of branching on `addr.Is4()`; a plugin that only ever handled one family (for example because it always got IPv4 before) keeps working unchanged as long as it ignores the family it does not expect.
+Migrating a `Retriever` written against the old `GetIPAddress(ctx) (netip.Addr, error)`: return the single address in the matching field of `Addresses` (`V4` if `addr.Is4()`, `V6` otherwise) and leave the other at its zero value; a plugin that only ever handles one family keeps working unchanged. A retriever whose service is itself dual-stack can fill both fields in one call, as the four `family = "dual"` retrievers built into dnspatch do.
+
+Migrating a `Provider` written against the older `SetIPAddress(ctx, addr netip.Addr) error`: write the same record for each family that is valid (`addrs.V4.IsValid()`, `addrs.V6.IsValid()`) instead of branching on `addr.Is4()`; a plugin that only ever handled one family (for example because it always got IPv4 before) keeps working unchanged as long as it ignores the family it does not expect.
 
 A plugin is a configuration struct plus a constructor; struct tags declare the parameters and feed the generated reference. The step-by-step guide is in [CONTRIBUTING.md](CONTRIBUTING.md#writing-a-plugin).
 

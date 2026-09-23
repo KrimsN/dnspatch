@@ -370,11 +370,11 @@ type fakeRetrieverConfig struct {
 
 type fakeRetriever struct{ family string }
 
-func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
+func (r *fakeRetriever) GetAddresses(context.Context) (plugin.Addresses, error) {
 	if r.family == "ipv6" {
-		return netip.MustParseAddr("2001:db8::1"), nil
+		return plugin.Addresses{V6: netip.MustParseAddr("2001:db8::1")}, nil
 	}
-	return netip.MustParseAddr("203.0.113.1"), nil
+	return plugin.Addresses{V4: netip.MustParseAddr("203.0.113.1")}, nil
 }
 
 type fakeProviderStub struct{}
@@ -429,10 +429,115 @@ ref = "main"
 		t.Errorf("retriever names = %v, want [v4 v6]", names)
 	}
 
-	addr0, _ := instances[0].Retrievers[0].Retriever.GetIPAddress(context.Background())
-	addr1, _ := instances[0].Retrievers[1].Retriever.GetIPAddress(context.Background())
-	if !addr0.Is4() || addr1.Is4() {
-		t.Errorf("addresses = %v (v4), %v (v6); families were not wired to the right retriever", addr0, addr1)
+	addrs0, _ := instances[0].Retrievers[0].Retriever.GetAddresses(context.Background())
+	addrs1, _ := instances[0].Retrievers[1].Retriever.GetAddresses(context.Background())
+	if !addrs0.V4.IsValid() || !addrs1.V6.IsValid() {
+		t.Errorf("addresses = %+v (v4), %+v (v6); families were not wired to the right retriever", addrs0, addrs1)
+	}
+
+	families := []string{instances[0].Retrievers[0].Family, instances[0].Retrievers[1].Family}
+	if !slices.Equal(families, []string{"ipv4", "ipv6"}) {
+		t.Errorf("retriever families = %v, want [ipv4 ipv6]: the runner needs this hint to skip unneeded retrievers", families)
+	}
+}
+
+func TestBuildInstancesLowercasesTheFamilyHintAndLeavesItEmptyWhenAbsent(t *testing.T) {
+	registry := plugin.NewRegistry()
+	plugin.RegisterRetrieverIn(registry, "fake", func(cfg fakeRetrieverConfig) (plugin.Retriever, error) {
+		return &fakeRetriever{family: cfg.Family}, nil
+	})
+	plugin.RegisterProviderIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Provider, error) {
+		return fakeProviderStub{}, nil
+	})
+
+	cfg, err := config.Parse([]byte(`
+[retriever.pinned]
+type = "fake"
+[retriever.plain]
+type = "fake"
+[provider.main]
+type = "fake"
+
+[[instance]]
+name = "mixed"
+[[instance.retriever]]
+ref    = "pinned"
+family = "IPv4"
+[[instance.retriever]]
+ref = "plain"
+[[instance.provider]]
+ref = "main"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	instances, err := buildInstances(cfg, registry)
+	if err != nil {
+		t.Fatalf("buildInstances: %v", err)
+	}
+
+	families := []string{instances[0].Retrievers[0].Family, instances[0].Retrievers[1].Family}
+	if !slices.Equal(families, []string{"ipv4", ""}) {
+		t.Errorf("retriever families = %v, want [ipv4 \"\"]: mixed case is lowercased, an absent parameter leaves it empty", families)
+	}
+}
+
+// TestBuildInstancesPerFamilyFallbackChainFromREADME builds the README's
+// worked example of a per-family fallback chain (dual + ipv6-only +
+// ipv4-only retrievers, all real plugins) to make sure it is valid
+// configuration and wires the Family hints as documented.
+func TestBuildInstancesPerFamilyFallbackChainFromREADME(t *testing.T) {
+	cfg, err := config.Parse([]byte(`
+[retriever.icanhazip]
+type   = "icanhazip"
+family = "dual"
+
+[retriever.ipify]
+type   = "ipify"
+family = "ipv6"
+
+[retriever.ifconfigco]
+type   = "ifconfigco"
+family = "ipv4"
+
+[provider.regru]
+type     = "regru"
+username = "u"
+password = "p"
+zone     = "example.com"
+rr_name  = "home"
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+ref = "icanhazip"
+
+[[instance.retriever]]
+ref = "ipify"
+
+[[instance.retriever]]
+ref = "ifconfigco"
+
+[[instance.provider]]
+ref = "regru"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	instances, err := buildInstances(cfg, plugin.Default)
+	if err != nil {
+		t.Fatalf("buildInstances: %v", err)
+	}
+
+	families := make([]string, len(instances[0].Retrievers))
+	for i, r := range instances[0].Retrievers {
+		families[i] = r.Family
+	}
+	if want := []string{"dual", "ipv6", "ipv4"}; !slices.Equal(families, want) {
+		t.Errorf("retriever families = %v, want %v", families, want)
 	}
 }
 

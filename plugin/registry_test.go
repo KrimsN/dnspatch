@@ -29,8 +29,8 @@ type fakeRetriever struct {
 	cfg fakeConfig
 }
 
-func (r *fakeRetriever) GetIPAddress(context.Context) (netip.Addr, error) {
-	return netip.MustParseAddr("192.0.2.1"), nil
+func (r *fakeRetriever) GetAddresses(context.Context) (plugin.Addresses, error) {
+	return plugin.Addresses{V4: netip.MustParseAddr("192.0.2.1")}, nil
 }
 
 func newProvider(cfg fakeConfig) (plugin.Provider, error) { return &fakeProvider{cfg: cfg}, nil }

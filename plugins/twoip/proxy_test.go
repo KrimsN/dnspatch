@@ -90,7 +90,7 @@ func TestRetrieverThroughProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := r.GetIPAddress(context.Background())
+	got, err := r.getIPAddress(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestRetrieverWithoutProxyIgnoresRunningOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.GetIPAddress(context.Background()); err != nil {
+	if _, err := r.getIPAddress(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if targets := proxy.Targets(); len(targets) != 0 {

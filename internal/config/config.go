@@ -45,9 +45,10 @@ type Config struct {
 	Instances []Instance
 }
 
-// Instance ties one or more retrievers to one or more providers. There is at
-// most one retriever per address family: two retrievers means one for IPv4
-// and one for IPv6, distinguished at run time by the address each returns.
+// Instance ties one or more retrievers to one or more providers. Retrievers
+// are polled in order until every address family is filled: a later one
+// reporting a family an earlier one already filled is a redundant fallback
+// source, not an error.
 type Instance struct {
 	Name string
 	// Interval is the polling interval, already resolved against the global one.
@@ -294,11 +295,8 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 		}
 	}
 
-	switch {
-	case len(in.Retrievers) == 0:
+	if len(in.Retrievers) == 0 {
 		errs = append(errs, errors.New("at least one retriever is required"))
-	case len(in.Retrievers) > 2:
-		errs = append(errs, errors.New("at most two retrievers are supported (one per address family)"))
 	}
 
 	for i, override := range in.Retrievers {
@@ -306,8 +304,6 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 		errs = append(errs, pluginErrs...)
 		inst.Retrievers = append(inst.Retrievers, plugin)
 	}
-
-	errs = append(errs, duplicateRetrieverFamilies(inst.Retrievers)...)
 
 	if len(in.Providers) == 0 {
 		errs = append(errs, errors.New("at least one provider is required"))
@@ -418,29 +414,4 @@ func duplicateProviders(providers []Plugin) []error {
 	}
 
 	return errs
-}
-
-// duplicateRetrieverFamilies reports two retrievers declared for the same
-// address family via their "family" parameter. This is an early hint for a
-// likely misconfiguration, not a guarantee: the actual family is only known
-// once a retriever returns an address at run time, and a value that is not
-// an exact match, such as "IPv4", is not caught here.
-func duplicateRetrieverFamilies(retrievers []Plugin) []error {
-	if len(retrievers) != 2 {
-		return nil
-	}
-
-	family := func(p Plugin) (string, bool) {
-		f, ok := p.Params["family"].(string)
-		return f, ok && f != ""
-	}
-
-	f1, ok1 := family(retrievers[0])
-	f2, ok2 := family(retrievers[1])
-
-	if ok1 && ok2 && f1 == f2 {
-		return []error{fmt.Errorf("retriever #1 and #2 are both configured for family %q", f1)}
-	}
-
-	return nil
 }
