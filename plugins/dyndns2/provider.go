@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,8 +100,8 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 		return nil, fmt.Errorf("hostname: %q is not a single domain name", cfg.Hostname)
 	}
 
-	if cfg.IPParam == "" || cfg.IPv6Param == "" || cfg.IPParam == cfg.IPv6Param {
-		return nil, errors.New("ip_param and ipv6_param must be set and differ from each other")
+	if cfg.IPParam == "" || cfg.IPv6Param == "" {
+		return nil, errors.New("ip_param and ipv6_param must be set")
 	}
 
 	if client == nil {
@@ -138,12 +139,7 @@ func (p *provider) Update(ctx context.Context, addrs plugin.Addresses, _ plugin.
 
 	query := p.target.Query()
 	query.Set("hostname", p.hostname)
-	if addrs.V4.IsValid() {
-		query.Set(p.ipParam, addrs.V4.String())
-	}
-	if addrs.V6.IsValid() {
-		query.Set(p.ipv6Param, addrs.V6.String())
-	}
+	p.setAddresses(query, addrs)
 
 	target := *p.target
 	target.RawQuery = query.Encode()
@@ -174,6 +170,31 @@ func (p *provider) Update(ctx context.Context, addrs plugin.Addresses, _ plugin.
 	}
 
 	return checkAnswer(body)
+}
+
+// setAddresses puts the valid addresses into the query. When both families
+// share one parameter, the addresses go into it as a comma-separated list, the
+// way services such as Dyn and No-IP take a dual-stack update.
+func (p *provider) setAddresses(query url.Values, addrs plugin.Addresses) {
+	var v4, v6 string
+	if addrs.V4.IsValid() {
+		v4 = addrs.V4.String()
+	}
+	if addrs.V6.IsValid() {
+		v6 = addrs.V6.String()
+	}
+
+	if p.ipParam == p.ipv6Param {
+		query.Set(p.ipParam, strings.Join(slices.DeleteFunc([]string{v4, v6}, func(s string) bool { return s == "" }), ","))
+		return
+	}
+
+	if v4 != "" {
+		query.Set(p.ipParam, v4)
+	}
+	if v6 != "" {
+		query.Set(p.ipv6Param, v6)
+	}
 }
 
 // checkAnswer reads the status words of a response. The service answers HTTP

@@ -201,6 +201,36 @@ func TestUpdateCustomParameterNames(t *testing.T) {
 	}
 }
 
+func TestUpdateSharedParameterJoinsAddresses(t *testing.T) {
+	tests := []struct {
+		name  string
+		addrs plugin.Addresses
+		want  string
+	}{
+		{name: "both", addrs: plugin.Addresses{V4: v4, V6: v6}, want: "203.0.113.7,2001:db8::7"},
+		{name: "v4 only", addrs: plugin.Addresses{V4: v4}, want: "203.0.113.7"},
+		{name: "v6 only", addrs: plugin.Addresses{V6: v6}, want: "2001:db8::7"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, srv := newFakeService(t, "good")
+
+			cfg := testConfig(srv)
+			cfg.IPv6Param = cfg.IPParam
+
+			if err := update(context.Background(), providerFor(t, cfg, srv), tt.addrs); err != nil {
+				t.Fatal(err)
+			}
+
+			q := svc.query(t)
+			if q.Get("myip") != tt.want || q.Has("ipv6") {
+				t.Errorf("query = %v, want myip=%s alone", q, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdateReadsTheBody(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -327,7 +357,6 @@ func TestNewProviderValidatesConfig(t *testing.T) {
 		{name: "no host", mutate: func(c *Config) { c.BaseURL = "https://" }, wantErr: "base_url"},
 		{name: "empty hostname", mutate: func(c *Config) { c.Hostname = " " }, wantErr: "hostname"},
 		{name: "several hostnames", mutate: func(c *Config) { c.Hostname = "a.example.com,b.example.com" }, wantErr: "hostname"},
-		{name: "same parameter", mutate: func(c *Config) { c.IPv6Param = "myip" }, wantErr: "differ"},
 		{name: "empty parameter", mutate: func(c *Config) { c.IPParam = "" }, wantErr: "ip_param"},
 	}
 

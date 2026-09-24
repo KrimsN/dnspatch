@@ -208,6 +208,7 @@ rr_name = "*.home"                 # override a parameter of the definition
 | retriever | `interface` | reads the address from a local network interface, with no external service; public addresses only, the lowest one if several, narrowed by `network` (see [examples/interface-ipv6.toml](examples/interface-ipv6.toml)) |
 | provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
 | provider | `dyndns2` | updates a record through the dyndns2 protocol of any service that speaks it, for a service that has no plugin of its own; the update URL is a parameter and both addresses go in one request |
+| provider | `dyn` | updates the `A` and `AAAA` record of a host at [Dyn](https://dyn.com) (the former DynDNS) through its Dynamic DNS service, both addresses in one request; a `dyndns2` with the URL filled in |
 | provider | `dynu` | updates the `A` and `AAAA` record of a host at [Dynu](https://www.dynu.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
 | provider | `nicru` | updates the `A` and `AAAA` record of a domain at [NIC.RU](https://www.nic.ru) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in (see [examples/nicru.toml](examples/nicru.toml)) |
 | provider | `noip` | updates the `A` and `AAAA` record of a host at [No-IP](https://www.noip.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
