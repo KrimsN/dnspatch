@@ -107,7 +107,7 @@ type = "beget"
 login = "CHANGE_ME"
 
 # Beget account password
-password = "${BEGET_PASSWORD}"
+password = "${PASSWORD}"
 
 # Domain name of the zone, for example example.com
 zone = "example.com"
@@ -123,6 +123,107 @@ rr_name = "home"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.dyn]
+type = "dyn"
+
+# Login of the Dyn account
+username = "CHANGE_ME"
+
+# Updater client key of the account, created in the account settings; it is
+# not the account password
+password = "${PASSWORD}"
+
+# Full domain name of the host to update, for example home.example.com
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
+[provider.dyndns2]
+type = "dyndns2"
+
+# Update URL of the service, for example https://api.nic.ru/dyndns/update for
+# NIC.RU or https://updates.dnsomatic.com/nic/update for DNS-O-Matic
+base_url = "https://api.nic.ru/dyndns/update"
+
+# Login for HTTP Basic authentication; for NIC.RU the login of the contract or
+# of the account allowed to use Dynamic DNS
+username = "CHANGE_ME"
+
+# Password for HTTP Basic authentication; some services issue a separate
+# update password
+password = "${PASSWORD}"
+
+# Full domain name of the record to update.
+hostname = "home.example.com"
+
+# Query parameter that carries the IPv4 address
+# ip_param = "myip"
+
+# Query parameter that carries the IPv6 address; both addresses go in one
+# request, so the service must know this parameter to update an AAAA record.
+# ipv6_param = "ipv6"
+
+# User-Agent header; the protocol asks clients to identify themselves, and
+# some services refuse a request without one
+# user_agent = "dnspatch"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
+[provider.dynu]
+type = "dynu"
+
+# Dynu account login
+username = "CHANGE_ME"
+
+# Password of the account, or the separate IP update password that Dynu lets
+# you set in the account, which is the safer choice
+password = "${PASSWORD}"
+
+# Full domain name of the record to update, for example home.example.com
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
+[provider.nicru]
+type = "nicru"
+
+# Login of the NIC.RU account or contract that may update the domain; the
+# Dynamic DNS service must be switched on for it
+username = "CHANGE_ME"
+
+# Password for that login
+password = "${PASSWORD}"
+
+# Full domain name of the record to update.
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
+[provider.noip]
+type = "noip"
+
+# Login for the update: a DDNS key of the host, or the No-IP account itself
+username = "CHANGE_ME"
+
+# Password for that login
+password = "${PASSWORD}"
+
+# Full domain name of the host to update, for example home.example.com or a
+# name under ddns.net
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.regru]
 type = "regru"
 
@@ -131,7 +232,7 @@ username = "CHANGE_ME"
 
 # API password; set an alternative password for the API in the REG.RU account
 # and allow the address dnspatch runs from
-password = "${REGRU_PASSWORD}"
+password = "${PASSWORD}"
 
 # Domain name of the zone, for example example.com
 zone = "example.com"
@@ -191,7 +292,7 @@ account_id = "CHANGE_ME"
 username = "CHANGE_ME"
 
 # Password of the service user
-password = "${SELECTEL_PASSWORD}"
+password = "${PASSWORD}"
 
 # Name of the project the DNS zone belongs to
 project_name = "CHANGE_ME"

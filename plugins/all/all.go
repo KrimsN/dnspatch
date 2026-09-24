@@ -8,6 +8,11 @@ package all
 import (
 	// Built-in plugins register themselves in init.
 	_ "github.com/KrimsN/dnspatch/plugins/beget"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2/dyn"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2/dynu"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2/nicru"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2/noip"
 	_ "github.com/KrimsN/dnspatch/plugins/icanhazip"
 	_ "github.com/KrimsN/dnspatch/plugins/identme"
 	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"

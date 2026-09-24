@@ -17,6 +17,11 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
   - [beget](#provider-beget)
+  - [dyn](#provider-dyn)
+  - [dyndns2](#provider-dyndns2)
+  - [dynu](#provider-dynu)
+  - [nicru](#provider-nicru)
+  - [noip](#provider-noip)
   - [regru](#provider-regru)
   - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
@@ -82,6 +87,55 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `zone` | yes | — | Domain name of the zone, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `base_url` | no | `https://api.beget.com/api` | Base URL of the API |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `dyn`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Login of the Dyn account |
+| `password` | yes | — | Updater client key of the account, created in the account settings; it is not the account password |
+| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `dyndns2`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | yes | — | Update URL of the service, for example https://api.nic.ru/dyndns/update for NIC.RU or https://updates.dnsomatic.com/nic/update for DNS-O-Matic |
+| `username` | yes | — | Login for HTTP Basic authentication; for NIC.RU the login of the contract or of the account allowed to use Dynamic DNS |
+| `password` | yes | — | Password for HTTP Basic authentication; some services issue a separate update password |
+| `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract |
+| `ip_param` | no | `myip` | Query parameter that carries the IPv4 address |
+| `ipv6_param` | no | `ipv6` | Query parameter that carries the IPv6 address; both addresses go in one request, so the service must know this parameter to update an AAAA record. Set it to the same name as ip_param for a service that takes both addresses in one parameter, separated by a comma. A family the retrievers did not report is not sent, and the service may then fall back to the address the request came from |
+| `user_agent` | no | `dnspatch` | User-Agent header; the protocol asks clients to identify themselves, and some services refuse a request without one |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `dynu`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Dynu account login |
+| `password` | yes | — | Password of the account, or the separate IP update password that Dynu lets you set in the account, which is the safer choice |
+| `hostname` | yes | — | Full domain name of the record to update, for example home.example.com |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `nicru`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Login of the NIC.RU account or contract that may update the domain; the Dynamic DNS service must be switched on for it |
+| `password` | yes | — | Password for that login |
+| `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract, not only in the zone the domain belongs to |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `noip`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Login for the update: a DDNS key of the host, or the No-IP account itself |
+| `password` | yes | — | Password for that login |
+| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com or a name under ddns.net |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `regru`

@@ -51,17 +51,17 @@ The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch)
 
 Things to know before running it in a container:
 
-- **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${REGRU_PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
-- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets. Docker/Swarm and Kubernetes secrets avoid this: they are mounted as files, not environment variables. Write `password = "${file:/run/secrets/regru_password}"` instead, and add the secret to `compose.yml`:
+- **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
+- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets. Docker/Swarm and Kubernetes secrets avoid this: they are mounted as files, not environment variables. Write `password = "${file:/run/secrets/password}"` instead, and add the secret to `compose.yml`:
 
   ```yaml
   services:
     dnspatch:
       secrets:
-        - regru_password
+        - password
   secrets:
-    regru_password:
-      file: ./secrets/regru_password.txt
+    password:
+      file: ./secrets/password.txt
   ```
 - **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
 - **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
@@ -104,7 +104,7 @@ interval = "5m"                    # default for every instance, at least 1s
 [provider.regru]
 type     = "regru"
 username = "my-login"
-password = "${REGRU_PASSWORD}"     # read from the environment
+password = "${PASSWORD}"     # read from the environment
 zone     = "example.com"
 rr_name  = "home"
 
@@ -207,6 +207,11 @@ rr_name = "*.home"                 # override a parameter of the definition
 | retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
 | retriever | `interface` | reads the address from a local network interface, with no external service; public addresses only, the lowest one if several, narrowed by `network` (see [examples/interface-ipv6.toml](examples/interface-ipv6.toml)) |
 | provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
+| provider | `dyndns2` | updates a record through the dyndns2 protocol of any service that speaks it, for a service that has no plugin of its own; the update URL is a parameter and both addresses go in one request |
+| provider | `dyn` | updates the `A` and `AAAA` record of a host at [Dyn](https://dyn.com) (the former DynDNS) through its Dynamic DNS service, both addresses in one request; a `dyndns2` with the URL filled in |
+| provider | `dynu` | updates the `A` and `AAAA` record of a host at [Dynu](https://www.dynu.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
+| provider | `nicru` | updates the `A` and `AAAA` record of a domain at [NIC.RU](https://www.nic.ru) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in (see [examples/nicru.toml](examples/nicru.toml)) |
+| provider | `noip` | updates the `A` and `AAAA` record of a host at [No-IP](https://www.noip.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `rfc2136` | sets the `A` or `AAAA` record on your own name server (BIND, Knot DNS, PowerDNS, Technitium, ...) with RFC 2136 dynamic updates, signed with TSIG |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
