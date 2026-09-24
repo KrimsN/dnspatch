@@ -13,6 +13,8 @@ const endpoint = "https://api.nic.ru/dyndns/update"
 func newProvider(cfg Config, baseURL string) (plugin.Provider, error) {
 	return dyndns2.NewForService(dyndns2.Config{
 		BaseURL:     baseURL,
+		IPParam:     "myip",
+		IPv6Param:   "ipv6",
 		Username:    cfg.Username,
 		Password:    cfg.Password,
 		Hostname:    cfg.Hostname,
