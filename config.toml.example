@@ -123,6 +123,23 @@ rr_name = "home"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.dyn]
+type = "dyn"
+
+# Login of the Dyn account
+username = "CHANGE_ME"
+
+# Updater client key of the account, created in the account settings; it is
+# not the account password
+password = "${PASSWORD}"
+
+# Full domain name of the host to update, for example home.example.com
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.dyndns2]
 type = "dyndns2"
 
