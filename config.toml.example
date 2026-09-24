@@ -156,6 +156,23 @@ hostname = "home.example.com"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.nicru]
+type = "nicru"
+
+# Login of the NIC.RU account or contract that may update the domain; the
+# Dynamic DNS service must be switched on for it
+username = "CHANGE_ME"
+
+# Password for that login
+password = "${PASSWORD}"
+
+# Full domain name of the record to update.
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.regru]
 type = "regru"
 

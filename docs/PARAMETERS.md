@@ -18,6 +18,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 - [Providers](#providers)
   - [beget](#provider-beget)
   - [dyndns2](#provider-dyndns2)
+  - [nicru](#provider-nicru)
   - [regru](#provider-regru)
   - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
@@ -96,6 +97,15 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `ip_param` | no | `myip` | Query parameter that carries the IPv4 address |
 | `ipv6_param` | no | `ipv6` | Query parameter that carries the IPv6 address; both addresses go in one request, so the service must know this parameter to update an AAAA record. A family the retrievers did not report is not sent, and the service may then fall back to the address the request came from |
 | `user_agent` | no | `dnspatch` | User-Agent header; the protocol asks clients to identify themselves, and some services refuse a request without one |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `nicru`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Login of the NIC.RU account or contract that may update the domain; the Dynamic DNS service must be switched on for it |
+| `password` | yes | — | Password for that login |
+| `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract, not only in the zone the domain belongs to |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `regru`

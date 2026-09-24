@@ -207,7 +207,8 @@ rr_name = "*.home"                 # override a parameter of the definition
 | retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
 | retriever | `interface` | reads the address from a local network interface, with no external service; public addresses only, the lowest one if several, narrowed by `network` (see [examples/interface-ipv6.toml](examples/interface-ipv6.toml)) |
 | provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
-| provider | `dyndns2` | updates a record through the dyndns2 protocol of any service that speaks it, such as [NIC.RU](https://www.nic.ru), DNS-O-Matic or No-IP; the update URL is a parameter and both addresses go in one request (see [examples/nicru.toml](examples/nicru.toml)) |
+| provider | `dyndns2` | updates a record through the dyndns2 protocol of any service that speaks it, such as DNS-O-Matic or No-IP; the update URL is a parameter and both addresses go in one request |
+| provider | `nicru` | updates the `A` and `AAAA` record of a domain at [NIC.RU](https://www.nic.ru) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in (see [examples/nicru.toml](examples/nicru.toml)) |
 | provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
 | provider | `rfc2136` | sets the `A` or `AAAA` record on your own name server (BIND, Knot DNS, PowerDNS, Technitium, ...) with RFC 2136 dynamic updates, signed with TSIG |
 | provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |

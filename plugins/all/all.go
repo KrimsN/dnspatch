@@ -14,6 +14,7 @@ import (
 	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"
 	_ "github.com/KrimsN/dnspatch/plugins/ipify"
 	_ "github.com/KrimsN/dnspatch/plugins/netif"
+	_ "github.com/KrimsN/dnspatch/plugins/nicru"
 	_ "github.com/KrimsN/dnspatch/plugins/regru"
 	_ "github.com/KrimsN/dnspatch/plugins/rfc2136"
 	_ "github.com/KrimsN/dnspatch/plugins/selectel"

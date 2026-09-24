@@ -10,7 +10,7 @@ with `--config`.
 | [dual-stack.toml](dual-stack.toml) | One instance writing both an A and an AAAA record, using two retrievers pinned to `ipv4` and `ipv6`. |
 | [family-dual-with-fallback.toml](family-dual-with-fallback.toml) | A retriever whose service is itself dual-stack (`family = "dual"`), plus a fallback chain across further retrievers for the families it does not fill. |
 | [interface-ipv6.toml](interface-ipv6.toml) | Reading the IPv6 address from a network interface instead of an external service, with a delegated prefix picked by `network`. |
-| [nicru.toml](nicru.toml) | Updating a record at NIC.RU (or any dyndns2 service) with one request for both addresses; notes the NIC.RU quirk of changing same-name records in every zone of the contract. |
+| [nicru.toml](nicru.toml) | Updating a record at NIC.RU with one request for both addresses; notes the NIC.RU quirk of changing same-name records in every zone of the contract. Other dyndns2 services use `type = "dyndns2"` with a `base_url`. |
 | [proxy.toml](proxy.toml) | Reaching a provider's API through a proxy, for a DNS host that only accepts requests from a fixed address. |
 | [rfc2136.toml](rfc2136.toml) | Updating a record on your own name server (BIND, Knot, PowerDNS, ...) with RFC 2136 dynamic updates signed with a TSIG key. |
 | [secrets-from-files.toml](secrets-from-files.toml) | Reading a secret from a file (`${file:/path}`) instead of an environment variable, the way Docker/Kubernetes secrets are mounted. |
