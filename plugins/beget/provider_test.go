@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	testLogin  = "user"
-	testPass   = "s3cret"
-	testDomain = "home.example.com"
+	testUsername = "user"
+	testPass     = "s3cret"
+	testDomain   = "home.example.com"
 )
 
 // fakeAPI is an in-memory stand-in for the Beget API. It stores one record
@@ -56,7 +56,7 @@ func newFakeAPI(t *testing.T) (*fakeAPI, *httptest.Server) {
 }
 
 func (a *fakeAPI) checkAuth(w http.ResponseWriter, r *http.Request) bool {
-	if r.URL.Query().Get("login") != testLogin || r.URL.Query().Get("passwd") != testPass {
+	if r.URL.Query().Get("login") != testUsername || r.URL.Query().Get("passwd") != testPass {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, `{"status":"error","error_code":"AUTH_ERROR","error_text":"invalid login or password"}`)
 		return false
@@ -170,7 +170,7 @@ func (a *fakeAPI) recordsOf(fqdn, recType string) []record {
 
 func testConfig(srv *httptest.Server) Config {
 	return Config{
-		Login: testLogin, Password: testPass,
+		Username: testUsername, Password: testPass,
 		Zone: "example.com", RRName: "home",
 		BaseURL: srv.URL + "/api",
 	}
@@ -427,7 +427,7 @@ func TestUpdateCancelled(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	cfg := Config{Login: testLogin, Password: testPass, Zone: "example.com", RRName: "home", BaseURL: srv.URL}
+	cfg := Config{Username: testUsername, Password: testPass, Zone: "example.com", RRName: "home", BaseURL: srv.URL}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -453,7 +453,7 @@ func TestUpdateUnreachableDoesNotLeakPassword(t *testing.T) {
 	addr := l.Addr().String()
 	_ = l.Close()
 
-	cfg := Config{Login: testLogin, Password: testPass, Zone: "example.com", RRName: "home", BaseURL: "http://" + addr}
+	cfg := Config{Username: testUsername, Password: testPass, Zone: "example.com", RRName: "home", BaseURL: "http://" + addr}
 
 	p, err := newProvider(cfg, nil)
 	if err != nil {
@@ -494,7 +494,7 @@ func TestUpdateDoesNotFollowRedirects(t *testing.T) {
 
 func TestNewProviderValidation(t *testing.T) {
 	valid := Config{
-		Login: testLogin, Password: testPass,
+		Username: testUsername, Password: testPass,
 		Zone: "example.com", RRName: "home",
 		BaseURL: "https://api.test",
 	}
@@ -553,7 +553,7 @@ func TestSameAddress(t *testing.T) {
 
 func TestRegisteredInDefault(t *testing.T) {
 	params := map[string]any{
-		"login": testLogin, "password": testPass,
+		"username": testUsername, "password": testPass,
 		"zone": "example.com", "rr_name": "@",
 	}
 

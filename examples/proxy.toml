@@ -11,10 +11,10 @@ type = "ifconfigco"
 
 [provider.regru]
 type     = "regru"
-username = "CHANGE_ME"
-password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
 proxy    = "${PROXY_URL}"
 
 [[instance]]

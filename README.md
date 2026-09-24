@@ -103,10 +103,10 @@ interval = "5m"                    # default for every instance, at least 1s
 
 [provider.regru]
 type     = "regru"
-username = "my-login"
-password = "${PASSWORD}"     # read from the environment
 zone     = "example.com"
 rr_name  = "home"
+username = "my-login"
+password = "${PASSWORD}"     # read from the environment
 
 [[instance]]
 name = "home"
@@ -224,8 +224,8 @@ Some DNS APIs only accept requests from a fixed address, which does not fit a da
 ```toml
 [provider.regru]
 type  = "regru"
-proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
 # ...
+proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
 ```
 
 - Supported schemes are `socks5`, `socks5h`, `http` and `https`, with an optional `user:pass@`; percent-encode special characters in them. With `socks5` and `socks5h` the proxy resolves the API host name.

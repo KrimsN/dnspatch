@@ -20,10 +20,10 @@ network = "2001:db8:1234::/64"   # optional: only addresses inside this prefix
 
 [provider.regru]
 type     = "regru"
-username = "CHANGE_ME"
-password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
 
 [[instance]]
 name = "home"

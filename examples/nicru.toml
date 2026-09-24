@@ -21,6 +21,6 @@ family = "dual"
 
 [[instance.provider]]
 type     = "nicru"
+hostname = "home.example.com"
 username = "my-login"
 password = "${PASSWORD}"
-hostname = "home.example.com"

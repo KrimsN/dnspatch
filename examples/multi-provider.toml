@@ -13,19 +13,19 @@ base_url = "https://10.0.0.1"
 
 [provider.regru]
 type     = "regru"
-username = "CHANGE_ME"
-password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
 
 [provider.selectel]
 type         = "selectel"
+zone         = "example.net"
+rr_name      = "home"
+project_name = "CHANGE_ME"
 account_id   = "CHANGE_ME"
 username     = "CHANGE_ME"
 password     = "${PASSWORD}"
-project_name = "CHANGE_ME"
-zone         = "example.net"
-rr_name      = "home"
 
 [[instance]]
 name = "home"
