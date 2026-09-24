@@ -156,6 +156,23 @@ hostname = "home.example.com"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.dynu]
+type = "dynu"
+
+# Dynu account login
+username = "CHANGE_ME"
+
+# Password of the account, or the separate IP update password that Dynu lets
+# you set in the account, which is the safer choice
+password = "${PASSWORD}"
+
+# Full domain name of the record to update, for example home.example.com
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.nicru]
 type = "nicru"
 
@@ -167,6 +184,23 @@ username = "CHANGE_ME"
 password = "${PASSWORD}"
 
 # Full domain name of the record to update.
+hostname = "home.example.com"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
+[provider.noip]
+type = "noip"
+
+# Login for the update: a DDNS key of the host, or the No-IP account itself
+username = "CHANGE_ME"
+
+# Password for that login
+password = "${PASSWORD}"
+
+# Full domain name of the host to update, for example home.example.com or a
+# name under ddns.net
 hostname = "home.example.com"
 
 # URL of a proxy to send API requests through, for example

@@ -218,6 +218,7 @@ func TestUpdateReadsTheBody(t *testing.T) {
 		{name: "abuse", body: "abuse", wantErr: "blocked"},
 		{name: "badagent", body: "badagent", wantErr: "refuses this client"},
 		{name: "dnserr", body: "dnserr", wantErr: "try again later"},
+		{name: "servererror", body: "servererror", wantErr: "try again later"},
 		{name: "911", body: "911", wantErr: "try again later"},
 		{name: "unknown word", body: "wat 1.2.3.4", wantErr: "did not confirm"},
 		{name: "html page", body: "<html>maintenance</html>", wantErr: "did not confirm"},

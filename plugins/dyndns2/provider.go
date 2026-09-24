@@ -24,17 +24,18 @@ const (
 // failures explains the status words of the protocol that mean the update was
 // not applied. A word missing here is still an error, reported as it came.
 var failures = map[string]string{
-	"badauth":  "the login or password was rejected",
-	"!donator": "the account does not have the service needed for this update",
-	"notfqdn":  "the host name is not a fully qualified domain name",
-	"nohost":   "the host name does not exist or does not belong to this account",
-	"numhost":  "too many host names in one update",
-	"abuse":    "the account is blocked for abusing the service",
-	"badagent": "the service refuses this client",
-	"badsys":   "the system parameter is not valid",
-	"dnserr":   "the service has a DNS error; try again later",
-	"911":      "the service has a problem; try again later",
-	"!yours":   "the host name belongs to another account",
+	"badauth":     "the login or password was rejected",
+	"!donator":    "the account does not have the service needed for this update",
+	"notfqdn":     "the host name is not a fully qualified domain name",
+	"nohost":      "the host name does not exist or does not belong to this account",
+	"numhost":     "too many host names in one update",
+	"abuse":       "the account is blocked for abusing the service",
+	"badagent":    "the service refuses this client",
+	"badsys":      "the system parameter is not valid",
+	"servererror": "the service has an error; try again later",
+	"dnserr":      "the service has a DNS error; try again later",
+	"911":         "the service has a problem; try again later",
+	"!yours":      "the host name belongs to another account",
 }
 
 // Defaults of the parameters that name the query parameters and the client. They

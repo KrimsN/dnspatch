@@ -18,7 +18,9 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 - [Providers](#providers)
   - [beget](#provider-beget)
   - [dyndns2](#provider-dyndns2)
+  - [dynu](#provider-dynu)
   - [nicru](#provider-nicru)
+  - [noip](#provider-noip)
   - [regru](#provider-regru)
   - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
@@ -99,6 +101,15 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `user_agent` | no | `dnspatch` | User-Agent header; the protocol asks clients to identify themselves, and some services refuse a request without one |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
+### Provider `dynu`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Dynu account login |
+| `password` | yes | — | Password of the account, or the separate IP update password that Dynu lets you set in the account, which is the safer choice |
+| `hostname` | yes | — | Full domain name of the record to update, for example home.example.com |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
 ### Provider `nicru`
 
 | Parameter | Required | Default | Description |
@@ -106,6 +117,15 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `username` | yes | — | Login of the NIC.RU account or contract that may update the domain; the Dynamic DNS service must be switched on for it |
 | `password` | yes | — | Password for that login |
 | `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract, not only in the zone the domain belongs to |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `noip`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `username` | yes | — | Login for the update: a DDNS key of the host, or the No-IP account itself |
+| `password` | yes | — | Password for that login |
+| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com or a name under ddns.net |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `regru`
