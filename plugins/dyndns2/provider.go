@@ -37,6 +37,15 @@ var failures = map[string]string{
 	"!yours":   "the host name belongs to another account",
 }
 
+// Defaults of the parameters that name the query parameters and the client. They
+// mirror the defaults in the tags of Config, which apply only to a Config
+// decoded from the configuration file.
+const (
+	defaultIPParam   = "myip"
+	defaultIPv6Param = "ipv6"
+	defaultUserAgent = "dnspatch"
+)
+
 type provider struct {
 	target    *url.URL
 	username  string
@@ -46,6 +55,30 @@ type provider struct {
 	ipv6Param string
 	userAgent string
 	client    *http.Client
+}
+
+// NewForService builds the dyndns2 provider of one particular service, the way
+// a wrapper package such as nicru does: it fills in the update URL and takes
+// the rest of the parameters from its own configuration. A Config assembled in
+// Go has no defaults applied, so an empty parameter name or User-Agent takes
+// the value the configuration file would give.
+func NewForService(cfg Config) (plugin.Provider, error) {
+	if cfg.IPParam == "" {
+		cfg.IPParam = defaultIPParam
+	}
+	if cfg.IPv6Param == "" {
+		cfg.IPv6Param = defaultIPv6Param
+	}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = defaultUserAgent
+	}
+
+	p, err := newProvider(cfg, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
 
 // newProvider validates cfg and builds the provider. A nil client selects one

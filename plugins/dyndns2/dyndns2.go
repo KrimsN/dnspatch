@@ -8,7 +8,7 @@
 // the record options are ignored.
 //
 // Wrappers for particular services live in subdirectories, such as nicru: each
-// is a provider of its own that fills in the update URL and calls New.
+// is a provider of its own that fills in the update URL and calls NewForService.
 package dyndns2
 
 import "github.com/KrimsN/dnspatch/plugin"
@@ -21,33 +21,3 @@ func init() {
 		return newProvider(cfg, nil)
 	})
 }
-
-// New builds the provider from a Config assembled in Go, as the plugins that
-// wrap a particular dyndns2 service do. Unlike a Config decoded from the
-// configuration file, it has no defaults filled in yet: an empty parameter
-// name or User-Agent takes the default the configuration file would give.
-func New(cfg Config) (plugin.Provider, error) {
-	if cfg.IPParam == "" {
-		cfg.IPParam = DefaultIPParam
-	}
-	if cfg.IPv6Param == "" {
-		cfg.IPv6Param = DefaultIPv6Param
-	}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = DefaultUserAgent
-	}
-
-	p, err := newProvider(cfg, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-// Defaults of the parameters that name the query parameters and the client.
-const (
-	DefaultIPParam   = "myip"
-	DefaultIPv6Param = "ipv6"
-	DefaultUserAgent = "dnspatch"
-)
