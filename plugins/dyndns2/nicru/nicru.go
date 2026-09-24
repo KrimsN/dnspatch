@@ -13,6 +13,6 @@ const Name = "nicru"
 
 func init() {
 	plugin.RegisterProvider(Name, func(cfg Config) (plugin.Provider, error) {
-		return build(cfg, endpoint)
+		return newProvider(cfg, endpoint)
 	})
 }

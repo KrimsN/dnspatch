@@ -22,7 +22,7 @@ func TestBuildSendsBothAddressesToTheService(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := build(Config{Username: "u", Password: "p", Hostname: "home.example.com"}, srv.URL+"/dyndns/update")
+	p, err := newProvider(Config{Username: "u", Password: "p", Hostname: "home.example.com"}, srv.URL+"/dyndns/update")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestBuildReadsTheBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := build(Config{Username: "u", Password: "p", Hostname: "home.example.com"}, srv.URL)
+	p, err := newProvider(Config{Username: "u", Password: "p", Hostname: "home.example.com"}, srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
