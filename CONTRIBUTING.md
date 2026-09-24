@@ -116,7 +116,7 @@ the single source of truth: the decoder, the parameter reference in
 
 ```go
 type Config struct {
-	Token   string `toml:"token,required" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
+	Token   string `toml:"token,required,secret" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
 	Zone    string `toml:"zone,required" example:"example.com" doc:"Domain name of the zone"`
 	BaseURL string `toml:"base_url" default:"https://api.example.com" doc:"Base URL of the API"`
 
@@ -128,6 +128,7 @@ type Config struct {
 |-----|---------|----------------|
 | `toml:"name"` | the key in the configuration file | without it the key is the lower-cased field name; spell it out so that renaming a field never renames a parameter |
 | `toml:"name,required"` | the parameter must be set | a missing required parameter stops the daemon at startup with an error naming it; without the option a forgotten token becomes an unauthorised request to the API |
+| `toml:"name,secret"` | the value is a password, key, token or a URL with a login | `--check-config` lists the parameters that tell providers of one type apart; a secret one is printed as `***`, and only when nothing else differs, while a parameter without the option is printed as it is. A test fails for a parameter whose `example` is a `${NAME}` reference but that lacks the option |
 | `default:"value"` | the value used when the parameter is omitted | shown in the reference and the example file; the daemon and the docs cannot disagree, since both read the same tag |
 | `doc:"text"` | the description shown in `docs/PARAMETERS.md` and as a comment in the example file | a parameter without it appears as "no description" in the reference |
 | `example:"value"` | the value the example file shows | required for a required parameter that is not a plain string; for a secret, use a `${NAME}` reference |

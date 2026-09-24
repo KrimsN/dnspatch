@@ -1112,3 +1112,22 @@ zone = "b.com"
 		t.Fatalf("providers = %d, want 2", got)
 	}
 }
+
+func TestPluginNameIsTheRefOrElseTheType(t *testing.T) {
+	tests := map[string]struct {
+		plugin Plugin
+		want   string
+	}{
+		"from a definition":      {Plugin{Ref: "home", Type: "regru"}, "home"},
+		"declared inline":        {Plugin{Type: "regru"}, "regru"},
+		"definition named alike": {Plugin{Ref: "regru", Type: "regru"}, "regru"},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := tt.plugin.Name(); got != tt.want {
+				t.Errorf("Name() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

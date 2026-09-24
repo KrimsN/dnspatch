@@ -66,25 +66,35 @@ func TestFieldsReadsTags(t *testing.T) {
 }
 
 func TestFieldsReadsOptionsAfterTheName(t *testing.T) {
-	type options struct {
+	type withOptions struct {
 		Named   string `toml:"named,required"`
 		Unnamed string `toml:",required"`
+		Hidden  string `toml:"hidden,secret"`
+		Both    string `toml:"both,required,secret"`
 		Plain   string `toml:"plain"`
 	}
 
-	fields, err := Fields(reflect.TypeFor[options]())
+	fields, err := Fields(reflect.TypeFor[withOptions]())
 	if err != nil {
 		t.Fatalf("Fields: %v", err)
 	}
 
-	got := make(map[string]bool, len(fields))
+	type flags struct{ required, secret bool }
+
+	got := make(map[string]flags, len(fields))
 	for _, f := range fields {
-		got[f.Key] = f.Required
+		got[f.Key] = flags{f.Required, f.Secret}
 	}
 
-	want := map[string]bool{"named": true, "unnamed": true, "plain": false}
+	want := map[string]flags{
+		"named":   {required: true},
+		"unnamed": {required: true},
+		"hidden":  {secret: true},
+		"both":    {required: true, secret: true},
+		"plain":   {},
+	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("required by key = %v, want %v (the option follows the name, which may be left to the field name)", got, want)
+		t.Errorf("flags by key = %v, want %v (an option follows the name, which may be left to the field name)", got, want)
 	}
 }
 

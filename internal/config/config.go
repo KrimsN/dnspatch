@@ -68,6 +68,16 @@ type Plugin struct {
 	Params map[string]any
 }
 
+// Name is how messages and logs call the plugin: the name of the definition it
+// was built from, or its type for a plugin declared inline.
+func (p Plugin) Name() string {
+	if p.Ref != "" {
+		return p.Ref
+	}
+
+	return p.Type
+}
+
 // rawInstance is one [[instance]] table after its shape has been checked.
 type rawInstance struct {
 	Name       string

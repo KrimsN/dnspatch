@@ -9,7 +9,7 @@
 // configuration file:
 //
 //	type Config struct {
-//		APIToken string        `toml:"api_token,required"`
+//		APIToken string        `toml:"api_token,required,secret"`
 //		Timeout  time.Duration `toml:"timeout" default:"10s"`
 //	}
 //
