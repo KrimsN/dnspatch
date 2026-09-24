@@ -14,7 +14,7 @@ type base struct {
 
 type sample struct {
 	base
-	Token    string     `toml:"token" required:"true"`
+	Token    string     `toml:"token,required"`
 	Region   string     // named after the field
 	Addr     netip.Addr `toml:"addr"`
 	Skipped  string     `toml:"-"`
@@ -62,6 +62,65 @@ func TestFieldsReadsTags(t *testing.T) {
 
 	if token := fields[1]; !token.Required || token.HasDefault || token.HasExample {
 		t.Errorf("token = %+v, want required with no default and no example", token)
+	}
+}
+
+func TestFieldsReadsOptionsAfterTheName(t *testing.T) {
+	type options struct {
+		Named   string `toml:"named,required"`
+		Unnamed string `toml:",required"`
+		Plain   string `toml:"plain"`
+	}
+
+	fields, err := Fields(reflect.TypeFor[options]())
+	if err != nil {
+		t.Fatalf("Fields: %v", err)
+	}
+
+	got := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		got[f.Key] = f.Required
+	}
+
+	want := map[string]bool{"named": true, "unnamed": true, "plain": false}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("required by key = %v, want %v (the option follows the name, which may be left to the field name)", got, want)
+	}
+}
+
+func TestFieldsRejectsAMalformedOption(t *testing.T) {
+	type unknown struct {
+		Token string `toml:"token,requird"`
+	}
+	type repeated struct {
+		Token string `toml:"token,required,required"`
+	}
+	type embedded struct {
+		base `toml:",required"`
+	}
+
+	tests := map[string]struct {
+		config reflect.Type
+		want   []string
+	}{
+		"unknown":  {reflect.TypeFor[unknown](), []string{`unknown option "requird"`, "field Token"}},
+		"repeated": {reflect.TypeFor[repeated](), []string{`option "required" is repeated`, "field Token"}},
+		"embedded": {reflect.TypeFor[embedded](), []string{"embedded struct", "field base"}},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := Fields(tt.config)
+			if err == nil {
+				t.Fatal("Fields succeeded, want an error")
+			}
+
+			for _, fragment := range tt.want {
+				if !strings.Contains(err.Error(), fragment) {
+					t.Errorf("error = %v, want it to contain %q", err, fragment)
+				}
+			}
+		})
 	}
 }
 

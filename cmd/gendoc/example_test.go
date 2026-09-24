@@ -18,8 +18,8 @@ import (
 )
 
 type exampleSample struct {
-	Token   string        `toml:"token" required:"true" doc:"API token. Keep it secret."`
-	Zone    string        `toml:"zone" required:"true" example:"example.com" doc:"Zone"`
+	Token   string        `toml:"token,required" doc:"API token. Keep it secret."`
+	Zone    string        `toml:"zone,required" example:"example.com" doc:"Zone"`
 	Timeout time.Duration `toml:"timeout" default:"10s" doc:"Request timeout"`
 	Retries int           `toml:"retries" default:"3"`
 	Verify  bool          `toml:"verify" default:"true"`
@@ -28,10 +28,10 @@ type exampleSample struct {
 	Addr    netip.Addr    `toml:"addr"`
 	Empty   string        `toml:"empty" default:""`
 	Auth    struct {
-		User string `toml:"user" required:"true" example:"admin" doc:"Login"`
+		User string `toml:"user,required" example:"admin" doc:"Login"`
 	} `toml:"auth"`
 	Extra *struct {
-		Key string `toml:"key" required:"true" doc:"Key of the optional block"`
+		Key string `toml:"key,required" doc:"Key of the optional block"`
 	} `toml:"extra"`
 }
 
@@ -105,7 +105,7 @@ func TestExampleIsRepeatable(t *testing.T) {
 
 func TestExampleRejectsParametersItCannotShow(t *testing.T) {
 	type noExample struct {
-		Retries int `toml:"retries" required:"true"`
+		Retries int `toml:"retries,required"`
 	}
 
 	type badDefault struct {

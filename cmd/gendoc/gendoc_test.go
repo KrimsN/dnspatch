@@ -19,16 +19,16 @@ type baseConfig struct {
 // sampleConfig uses every feature of the configuration struct that the
 // decoder understands.
 type sampleConfig struct {
-	Token  string `toml:"token" required:"true" doc:"API token"`
+	Token  string `toml:"token,required" doc:"API token"`
 	Region string
 	Secret string     `toml:"-"`
 	hidden string     //nolint:unused // exercises the skipping of unexported fields
 	Addr   netip.Addr `toml:"addr" doc:"A leaf struct is one parameter, not a table"`
 	Auth   struct {
-		User string `toml:"user" required:"true" doc:"Login"`
+		User string `toml:"user,required" doc:"Login"`
 	} `toml:"auth"`
 	Extra *struct {
-		Key string `toml:"key" required:"true" doc:"Key of the optional block"`
+		Key string `toml:"key,required" doc:"Key of the optional block"`
 	} `toml:"extra"`
 
 	baseConfig
@@ -142,14 +142,14 @@ func TestDescribeRejectsAmbiguousConfigurations(t *testing.T) {
 }
 
 type alphaConfig struct {
-	Zone string `toml:"zone" required:"true" doc:"Zone | with a pipe"`
+	Zone string `toml:"zone,required" doc:"Zone | with a pipe"`
 	Mode string `toml:"mode" default:"" doc:"Line one.\nLine two."`
 	Note string "toml:\"note\" default:\"a`b\""
 }
 
 type betaConfig struct {
 	Extra *struct {
-		Key string `toml:"key" required:"true" doc:"Key"`
+		Key string `toml:"key,required" doc:"Key"`
 	} `toml:"extra"`
 }
 
@@ -208,7 +208,7 @@ func TestRenderOutput(t *testing.T) {
 func TestRenderMarksRequiredParametersOfOptionalTables(t *testing.T) {
 	type config struct {
 		Extra *struct {
-			Key string `toml:"key" required:"true" doc:"Key"`
+			Key string `toml:"key,required" doc:"Key"`
 		} `toml:"extra"`
 	}
 
