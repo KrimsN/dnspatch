@@ -123,6 +123,39 @@ rr_name = "home"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.dyndns2]
+type = "dyndns2"
+
+# Update URL of the service, for example https://api.nic.ru/dyndns/update for
+# NIC.RU or https://updates.dnsomatic.com/nic/update for DNS-O-Matic
+base_url = "https://api.nic.ru/dyndns/update"
+
+# Login for HTTP Basic authentication; for NIC.RU the login of the contract or
+# of the account allowed to use Dynamic DNS
+username = "CHANGE_ME"
+
+# Password for HTTP Basic authentication; some services issue a separate
+# update password
+password = "${PASSWORD}"
+
+# Full domain name of the record to update.
+hostname = "home.example.com"
+
+# Query parameter that carries the IPv4 address
+# ip_param = "myip"
+
+# Query parameter that carries the IPv6 address; both addresses go in one
+# request, so the service must know this parameter to update an AAAA record.
+# ipv6_param = "ipv6"
+
+# User-Agent header; the protocol asks clients to identify themselves, and
+# some services refuse a request without one
+# user_agent = "dnspatch"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.regru]
 type = "regru"
 

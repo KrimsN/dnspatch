@@ -1,0 +1,26 @@
+# Updating a record at NIC.RU (RU-CENTER) through its Dynamic DNS service, and
+# at any other service that speaks the dyndns2 protocol: only base_url changes.
+#
+# NIC.RU needs the "Dynamic DNS" service switched on for the domain. The
+# update changes the A records with this name in EVERY zone of the contract,
+# not only in the one the domain belongs to. Use the login and password of the
+# account that is allowed to update it.
+#
+# Both addresses go in one request (myip and ipv6). A family a retriever did
+# not report is left out of the request, and the service may then fill it in
+# with the address the request came from, so give the provider the families
+# you want kept.
+
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+type   = "ifconfigco"
+family = "dual"
+
+[[instance.provider]]
+type     = "dyndns2"
+base_url = "https://api.nic.ru/dyndns/update"
+username = "${USERNAME}"
+password = "${PASSWORD}"
+hostname = "home.example.com"
