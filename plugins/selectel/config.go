@@ -6,7 +6,7 @@ import "github.com/KrimsN/dnspatch/internal/httpx"
 type Config struct {
 	AccountID   string `toml:"account_id" required:"true" doc:"Selectel account ID (the domain name used for API auth), shown in the top right corner of the Control panel"`
 	Username    string `toml:"username" required:"true" doc:"Name of the service user used for API calls"`
-	Password    string `toml:"password" required:"true" example:"${SELECTEL_PASSWORD}" doc:"Password of the service user"`
+	Password    string `toml:"password" required:"true" example:"${PASSWORD}" doc:"Password of the service user"`
 	ProjectName string `toml:"project_name" required:"true" doc:"Name of the project the DNS zone belongs to"`
 	Zone        string `toml:"zone" required:"true" example:"example.com" doc:"Domain name of the zone, for example example.com"`
 	RRName      string `toml:"rr_name" required:"true" example:"home" doc:"Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home"`
