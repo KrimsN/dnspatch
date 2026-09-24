@@ -16,8 +16,11 @@ import (
 const tag = "toml"
 
 // Options that may follow the parameter name in the tag, as in
-// `toml:"password,required"`.
-const optionRequired = "required"
+// `toml:"password,required,secret"`.
+const (
+	optionRequired = "required"
+	optionSecret   = "secret"
+)
 
 var textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 
@@ -32,7 +35,10 @@ type Field struct {
 	Type reflect.Type
 
 	// Required is set by the "required" option of the toml tag.
-	Required   bool
+	Required bool
+	// Secret is set by the "secret" option of the toml tag: the value is a
+	// password, a key or the like, and must never be printed or logged.
+	Secret     bool
 	Default    string
 	HasDefault bool
 	Doc        string
@@ -119,7 +125,7 @@ func collect(t reflect.Type, prefix []int) ([]Field, error) {
 			key = strings.ToLower(field.Name)
 		}
 
-		required, err := parseOptions(options)
+		flags, err := parseOptions(options)
 		if err != nil {
 			return nil, fmt.Errorf("field %s of %s: %w", field.Name, t, err)
 		}
@@ -131,7 +137,8 @@ func collect(t reflect.Type, prefix []int) ([]Field, error) {
 			Index:      index,
 			Key:        key,
 			Type:       field.Type,
-			Required:   required,
+			Required:   flags.required,
+			Secret:     flags.secret,
 			Default:    defaultVal,
 			HasDefault: hasDefault,
 			Doc:        field.Tag.Get("doc"),
@@ -143,30 +150,40 @@ func collect(t reflect.Type, prefix []int) ([]Field, error) {
 	return fields, nil
 }
 
+// options are the flags a tag can set on a parameter.
+type options struct {
+	required, secret bool
+}
+
 // parseOptions reads the comma-separated options that follow the parameter
 // name in the tag. An option that is unknown or repeated is an error.
-func parseOptions(list string) (required bool, err error) {
+func parseOptions(list string) (options, error) {
+	var flags options
+
 	if list == "" {
-		return false, nil
+		return flags, nil
 	}
 
 	seen := make(map[string]bool)
 
 	for option := range strings.SplitSeq(list, ",") {
 		if seen[option] {
-			return false, fmt.Errorf("option %q is repeated in tag %s", option, tag)
+			return options{}, fmt.Errorf("option %q is repeated in tag %s", option, tag)
 		}
 		seen[option] = true
 
 		switch option {
 		case optionRequired:
-			required = true
+			flags.required = true
+		case optionSecret:
+			flags.secret = true
 		default:
-			return false, fmt.Errorf("unknown option %q in tag %s, the only option is %q", option, tag, optionRequired)
+			return options{}, fmt.Errorf("unknown option %q in tag %s, the options are %q and %q",
+				option, tag, optionRequired, optionSecret)
 		}
 	}
 
-	return required, nil
+	return flags, nil
 }
 
 // goPath names a field by its Go path, such as Base.Timeout, for messages
