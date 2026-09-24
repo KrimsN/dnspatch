@@ -30,7 +30,7 @@ const (
 
 // provider publishes an address to one record of one zone on Beget.
 type provider struct {
-	login    string
+	username string
 	password string
 	base     string
 	zone     string
@@ -78,7 +78,7 @@ func newProvider(cfg Config, client *http.Client) (*provider, error) {
 	client = &noRedirect
 
 	return &provider{
-		login:    cfg.Login,
+		username: cfg.Username,
 		password: cfg.Password,
 		base:     strings.TrimRight(cfg.BaseURL, "/"),
 		zone:     zone,
@@ -269,7 +269,7 @@ func (p *provider) call(ctx context.Context, method string, input []byte) (resul
 	}()
 
 	q := url.Values{
-		"login":         {p.login},
+		"login":         {p.username},
 		"passwd":        {p.password},
 		"input_format":  {"json"},
 		"output_format": {"json"},

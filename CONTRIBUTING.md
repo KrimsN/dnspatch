@@ -116,13 +116,16 @@ the single source of truth: the decoder, the parameter reference in
 
 ```go
 type Config struct {
-	Token   string `toml:"token,required,secret" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
-	Zone    string `toml:"zone,required" example:"example.com" doc:"Domain name of the zone"`
 	BaseURL string `toml:"base_url" default:"https://api.example.com" doc:"Base URL of the API"`
+	Zone    string `toml:"zone,required" example:"example.com" doc:"Domain name of the zone"`
+	Token   string `toml:"token,required,secret" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
 
 	httpx.ProxyConfig
 }
 ```
+
+The order of the fields is the order of the parameters everywhere they are
+listed, so keep to the scheme under "Order and names of parameters" below.
 
 | Tag | Meaning | Why it matters |
 |-----|---------|----------------|
@@ -146,6 +149,46 @@ Notes:
 - Unknown parameters and missing required ones are reported by the decoder; the
   constructor only checks what the tags cannot express, such as that `base_url`
   is an `http(s)` URL. Prefix its errors with the parameter name.
+
+#### Order and names of parameters
+
+The order of the fields of `Config` is the order of the parameters in
+`docs/PARAMETERS.md`, in `config.toml.example` and in the signature that
+`--check-config` prints for a provider. So that a reader finds the same thing in
+the same place in every plugin, the order goes from the general to the
+particular, with secrets and `proxy` at the end:
+
+1. The entry point: `base_url` (`server` for a name server given as host or
+   host:port).
+2. The record: `zone` or `zone_id`, then `rr_name` or `hostname`.
+3. What is written to the record: `ttl`, and the query parameters that carry the
+   address (`ip_param`, `ipv6_param`).
+4. The scope of the account: `project_name`, `account_id`.
+5. Credentials: `username`, `password`; a key that is not a password comes here
+   too (`key`, or the TSIG parameters `key_name`, `key_algorithm`, `key_secret`).
+6. The technical side of access and transport: `auth_url`, `user_agent`,
+   `protocol`, `timeout`.
+7. `proxy`, the embedded `httpx.ProxyConfig`, always the last.
+
+A parameter that fits no group goes next to the one closest to it in meaning. A
+retriever has fewer of them: `base_url`, `family`, then `proxy`.
+
+Name a parameter as its counterparts in the other plugins are named:
+
+| Meaning | Name | Notes |
+|---------|------|-------|
+| URL of the service | `base_url` | an `http(s)` URL, defaulting to the public API |
+| Login of the account | `username` | not `login` or `user`, even where the service's own API calls it that |
+| Secret of the login | `password` | marked `secret` |
+| Zone of the domain | `zone` | the domain name; `zone_id` when the service addresses a zone by an ID |
+| Record in the zone | `rr_name` | relative to the zone (`@`, `*`, `home`); `hostname` when the service takes the full domain name |
+| Lifetime of the record | `ttl` | in seconds, an `int` |
+| Identity service that issues the token | `auth_url` | a base URL the plugin appends the path to; a full token endpoint is named after the service, as `iam_url` of yandexcloud is |
+| Proxy of the requests | `proxy` | comes from the embedded `httpx.ProxyConfig` |
+
+The names of `zone` and `zone_id`, of `rr_name` and `hostname`, and of `server`
+and `base_url` stay apart on purpose: they mean different things (a name or an
+ID, a name in the zone or a full name, host:port or a URL).
 
 ### 3. Register the plugin
 

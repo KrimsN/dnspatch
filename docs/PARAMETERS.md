@@ -82,20 +82,20 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `login` | yes | — | Beget account login used for API calls |
-| `password` | yes | — | Beget account password |
+| `base_url` | no | `https://api.beget.com/api` | Base URL of the API |
 | `zone` | yes | — | Domain name of the zone, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
-| `base_url` | no | `https://api.beget.com/api` | Base URL of the API |
+| `username` | yes | — | Beget account login used for API calls |
+| `password` | yes | — | Beget account password |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `dyn`
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
+| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com |
 | `username` | yes | — | Login of the Dyn account |
 | `password` | yes | — | Updater client key of the account, created in the account settings; it is not the account password |
-| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `dyndns2`
@@ -103,11 +103,11 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `base_url` | yes | — | Update URL of the service, for example https://api.nic.ru/dyndns/update for NIC.RU or https://updates.dnsomatic.com/nic/update for DNS-O-Matic |
-| `username` | yes | — | Login for HTTP Basic authentication; for NIC.RU the login of the contract or of the account allowed to use Dynamic DNS |
-| `password` | yes | — | Password for HTTP Basic authentication; some services issue a separate update password |
 | `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract |
 | `ip_param` | no | `myip` | Query parameter that carries the IPv4 address |
 | `ipv6_param` | no | `ipv6` | Query parameter that carries the IPv6 address; both addresses go in one request, so the service must know this parameter to update an AAAA record. Set it to the same name as ip_param for a service that takes both addresses in one parameter, separated by a comma. A family the retrievers did not report is not sent, and the service may then fall back to the address the request came from |
+| `username` | yes | — | Login for HTTP Basic authentication; for NIC.RU the login of the contract or of the account allowed to use Dynamic DNS |
+| `password` | yes | — | Password for HTTP Basic authentication; some services issue a separate update password |
 | `user_agent` | no | `dnspatch` | User-Agent header; the protocol asks clients to identify themselves, and some services refuse a request without one |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
@@ -115,38 +115,38 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
+| `hostname` | yes | — | Full domain name of the record to update, for example home.example.com |
 | `username` | yes | — | Dynu account login |
 | `password` | yes | — | Password of the account, or the separate IP update password that Dynu lets you set in the account, which is the safer choice |
-| `hostname` | yes | — | Full domain name of the record to update, for example home.example.com |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `nicru`
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
+| `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract, not only in the zone the domain belongs to |
 | `username` | yes | — | Login of the NIC.RU account or contract that may update the domain; the Dynamic DNS service must be switched on for it |
 | `password` | yes | — | Password for that login |
-| `hostname` | yes | — | Full domain name of the record to update. NIC.RU changes the A records with this name in every zone of the contract, not only in the zone the domain belongs to |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `noip`
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
+| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com or a name under ddns.net |
 | `username` | yes | — | Login for the update: a DDNS key of the host, or the No-IP account itself |
 | `password` | yes | — | Password for that login |
-| `hostname` | yes | — | Full domain name of the host to update, for example home.example.com or a name under ddns.net |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `regru`
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `username` | yes | — | REG.RU account login used for API calls |
-| `password` | yes | — | API password; set an alternative password for the API in the REG.RU account and allow the address dnspatch runs from |
+| `base_url` | no | `https://api.reg.ru/api/regru2` | Base URL of the API |
 | `zone` | yes | — | Domain name of the zone, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
-| `base_url` | no | `https://api.reg.ru/api/regru2` | Base URL of the API |
+| `username` | yes | — | REG.RU account login used for API calls |
+| `password` | yes | — | API password; set an alternative password for the API in the REG.RU account and allow the address dnspatch runs from |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `rfc2136`
@@ -156,10 +156,10 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `server` | yes | — | Address of the name server that accepts updates, as host or host:port. The port defaults to 53. It must be the primary (master) server of the zone or one that forwards updates to it |
 | `zone` | yes | — | Domain name of the zone the server is authoritative for, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
-| `key_name` | no | — | Name of the TSIG key used to sign updates, as configured on the server. Leave empty (together with key_secret) to send unsigned updates, which only fits a server that authorizes by client address |
-| `key_secret` | no | — | Base64-encoded secret of the TSIG key, as printed by tsig-keygen |
-| `key_algorithm` | no | `hmac-sha256` | TSIG algorithm of the key: hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384 or hmac-sha512 |
 | `ttl` | no | `300` | TTL in seconds of the record this provider writes |
+| `key_name` | no | — | Name of the TSIG key used to sign updates, as configured on the server. Leave empty (together with key_secret) to send unsigned updates, which only fits a server that authorizes by client address |
+| `key_algorithm` | no | `hmac-sha256` | TSIG algorithm of the key: hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384 or hmac-sha512 |
+| `key_secret` | no | — | Base64-encoded secret of the TSIG key, as printed by tsig-keygen |
 | `protocol` | no | `tcp` | Transport of the update: tcp or udp. There is no fallback from one to the other |
 | `timeout` | no | `10s` | How long to wait for the server to answer an update |
 
@@ -167,25 +167,25 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `account_id` | yes | — | Selectel account ID (the domain name used for API auth), shown in the top right corner of the Control panel |
-| `username` | yes | — | Name of the service user used for API calls |
-| `password` | yes | — | Password of the service user |
-| `project_name` | yes | — | Name of the project the DNS zone belongs to |
+| `base_url` | no | `https://api.selectel.ru/domains/v2` | Base URL of the DNS Hosting API |
 | `zone` | yes | — | Domain name of the zone, for example example.com |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `ttl` | no | `60` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL. Selectel accepts 60 to 604800 |
+| `project_name` | yes | — | Name of the project the DNS zone belongs to |
+| `account_id` | yes | — | Selectel account ID (the domain name used for API auth), shown in the top right corner of the Control panel |
+| `username` | yes | — | Name of the service user used for API calls |
+| `password` | yes | — | Password of the service user |
 | `auth_url` | no | `https://cloud.api.selcloud.ru/identity/v3` | Base URL of the identity (Keystone) API used to obtain a project IAM token |
-| `base_url` | no | `https://api.selectel.ru/domains/v2` | Base URL of the DNS Hosting API |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `yandexcloud`
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `key` | yes | — | Authorized key of the service account as JSON, the file that yc iam key create writes. The account needs the dns.editor role on the folder of the zone |
+| `base_url` | no | `https://dns.api.cloud.yandex.net/dns/v1` | Base URL of the Cloud DNS API |
 | `zone_id` | yes | — | ID of the DNS zone, shown in the Cloud DNS console or by yc dns zone list |
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `ttl` | no | `300` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL |
+| `key` | yes | — | Authorized key of the service account as JSON, the file that yc iam key create writes. The account needs the dns.editor role on the folder of the zone |
 | `iam_url` | no | `https://iam.api.cloud.yandex.net/iam/v1/tokens` | URL of the IAM API endpoint that exchanges a signed JWT for an IAM token |
-| `base_url` | no | `https://dns.api.cloud.yandex.net/dns/v1` | Base URL of the Cloud DNS API |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |

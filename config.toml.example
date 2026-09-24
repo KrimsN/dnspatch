@@ -103,11 +103,8 @@ type = "ipify"
 [provider.beget]
 type = "beget"
 
-# Beget account login used for API calls
-login = "CHANGE_ME"
-
-# Beget account password
-password = "${PASSWORD}"
+# Base URL of the API
+# base_url = "https://api.beget.com/api"
 
 # Domain name of the zone, for example example.com
 zone = "example.com"
@@ -116,8 +113,11 @@ zone = "example.com"
 # label such as home
 rr_name = "home"
 
-# Base URL of the API
-# base_url = "https://api.beget.com/api"
+# Beget account login used for API calls
+username = "CHANGE_ME"
+
+# Beget account password
+password = "${PASSWORD}"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -126,15 +126,15 @@ rr_name = "home"
 [provider.dyn]
 type = "dyn"
 
+# Full domain name of the host to update, for example home.example.com
+hostname = "home.example.com"
+
 # Login of the Dyn account
 username = "CHANGE_ME"
 
 # Updater client key of the account, created in the account settings; it is
 # not the account password
 password = "${PASSWORD}"
-
-# Full domain name of the host to update, for example home.example.com
-hostname = "home.example.com"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -147,14 +147,6 @@ type = "dyndns2"
 # NIC.RU or https://updates.dnsomatic.com/nic/update for DNS-O-Matic
 base_url = "https://api.nic.ru/dyndns/update"
 
-# Login for HTTP Basic authentication; for NIC.RU the login of the contract or
-# of the account allowed to use Dynamic DNS
-username = "CHANGE_ME"
-
-# Password for HTTP Basic authentication; some services issue a separate
-# update password
-password = "${PASSWORD}"
-
 # Full domain name of the record to update.
 hostname = "home.example.com"
 
@@ -164,6 +156,14 @@ hostname = "home.example.com"
 # Query parameter that carries the IPv6 address; both addresses go in one
 # request, so the service must know this parameter to update an AAAA record.
 # ipv6_param = "ipv6"
+
+# Login for HTTP Basic authentication; for NIC.RU the login of the contract or
+# of the account allowed to use Dynamic DNS
+username = "CHANGE_ME"
+
+# Password for HTTP Basic authentication; some services issue a separate
+# update password
+password = "${PASSWORD}"
 
 # User-Agent header; the protocol asks clients to identify themselves, and
 # some services refuse a request without one
@@ -176,15 +176,15 @@ hostname = "home.example.com"
 [provider.dynu]
 type = "dynu"
 
+# Full domain name of the record to update, for example home.example.com
+hostname = "home.example.com"
+
 # Dynu account login
 username = "CHANGE_ME"
 
 # Password of the account, or the separate IP update password that Dynu lets
 # you set in the account, which is the safer choice
 password = "${PASSWORD}"
-
-# Full domain name of the record to update, for example home.example.com
-hostname = "home.example.com"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -193,15 +193,15 @@ hostname = "home.example.com"
 [provider.nicru]
 type = "nicru"
 
+# Full domain name of the record to update.
+hostname = "home.example.com"
+
 # Login of the NIC.RU account or contract that may update the domain; the
 # Dynamic DNS service must be switched on for it
 username = "CHANGE_ME"
 
 # Password for that login
 password = "${PASSWORD}"
-
-# Full domain name of the record to update.
-hostname = "home.example.com"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -210,15 +210,15 @@ hostname = "home.example.com"
 [provider.noip]
 type = "noip"
 
+# Full domain name of the host to update, for example home.example.com or a
+# name under ddns.net
+hostname = "home.example.com"
+
 # Login for the update: a DDNS key of the host, or the No-IP account itself
 username = "CHANGE_ME"
 
 # Password for that login
 password = "${PASSWORD}"
-
-# Full domain name of the host to update, for example home.example.com or a
-# name under ddns.net
-hostname = "home.example.com"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -227,12 +227,8 @@ hostname = "home.example.com"
 [provider.regru]
 type = "regru"
 
-# REG.RU account login used for API calls
-username = "CHANGE_ME"
-
-# API password; set an alternative password for the API in the REG.RU account
-# and allow the address dnspatch runs from
-password = "${PASSWORD}"
+# Base URL of the API
+# base_url = "https://api.reg.ru/api/regru2"
 
 # Domain name of the zone, for example example.com
 zone = "example.com"
@@ -241,8 +237,12 @@ zone = "example.com"
 # label such as home
 rr_name = "home"
 
-# Base URL of the API
-# base_url = "https://api.reg.ru/api/regru2"
+# REG.RU account login used for API calls
+username = "CHANGE_ME"
+
+# API password; set an alternative password for the API in the REG.RU account
+# and allow the address dnspatch runs from
+password = "${PASSWORD}"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -262,18 +262,18 @@ zone = "example.com"
 # label such as home
 rr_name = "home"
 
+# TTL in seconds of the record this provider writes
+# ttl = 300
+
 # Name of the TSIG key used to sign updates, as configured on the server.
 # key_name = "dnspatch-key"
-
-# Base64-encoded secret of the TSIG key, as printed by tsig-keygen
-# key_secret = "${TSIG_SECRET}"
 
 # TSIG algorithm of the key: hmac-sha1, hmac-sha224, hmac-sha256, hmac-sha384
 # or hmac-sha512
 # key_algorithm = "hmac-sha256"
 
-# TTL in seconds of the record this provider writes
-# ttl = 300
+# Base64-encoded secret of the TSIG key, as printed by tsig-keygen
+# key_secret = "${TSIG_SECRET}"
 
 # Transport of the update: tcp or udp.
 # protocol = "tcp"
@@ -284,18 +284,8 @@ rr_name = "home"
 [provider.selectel]
 type = "selectel"
 
-# Selectel account ID (the domain name used for API auth), shown in the top
-# right corner of the Control panel
-account_id = "CHANGE_ME"
-
-# Name of the service user used for API calls
-username = "CHANGE_ME"
-
-# Password of the service user
-password = "${PASSWORD}"
-
-# Name of the project the DNS zone belongs to
-project_name = "CHANGE_ME"
+# Base URL of the DNS Hosting API
+# base_url = "https://api.selectel.ru/domains/v2"
 
 # Domain name of the zone, for example example.com
 zone = "example.com"
@@ -308,11 +298,21 @@ rr_name = "home"
 # its own TTL.
 # ttl = 60
 
+# Name of the project the DNS zone belongs to
+project_name = "CHANGE_ME"
+
+# Selectel account ID (the domain name used for API auth), shown in the top
+# right corner of the Control panel
+account_id = "CHANGE_ME"
+
+# Name of the service user used for API calls
+username = "CHANGE_ME"
+
+# Password of the service user
+password = "${PASSWORD}"
+
 # Base URL of the identity (Keystone) API used to obtain a project IAM token
 # auth_url = "https://cloud.api.selcloud.ru/identity/v3"
-
-# Base URL of the DNS Hosting API
-# base_url = "https://api.selectel.ru/domains/v2"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.
@@ -321,9 +321,8 @@ rr_name = "home"
 [provider.yandexcloud]
 type = "yandexcloud"
 
-# Authorized key of the service account as JSON, the file that yc iam key
-# create writes.
-key = "${YANDEX_CLOUD_KEY}"
+# Base URL of the Cloud DNS API
+# base_url = "https://dns.api.cloud.yandex.net/dns/v1"
 
 # ID of the DNS zone, shown in the Cloud DNS console or by yc dns zone list
 zone_id = "dns1234567890abcdefgh"
@@ -336,11 +335,12 @@ rr_name = "home"
 # its own TTL
 # ttl = 300
 
+# Authorized key of the service account as JSON, the file that yc iam key
+# create writes.
+key = "${YANDEX_CLOUD_KEY}"
+
 # URL of the IAM API endpoint that exchanges a signed JWT for an IAM token
 # iam_url = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
-
-# Base URL of the Cloud DNS API
-# base_url = "https://dns.api.cloud.yandex.net/dns/v1"
 
 # URL of a proxy to send API requests through, for example
 # socks5://user:pass@203.0.113.5:1080.

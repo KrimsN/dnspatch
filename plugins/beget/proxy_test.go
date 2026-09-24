@@ -156,7 +156,7 @@ func TestUpdateCancelledThroughProxy(t *testing.T) {
 
 func TestProxyValidatedAtConstruction(t *testing.T) {
 	valid := Config{
-		Login: testLogin, Password: testPass,
+		Username: testUsername, Password: testPass,
 		Zone: "example.com", RRName: "home",
 		BaseURL: "https://api.test",
 	}
@@ -201,7 +201,7 @@ func TestProxyValidatedAtConstruction(t *testing.T) {
 
 func TestProxyParameterIsRegistered(t *testing.T) {
 	params := map[string]any{
-		"login": testLogin, "password": testPass,
+		"username": testUsername, "password": testPass,
 		"zone": "example.com", "rr_name": "@",
 		"proxy": "socks5://203.0.113.5:1080",
 	}
@@ -237,7 +237,7 @@ func TestProxyParameterIsDocumented(t *testing.T) {
 
 func TestProxyDirectIgnoresEnvironment(t *testing.T) {
 	cfg := Config{
-		Login: testLogin, Password: testPass,
+		Username: testUsername, Password: testPass,
 		Zone: "example.com", RRName: "home",
 		BaseURL: "https://api.test",
 	}

@@ -13,10 +13,10 @@ family = "ipv6"
 
 [provider.regru]
 type     = "regru"
-username = "CHANGE_ME"
-password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
 
 [[instance]]
 name = "home"

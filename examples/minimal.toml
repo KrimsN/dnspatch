@@ -16,7 +16,7 @@ type = "ifconfigco"
 
 [[instance.provider]]
 type     = "regru"
-username = "CHANGE_ME"
-password = "${PASSWORD}"
 zone     = "example.com"
 rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
