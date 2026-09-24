@@ -6,6 +6,9 @@
 // The URL is a parameter, so one plugin serves NIC.RU, DNS-O-Matic, No-IP and
 // every other service of the kind. The protocol has no way to set a TTL, so
 // the record options are ignored.
+//
+// Wrappers for particular services live in subdirectories, such as nicru: each
+// is a provider of its own that fills in the update URL and calls New.
 package dyndns2
 
 import "github.com/KrimsN/dnspatch/plugin"

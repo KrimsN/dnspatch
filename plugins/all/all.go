@@ -9,12 +9,12 @@ import (
 	// Built-in plugins register themselves in init.
 	_ "github.com/KrimsN/dnspatch/plugins/beget"
 	_ "github.com/KrimsN/dnspatch/plugins/dyndns2"
+	_ "github.com/KrimsN/dnspatch/plugins/dyndns2/nicru"
 	_ "github.com/KrimsN/dnspatch/plugins/icanhazip"
 	_ "github.com/KrimsN/dnspatch/plugins/identme"
 	_ "github.com/KrimsN/dnspatch/plugins/ifconfigco"
 	_ "github.com/KrimsN/dnspatch/plugins/ipify"
 	_ "github.com/KrimsN/dnspatch/plugins/netif"
-	_ "github.com/KrimsN/dnspatch/plugins/nicru"
 	_ "github.com/KrimsN/dnspatch/plugins/regru"
 	_ "github.com/KrimsN/dnspatch/plugins/rfc2136"
 	_ "github.com/KrimsN/dnspatch/plugins/selectel"
