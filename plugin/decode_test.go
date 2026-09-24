@@ -16,7 +16,7 @@ type nested struct {
 }
 
 type decodeConfig struct {
-	APIToken  string            `toml:"api_token" required:"true"`
+	APIToken  string            `toml:"api_token,required"`
 	Port      int               `toml:"port" default:"443"`
 	Ratio     float64           `toml:"ratio"`
 	VerifyTLS bool              `toml:"verify_tls" default:"true"`
@@ -254,7 +254,7 @@ func TestDecodeRejectsNonStruct(t *testing.T) {
 }
 
 type nestedRequired struct {
-	Must  string `toml:"must" required:"true"`
+	Must  string `toml:"must,required"`
 	Label string `toml:"label" default:"dflt"`
 }
 
@@ -331,7 +331,7 @@ func TestDecodeConflictingParameterCase(t *testing.T) {
 
 type sharedBase struct {
 	Timeout time.Duration `toml:"timeout" default:"5s"`
-	Region  string        `toml:"region" required:"true"`
+	Region  string        `toml:"region,required"`
 }
 
 type promoted struct {

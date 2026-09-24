@@ -116,8 +116,8 @@ the single source of truth: the decoder, the parameter reference in
 
 ```go
 type Config struct {
-	Token   string `toml:"token" required:"true" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
-	Zone    string `toml:"zone" required:"true" example:"example.com" doc:"Domain name of the zone"`
+	Token   string `toml:"token,required" example:"${EXAMPLE_TOKEN}" doc:"API token with edit rights on the zone"`
+	Zone    string `toml:"zone,required" example:"example.com" doc:"Domain name of the zone"`
 	BaseURL string `toml:"base_url" default:"https://api.example.com" doc:"Base URL of the API"`
 
 	httpx.ProxyConfig
@@ -127,13 +127,16 @@ type Config struct {
 | Tag | Meaning | Why it matters |
 |-----|---------|----------------|
 | `toml:"name"` | the key in the configuration file | without it the key is the lower-cased field name; spell it out so that renaming a field never renames a parameter |
-| `required:"true"` | the parameter must be set | a missing required parameter stops the daemon at startup with an error naming it; without the tag a forgotten token becomes an unauthorised request to the API |
+| `toml:"name,required"` | the parameter must be set | a missing required parameter stops the daemon at startup with an error naming it; without the option a forgotten token becomes an unauthorised request to the API |
 | `default:"value"` | the value used when the parameter is omitted | shown in the reference and the example file; the daemon and the docs cannot disagree, since both read the same tag |
 | `doc:"text"` | the description shown in `docs/PARAMETERS.md` and as a comment in the example file | a parameter without it appears as "no description" in the reference |
 | `example:"value"` | the value the example file shows | required for a required parameter that is not a plain string; for a secret, use a `${NAME}` reference |
 
 Notes:
 
+- Options follow the key after a comma, the way `encoding/json` writes
+  `json:"name,omitempty"`. An unknown or repeated option stops the process at
+  registration, so a typo cannot turn into a flag that silently does nothing.
 - Embed `httpx.ProxyConfig` in a provider to get the `proxy` parameter
   (`httpx.DirectProxyConfig` in a retriever, where the default is `direct`) and
   build the client with `httpx.NewClient`. Do not read `HTTP_PROXY` yourself.

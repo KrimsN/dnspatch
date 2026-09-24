@@ -12,8 +12,9 @@ import (
 // Parameter names come from the `toml` struct tag, falling back to the
 // lower-cased field name; a tag of "-" excludes the field. Names match
 // case-insensitively, and two parameters differing only in case are an error.
-// A field tagged `required:"true"` must be present in params, and a field
-// tagged `default:"..."` takes that value when params does not set it.
+// A field whose `toml` tag carries the "required" option, as in
+// `toml:"name,required"`, must be present in params, and a field tagged
+// `default:"..."` takes that value when params does not set it.
 // Parameters that match no field are reported as errors.
 //
 // Values keep the types the TOML parser produced: integers arrive as int64
@@ -33,7 +34,8 @@ import (
 // outer struct, the way encoding/json promotes them.
 //
 // Decode panics when the configuration struct itself is malformed, that is
-// when two of its fields claim the same parameter name.
+// when two of its fields claim the same parameter name or a `toml` tag carries
+// an unknown or repeated option.
 //
 // Errors describe the offending parameter only. Callers add the surrounding
 // context, such as the instance and plugin names.

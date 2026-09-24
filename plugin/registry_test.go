@@ -14,7 +14,7 @@ import (
 )
 
 type fakeConfig struct {
-	Token string `toml:"token" required:"true"`
+	Token string `toml:"token,required"`
 }
 
 type fakeProvider struct {
@@ -291,6 +291,39 @@ func TestRegistrationRejectsDuplicatedParameterName(t *testing.T) {
 				}
 				if !strings.Contains(fmt.Sprint(recovered), `First and Second`) {
 					t.Errorf("panic = %v, want it to name both fields", recovered)
+				}
+			}()
+
+			register()
+		})
+	}
+}
+
+// mistyped has an option no decoder knows: the typo must stop the process at
+// registration instead of leaving the parameter optional.
+type mistyped struct {
+	Token string `toml:"token,requird"`
+}
+
+func TestRegistrationRejectsUnknownTagOption(t *testing.T) {
+	tests := map[string]func(){
+		"provider": func() {
+			plugin.RegisterProviderIn(plugin.NewRegistry(), "fake", func(mistyped) (plugin.Provider, error) { return nil, nil })
+		},
+		"retriever": func() {
+			plugin.RegisterRetrieverIn(plugin.NewRegistry(), "fake", func(mistyped) (plugin.Retriever, error) { return nil, nil })
+		},
+	}
+
+	for name, register := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					t.Fatal("registering a configuration with an unknown tag option did not panic")
+				}
+				if !strings.Contains(fmt.Sprint(recovered), `unknown option "requird"`) {
+					t.Errorf("panic = %v, want it to name the unknown option", recovered)
 				}
 			}()
 

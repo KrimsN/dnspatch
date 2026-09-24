@@ -11,8 +11,13 @@ import (
 )
 
 // tag names the struct tag holding the parameter name, matching the keys used
-// in the configuration file.
+// in the configuration file. Flags follow the name after commas, the way
+// encoding/json writes `json:"name,omitempty"`.
 const tag = "toml"
+
+// Options that may follow the parameter name in the tag, as in
+// `toml:"password,required"`.
+const optionRequired = "required"
 
 var textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 
@@ -26,6 +31,7 @@ type Field struct {
 	// Type is the declared type of the field.
 	Type reflect.Type
 
+	// Required is set by the "required" option of the toml tag.
 	Required   bool
 	Default    string
 	HasDefault bool
@@ -42,9 +48,14 @@ type Field struct {
 // ParsesText says it is written as a single value.
 //
 // Two fields claiming the same name, ignoring case, are an error: no
-// configuration file could address them separately.
+// configuration file could address them separately. So is an option in the
+// tag that is unknown or repeated, or given to an embedded struct: a mistyped
+// option would otherwise be a flag that silently does nothing.
 func Fields(t reflect.Type) ([]Field, error) {
-	fields := collect(t, nil)
+	fields, err := collect(t, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	taken := make(map[string]string, len(fields))
 	for _, f := range fields {
@@ -68,13 +79,13 @@ func ParsesText(t reflect.Type) bool {
 
 // collect walks a struct type, following embedded structs. The prefix is the
 // index path of the embedded struct being walked.
-func collect(t reflect.Type, prefix []int) []Field {
+func collect(t reflect.Type, prefix []int) ([]Field, error) {
 	fields := make([]Field, 0, t.NumField())
 
 	for i := range t.NumField() {
 		field := t.Field(i)
 
-		key, _, _ := strings.Cut(field.Tag.Get(tag), ",")
+		key, options, _ := strings.Cut(field.Tag.Get(tag), ",")
 		if key == "-" {
 			continue
 		}
@@ -85,7 +96,18 @@ func collect(t reflect.Type, prefix []int) []Field {
 		// fields to the outer struct, so that a plugin can share a base
 		// configuration without nesting it in a table.
 		if field.Anonymous && key == "" && field.Type.Kind() == reflect.Struct {
-			fields = append(fields, collect(field.Type, index)...)
+			if options != "" {
+				return nil, fmt.Errorf("field %s of %s: options %q on an embedded struct have no meaning, put them on its fields",
+					field.Name, t, options)
+			}
+
+			promoted, err := collect(field.Type, index)
+			if err != nil {
+				return nil, err
+			}
+
+			fields = append(fields, promoted...)
+
 			continue
 		}
 
@@ -97,6 +119,11 @@ func collect(t reflect.Type, prefix []int) []Field {
 			key = strings.ToLower(field.Name)
 		}
 
+		required, err := parseOptions(options)
+		if err != nil {
+			return nil, fmt.Errorf("field %s of %s: %w", field.Name, t, err)
+		}
+
 		defaultVal, hasDefault := field.Tag.Lookup("default")
 		example, hasExample := field.Tag.Lookup("example")
 
@@ -104,7 +131,7 @@ func collect(t reflect.Type, prefix []int) []Field {
 			Index:      index,
 			Key:        key,
 			Type:       field.Type,
-			Required:   field.Tag.Get("required") == "true",
+			Required:   required,
 			Default:    defaultVal,
 			HasDefault: hasDefault,
 			Doc:        field.Tag.Get("doc"),
@@ -113,7 +140,33 @@ func collect(t reflect.Type, prefix []int) []Field {
 		})
 	}
 
-	return fields
+	return fields, nil
+}
+
+// parseOptions reads the comma-separated options that follow the parameter
+// name in the tag. An option that is unknown or repeated is an error.
+func parseOptions(list string) (required bool, err error) {
+	if list == "" {
+		return false, nil
+	}
+
+	seen := make(map[string]bool)
+
+	for option := range strings.SplitSeq(list, ",") {
+		if seen[option] {
+			return false, fmt.Errorf("option %q is repeated in tag %s", option, tag)
+		}
+		seen[option] = true
+
+		switch option {
+		case optionRequired:
+			required = true
+		default:
+			return false, fmt.Errorf("unknown option %q in tag %s, the only option is %q", option, tag, optionRequired)
+		}
+	}
+
+	return required, nil
 }
 
 // goPath names a field by its Go path, such as Base.Timeout, for messages
