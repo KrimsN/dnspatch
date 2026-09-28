@@ -21,6 +21,7 @@ import (
 	_ "github.com/KrimsN/dnspatch/plugins/regru"
 	_ "github.com/KrimsN/dnspatch/plugins/rfc2136"
 	_ "github.com/KrimsN/dnspatch/plugins/selectel"
+	_ "github.com/KrimsN/dnspatch/plugins/timeweb"
 	_ "github.com/KrimsN/dnspatch/plugins/twoip"
 	_ "github.com/KrimsN/dnspatch/plugins/yandexcloud"
 )
