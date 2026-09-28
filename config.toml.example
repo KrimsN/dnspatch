@@ -123,6 +123,38 @@ password = "${PASSWORD}"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.cloudflare]
+type = "cloudflare"
+
+# Base URL of the Cloudflare API
+# base_url = "https://api.cloudflare.com/client/v4"
+
+# ID of the zone, shown on the zone's Overview page in the Cloudflare
+# dashboard
+zone_id = "023e105f4ecef8ad9ca31a8372d0c353"
+
+# Domain name of the zone, for example example.com
+zone = "example.com"
+
+# Record name relative to the zone: @ for the apex, * for a wildcard, or a
+# label such as home
+rr_name = "home"
+
+# TTL in seconds for a record this provider creates; an existing record keeps
+# its own TTL. 1 means automatic
+# ttl = 300
+
+# Whether a record this provider creates is proxied through Cloudflare (the
+# orange cloud); an existing record keeps its own setting
+# proxied = false
+
+# Cloudflare API token, scoped to Zone:DNS:Edit on this zone only
+token = "${CF_TOKEN}"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.dyn]
 type = "dyn"
 

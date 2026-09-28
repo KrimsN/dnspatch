@@ -17,6 +17,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [ipify](#retriever-ipify)
 - [Providers](#providers)
   - [beget](#provider-beget)
+  - [cloudflare](#provider-cloudflare)
   - [dyn](#provider-dyn)
   - [dyndns2](#provider-dyndns2)
   - [dynu](#provider-dynu)
@@ -88,6 +89,19 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
 | `username` | yes | — | Beget account login used for API calls |
 | `password` | yes | — | Beget account password |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `cloudflare`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://api.cloudflare.com/client/v4` | Base URL of the Cloudflare API |
+| `zone_id` | yes | — | ID of the zone, shown on the zone's Overview page in the Cloudflare dashboard |
+| `zone` | yes | — | Domain name of the zone, for example example.com |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `ttl` | no | `300` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL. 1 means automatic |
+| `proxied` | no | — | Whether a record this provider creates is proxied through Cloudflare (the orange cloud); an existing record keeps its own setting |
+| `token` | yes | — | Cloudflare API token, scoped to Zone:DNS:Edit on this zone only |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `dyn`
