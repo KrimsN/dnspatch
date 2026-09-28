@@ -18,6 +18,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 - [Providers](#providers)
   - [beget](#provider-beget)
   - [cloudflare](#provider-cloudflare)
+  - [duckdns](#provider-duckdns)
   - [dyn](#provider-dyn)
   - [dyndns2](#provider-dyndns2)
   - [dynu](#provider-dynu)
@@ -102,6 +103,15 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `ttl` | no | `300` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL. 1 means automatic |
 | `proxied` | no | — | Whether a record this provider creates is proxied through Cloudflare (the orange cloud); an existing record keeps its own setting |
 | `token` | yes | — | Cloudflare API token, scoped to Zone:DNS:Edit on this zone only |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `duckdns`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://www.duckdns.org/update` | Update URL of the DuckDNS API |
+| `domain` | yes | — | Subdomain registered at DuckDNS, without the .duckdns.org suffix |
+| `token` | yes | — | DuckDNS account token, shown on the DuckDNS dashboard |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `dyn`
