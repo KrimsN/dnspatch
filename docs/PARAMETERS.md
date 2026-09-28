@@ -25,6 +25,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [regru](#provider-regru)
   - [rfc2136](#provider-rfc2136)
   - [selectel](#provider-selectel)
+  - [timeweb](#provider-timeweb)
   - [yandexcloud](#provider-yandexcloud)
 
 ## Retrievers
@@ -176,6 +177,17 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `username` | yes | — | Name of the service user used for API calls |
 | `password` | yes | — | Password of the service user |
 | `auth_url` | no | `https://cloud.api.selcloud.ru/identity/v3` | Base URL of the identity (Keystone) API used to obtain a project IAM token |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `timeweb`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://api.timeweb.cloud/api/v1` | Base URL of the DNS API |
+| `zone` | yes | — | Domain name of the zone, for example example.com |
+| `rr_name` | yes | — | Record name relative to the zone: @ for the apex, * for a wildcard, or a label such as home |
+| `ttl` | no | `300` | TTL in seconds for a record this provider creates; an existing record keeps its own TTL |
+| `token` | yes | — | Timeweb Cloud API JWT token, from the control panel under API keys |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `yandexcloud`
