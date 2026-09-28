@@ -155,6 +155,22 @@ token = "${CF_TOKEN}"
 # socks5://user:pass@203.0.113.5:1080.
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
+[provider.duckdns]
+type = "duckdns"
+
+# Update URL of the DuckDNS API
+# base_url = "https://www.duckdns.org/update"
+
+# Subdomain registered at DuckDNS, without the .duckdns.org suffix
+domain = "myhost"
+
+# DuckDNS account token, shown on the DuckDNS dashboard
+token = "${DUCKDNS_TOKEN}"
+
+# URL of a proxy to send API requests through, for example
+# socks5://user:pass@203.0.113.5:1080.
+# proxy = "socks5://user:pass@203.0.113.5:1080"
+
 [provider.dyn]
 type = "dyn"
 
