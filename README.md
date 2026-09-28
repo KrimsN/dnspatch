@@ -5,6 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/KrimsN/dnspatch.svg)](https://pkg.go.dev/github.com/KrimsN/dnspatch)
 [![Docker pulls](https://img.shields.io/docker/pulls/krimsn/dnspatch)](https://hub.docker.com/r/krimsn/dnspatch)
 [![License](https://img.shields.io/github/license/KrimsN/dnspatch)](LICENSE)
+[![Hits](https://hits.sh/github.com/KrimsN/dnspatch.svg)](https://hits.sh/github.com/KrimsN/dnspatch/)
 
 A dynamic DNS daemon in Go: it watches your public IP address and patches your DNS records when it changes.
 
