@@ -22,6 +22,7 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
   - [dyn](#provider-dyn)
   - [dyndns2](#provider-dyndns2)
   - [dynu](#provider-dynu)
+  - [namecheap](#provider-namecheap)
   - [nicru](#provider-nicru)
   - [noip](#provider-noip)
   - [regru](#provider-regru)
@@ -143,6 +144,16 @@ For a configuration to start from, copy [config.toml.example](../config.toml.exa
 | `hostname` | yes | — | Full domain name of the record to update, for example home.example.com |
 | `username` | yes | — | Dynu account login |
 | `password` | yes | — | Password of the account, or the separate IP update password that Dynu lets you set in the account, which is the safer choice |
+| `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+### Provider `namecheap`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `base_url` | no | `https://dynamicdns.park-your-domain.com/update` | Update URL of the Namecheap Dynamic DNS API |
+| `host` | yes | — | Host to update: @ for the bare domain, or the host record's name |
+| `domain` | yes | — | Domain registered at Namecheap, exactly as it appears in the account (the API is case-sensitive) |
+| `password` | yes | — | Dynamic DNS Password from the domain's Advanced DNS tab, not the account password |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ### Provider `nicru`
