@@ -197,3 +197,14 @@ jobs:
           build-args: TAGS=${{ matrix.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Branch protection requires a check named "docker build". The matrix above
+  # names its jobs after the variant, so this job stands in for all of them and
+  # keeps the required name stable when the matrix changes, as build & test does.
+  image-result:
+    name: docker build
+    needs: image
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.image.result }}" = success
