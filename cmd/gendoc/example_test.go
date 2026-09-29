@@ -36,7 +36,7 @@ type exampleSample struct {
 }
 
 func TestExampleShowsEveryKindOfParameter(t *testing.T) {
-	got, err := renderExample(nil, map[string]reflect.Type{"sample": reflect.TypeFor[exampleSample]()})
+	got, err := renderExample(nil, map[string]reflect.Type{"sample": reflect.TypeFor[exampleSample]()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestExampleShowsEveryKindOfParameter(t *testing.T) {
 }
 
 func TestExampleWithoutPluginsHasNoInstance(t *testing.T) {
-	got, err := renderExample(nil, nil)
+	got, err := renderExample(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,19 +76,55 @@ func TestExampleWithoutPluginsHasNoInstance(t *testing.T) {
 	}
 }
 
+// A notifier only works on the full build, so the example shows it commented out:
+// an active definition would make the file unusable on the lightweight build.
+func TestExampleShowsNotifiersCommentedOut(t *testing.T) {
+	got, err := renderExample(nil, nil, map[string]reflect.Type{"redis": reflect.TypeFor[exampleNotifier]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"# [notify.redis]\n", "# type = \"redis\"\n", "# address = \"${REDIS_URL}\"\n", "# topic_prefix = \"dnspatch.events.\"\n"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("example lacks %q:\n%s", want, got)
+		}
+	}
+
+	if regexp.MustCompile(`(?m)^\[notify\.`).Match(got) || regexp.MustCompile(`(?m)^address`).Match(got) {
+		t.Errorf("a notifier is active in the example:\n%s", got)
+	}
+}
+
+func TestExampleWithoutNotifiersShowsNoTable(t *testing.T) {
+	got, err := renderExample(nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(got), "notify") {
+		t.Errorf("example mentions notifiers with none registered:\n%s", got)
+	}
+}
+
+type exampleNotifier struct {
+	Address string `toml:"address,required" example:"${REDIS_URL}" doc:"Where the broker is."`
+
+	plugin.NotifierCommon
+}
+
 func TestExampleIsRepeatable(t *testing.T) {
 	plugins := make(map[string]reflect.Type)
 	for _, name := range []string{"e", "b", "d", "a", "c"} {
 		plugins[name] = reflect.TypeFor[exampleSample]()
 	}
 
-	first, err := renderExample(plugins, plugins)
+	first, err := renderExample(plugins, plugins, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for range 50 {
-		again, err := renderExample(plugins, plugins)
+		again, err := renderExample(plugins, plugins, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,7 +175,7 @@ func TestExampleRejectsParametersItCannotShow(t *testing.T) {
 
 	for name, typ := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := renderExample(nil, map[string]reflect.Type{"broken": typ})
+			_, err := renderExample(nil, map[string]reflect.Type{"broken": typ}, nil)
 			if err == nil || !strings.Contains(err.Error(), `provider "broken"`) {
 				t.Errorf("error %v does not reject and name the plugin", err)
 			}
@@ -201,7 +237,7 @@ func TestTOMLString(t *testing.T) {
 // A user copies the file, edits the values and runs it. Whatever the plugins
 // need to start has to be in it, and it has to load and build as written.
 func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
-	doc, err := renderExample(plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes())
+	doc, err := renderExample(plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +274,7 @@ func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
 func TestExampleDefinitionsAllBuild(t *testing.T) {
 	retrievers, providers := plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes()
 
-	doc, err := renderExample(retrievers, providers)
+	doc, err := renderExample(retrievers, providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,4 +351,90 @@ func authorizedKeyJSON(t *testing.T) string {
 	}
 
 	return string(out)
+}
+
+// uncommentNotify turns the notify templates of an example into a live
+// configuration, the way a user would by removing the leading "# " of the table
+// and its parameters.
+func uncommentNotify(doc []byte) []byte {
+	head, rest, found := strings.Cut(string(doc), "# [notify.")
+	if !found {
+		return doc
+	}
+
+	// The instance section follows the notifiers, and its own commented
+	// notify list is not one of the templates.
+	section, after, _ := strings.Cut("# [notify."+rest, "# Instances:")
+
+	live := regexp.MustCompile(`(?m)^# (\[notify\.[a-z0-9_-]+\]|[a-z0-9_]+ = .*)$`)
+
+	return []byte(head + live.ReplaceAllString(section, "$1") + "# Instances:" + after)
+}
+
+// The templates of the notifiers are meant to be uncommented and filled in, so
+// what they show has to load and build.
+func TestExampleNotifierTemplatesLoadAndBuildOnceUncommented(t *testing.T) {
+	registry := plugin.NewRegistry()
+	plugin.RegisterNotifierIn(registry, "one", func(exampleNotifier) (plugin.Notifier, error) { return nil, nil })
+	plugin.RegisterNotifierIn(registry, "two", func(exampleNotifier) (plugin.Notifier, error) { return nil, nil })
+
+	doc, err := renderExample(plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes(), registry.NotifierConfigTypes())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	live := uncommentNotify(doc)
+	setExampleEnv(t, live)
+
+	cfg, err := config.Parse(live)
+	if err != nil {
+		t.Fatalf("the example does not load with the notifiers uncommented: %v\n%s", err, live)
+	}
+
+	if len(cfg.Notify) != 2 {
+		t.Fatalf("got %d notifiers, want 2 (one, two): an instance without a notify list uses them all", len(cfg.Notify))
+	}
+
+	for _, table := range cfg.Notify {
+		if _, err := registry.BuildNotifier(table.Type, table.Params); err != nil {
+			t.Errorf("the template of notifier %q does not build: %v", table.Type, err)
+		}
+	}
+}
+
+func TestExampleMarksRequiredParametersOfNotifiers(t *testing.T) {
+	got, err := renderExample(nil, nil, map[string]reflect.Type{"redis": reflect.TypeFor[exampleNotifier]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(got), "# Where the broker is. Required.\n# address = ") {
+		t.Errorf("the required parameter of a notifier is not marked:\n%s", got)
+	}
+
+	if strings.Contains(string(got), "Prepended to the instance name to form the channel, topic or routing key an event is published under Required.") {
+		t.Errorf("an optional parameter is marked required:\n%s", got)
+	}
+}
+
+// The instance of the example shows how it would pick notifiers, commented out
+// like the notifiers themselves, and only when there are any.
+func TestExampleInstanceShowsHowToPickNotifiers(t *testing.T) {
+	with, err := renderExample(map[string]reflect.Type{"r": reflect.TypeFor[exampleSample]()}, map[string]reflect.Type{"p": reflect.TypeFor[exampleSample]()}, map[string]reflect.Type{"redis": reflect.TypeFor[exampleNotifier]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(with), "# notify = [\"redis\"]\n\n[[instance.retriever]]") {
+		t.Errorf("the instance does not show its notify list before its sub-tables:\n%s", with)
+	}
+
+	without, err := renderExample(map[string]reflect.Type{"r": reflect.TypeFor[exampleSample]()}, map[string]reflect.Type{"p": reflect.TypeFor[exampleSample]()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(without), "notify") {
+		t.Errorf("the instance shows a notify list with no notifier:\n%s", without)
+	}
 }

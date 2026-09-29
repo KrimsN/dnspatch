@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -347,6 +348,244 @@ ref = "main"
 `)
 	if custom.Interval != time.Minute || custom.Instances[0].Interval != time.Minute {
 		t.Errorf("global interval not inherited: %v / %v", custom.Interval, custom.Instances[0].Interval)
+	}
+}
+
+func TestPingURL(t *testing.T) {
+	t.Setenv("PING_TOKEN", "abc123")
+
+	cfg := mustParse(t, header+`
+[[instance]]
+name     = "a"
+ping_url = "https://hc-ping.com/${PING_TOKEN}"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+
+[[instance]]
+name = "b"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if got := cfg.Instances[0].PingURL; got != "https://hc-ping.com/abc123" {
+		t.Errorf("ping_url = %q, want the expanded URL", got)
+	}
+	if got := cfg.Instances[1].PingURL; got != "" {
+		t.Errorf("ping_url = %q, want empty when not set", got)
+	}
+}
+
+func TestPingURLMustBeAString(t *testing.T) {
+	got := parseError(t, header+`
+[[instance]]
+name     = "a"
+ping_url = 123
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `"ping_url" must be a string`) {
+		t.Errorf("error = %q, want it to complain about ping_url's type", got)
+	}
+}
+
+func TestPingURLReportsAnUnsetEnvironmentVariable(t *testing.T) {
+	got := parseError(t, header+`
+[[instance]]
+name     = "a"
+ping_url = "https://hc-ping.com/${NOT_SET}"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `"ping_url"`) || !strings.Contains(got, `"NOT_SET"`) {
+		t.Errorf("error = %q, want it to name ping_url and the unset variable", got)
+	}
+}
+
+// notifyInstance is an instance table with the given extra lines, for the tests
+// of the notify key.
+func notifyInstance(name, extra string) string {
+	return "\n[[instance]]\nname = \"" + name + "\"\n" + extra + "[[instance.retriever]]\nref = \"home\"\n[[instance.provider]]\nref = \"main\"\n"
+}
+
+func TestNotify(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+
+	cfg := mustParse(t, header+`
+[notify.alerts]
+type    = "redis"
+address = "${REDIS_URL}"
+`+notifyInstance("a", ""))
+
+	if len(cfg.Notify) != 1 {
+		t.Fatalf("Notify = %+v, want one entry", cfg.Notify)
+	}
+
+	alerts := cfg.Notify["alerts"]
+	if alerts.Type != "redis" || alerts.Ref != "alerts" {
+		t.Errorf("Notify[alerts] = %+v, want type redis and ref alerts", alerts)
+	}
+	if got := alerts.Params["address"]; got != "redis://localhost:6379/0" {
+		t.Errorf(`Notify[alerts].Params["address"] = %v, want the expanded URL`, got)
+	}
+}
+
+// An instance that does not say gets every notifier the file defines, so the
+// files written when all of them applied to all instances keep their meaning.
+func TestInstanceWithoutNotifyGetsEveryDefinition(t *testing.T) {
+	cfg := mustParse(t, header+`
+[notify.one]
+type = "redis"
+
+[notify.two]
+type = "redis"
+`+notifyInstance("a", ""))
+
+	if got, want := cfg.Instances[0].Notify, []string{"one", "two"}; !slices.Equal(got, want) {
+		t.Errorf("Instances[0].Notify = %q, want %q", got, want)
+	}
+}
+
+func TestInstanceListsItsOwnNotifiers(t *testing.T) {
+	cfg := mustParse(t, header+`
+[notify.one]
+type = "redis"
+
+[notify.two]
+type = "redis"
+
+[notify.three]
+type = "mqtt"
+`+notifyInstance("a", `notify = ["two"]
+`)+notifyInstance("b", `notify = ["one", "three"]
+`)+notifyInstance("c", `notify = []
+`))
+
+	for i, want := range [][]string{{"two"}, {"one", "three"}, {}} {
+		if got := cfg.Instances[i].Notify; !slices.Equal(got, want) {
+			t.Errorf("Instances[%d].Notify = %q, want %q", i, got, want)
+		}
+	}
+
+	if len(cfg.Notify) != 3 {
+		t.Errorf("Notify has %d entries, want the 3 that instances use", len(cfg.Notify))
+	}
+}
+
+// Only the definitions an instance publishes to are resolved, so the
+// environment of one that is left out need not be set.
+func TestUnusedNotifierIsNotResolved(t *testing.T) {
+	t.Setenv("USED_URL", "redis://used")
+
+	cfg := mustParse(t, header+`
+[notify.used]
+type    = "redis"
+address = "${USED_URL}"
+
+[notify.unused]
+type    = "redis"
+address = "${UNSET_NOTIFY_URL}"
+`+notifyInstance("a", `notify = ["used"]
+`))
+
+	if _, ok := cfg.Notify["unused"]; ok || len(cfg.Notify) != 1 {
+		t.Errorf("Notify = %+v, want only the definition that is used", cfg.Notify)
+	}
+}
+
+func TestNotifyAbsentByDefault(t *testing.T) {
+	cfg := loadFull(t)
+
+	if len(cfg.Notify) != 0 {
+		t.Errorf("Notify = %+v, want none: full.toml defines no notifier", cfg.Notify)
+	}
+	if len(cfg.Instances[0].Notify) != 0 {
+		t.Errorf("Instances[0].Notify = %q, want none", cfg.Instances[0].Notify)
+	}
+}
+
+func TestNotifyRequiresAType(t *testing.T) {
+	got := parseError(t, header+`
+[notify.alerts]
+address = "redis://localhost:6379/0"
+`+notifyInstance("a", ""))
+
+	if !strings.Contains(got, `notify "alerts": "type" is required and must be a string`) {
+		t.Errorf("error = %q, want it to name the definition and complain about the missing type", got)
+	}
+}
+
+// The array of tables the notifiers were first written as is rejected with a
+// pointer to the new shape, rather than read leniently.
+func TestNotifyMustBeATableOfDefinitions(t *testing.T) {
+	got := parseError(t, header+`
+[[notify]]
+type = "redis"
+`+notifyInstance("a", ""))
+
+	if !strings.Contains(got, `"notify" must be a table of named definitions: [notify.<name>]`) {
+		t.Errorf("error = %q, want it to complain about notify's shape", got)
+	}
+}
+
+func TestInstanceNotifyErrors(t *testing.T) {
+	tests := map[string]struct {
+		extra string
+		want  string
+	}{
+		"undefined": {`notify = ["nope"]
+`, `instance "a": notify "nope" is not defined (defined: alerts)`},
+		"repeated": {`notify = ["alerts", "alerts"]
+`, `instance "a": notify "alerts" is listed twice`},
+		"not a list": {`notify = "alerts"
+`, `instance "a": "notify" must be an array of names`},
+		"not names": {`notify = [1]
+`, `instance "a": "notify" must be an array of names`},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := parseError(t, header+`
+[notify.alerts]
+type = "redis"
+`+notifyInstance("a", tc.extra))
+
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("error = %q, want it to contain %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInstanceNotifyWithNoDefinitionsSaysSo(t *testing.T) {
+	got := parseError(t, header+notifyInstance("a", `notify = ["alerts"]
+`))
+
+	if !strings.Contains(got, `notify "alerts" is not defined (no notifiers are defined)`) {
+		t.Errorf("error = %q, want it to say no notifier is defined", got)
+	}
+}
+
+// A notifier definition takes no ref: it is not overridden per instance, since
+// an instance only names it and shares its connection.
+func TestNotifyDefinitionRejectsARef(t *testing.T) {
+	got := parseError(t, header+`
+[notify.alerts]
+type = "redis"
+ref  = "other"
+`+notifyInstance("a", ""))
+
+	if !strings.Contains(got, `notify "alerts": "ref" is only valid in an instance`) {
+		t.Errorf("error = %q, want it to reject ref", got)
 	}
 }
 

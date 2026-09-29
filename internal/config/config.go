@@ -1,12 +1,13 @@
-// Package config parses the TOML configuration: named retriever and provider
-// definitions, instances and their polling intervals.
+// Package config parses the TOML configuration: named retriever, provider and
+// notifier definitions, instances and their polling intervals.
 //
-// A file holds pools of named definitions ([retriever.<name>] and
-// [provider.<name>], each with a "type") and a list of [[instance]] tables.
-// An instance refers to definitions by "ref" and may override any of their
-// parameters. Parse resolves every reference, so the result holds, per
-// instance, the plugin type and the final parameters ready for the plugin
-// registry.
+// A file holds pools of named definitions ([retriever.<name>],
+// [provider.<name>] and [notify.<name>], each with a "type") and a list of
+// [[instance]] tables. An instance refers to retriever and provider
+// definitions by "ref" and may override any of their parameters, and lists the
+// notifiers it publishes to by name. Parse resolves every reference, so the
+// result holds, per instance, the plugin type and the final parameters ready
+// for the plugin registry.
 package config
 
 import (
@@ -43,6 +44,14 @@ type Config struct {
 	// Interval is the polling interval instances fall back to.
 	Interval  time.Duration
 	Instances []Instance
+	// Notify holds the notifiers, by definition name, that at least one
+	// instance publishes to: the brokers (for example Redis) that receive an
+	// instance's success/failure transitions. A build that has no notifier
+	// rejects a config that uses one, the same way an unsupported PingURL is
+	// rejected. Each entry is one broker connection, shared by every instance
+	// that lists it; two of them may be of one type, for example two Redis
+	// servers. A definition no instance uses is not resolved.
+	Notify map[string]Plugin
 }
 
 // Instance ties one or more retrievers to one or more providers. Retrievers
@@ -55,6 +64,17 @@ type Instance struct {
 	Interval   time.Duration
 	Retrievers []Plugin
 	Providers  []Plugin
+	// PingURL, when set, is called on every completed cycle of this instance
+	// by a build that supports monitoring hooks (the ping build tag); a build
+	// that does not rejects a config that sets it rather than silently
+	// ignoring it. Environment and file references ("${NAME}", "${file:PATH}")
+	// are expanded, same as a plugin parameter, since the URL commonly embeds
+	// a secret token (Healthchecks.io, Uptime Kuma).
+	PingURL string
+	// Notify names the notifiers this instance publishes to, each a key of
+	// Config.Notify. An instance that does not say gets all the notifiers the
+	// file defines, and one that says "notify = []" has none.
+	Notify []string
 }
 
 // Plugin is a plugin type together with its final parameters: the named
@@ -82,8 +102,12 @@ func (p Plugin) Name() string {
 type rawInstance struct {
 	Name       string
 	Interval   *string
+	PingURL    *string
 	Retrievers []map[string]any
 	Providers  []map[string]any
+	// Notify is nil when the instance does not set "notify", so that an empty
+	// list can be told from a missing one.
+	Notify []string
 }
 
 // Load reads and parses the config file at path. Problems are listed under a
@@ -110,7 +134,7 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, err
 	}
 
-	retrievers, providers, tables, shapeErrs := checkShape(doc)
+	retrievers, providers, notifiers, tables, shapeErrs := checkShape(doc)
 	if len(shapeErrs) > 0 {
 		return Config{}, errors.Join(shapeErrs...)
 	}
@@ -132,6 +156,9 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	cfg := Config{Interval: global}
+
+	used := make(map[string]bool)
+
 	seen := make(map[string]bool, len(tables))
 
 	for i, table := range tables {
@@ -143,13 +170,34 @@ func Parse(data []byte) (Config, error) {
 		}
 		seen[in.Name] = true
 
-		resolved, resolveErrs := resolveInstance(in, retrievers, providers, global)
+		resolved, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, global)
 		instErrs = append(instErrs, resolveErrs...)
+
+		for _, name := range resolved.Notify {
+			used[name] = true
+		}
 
 		for _, e := range instErrs {
 			errs = append(errs, fmt.Errorf("%s: %w", label, e))
 		}
 		cfg.Instances = append(cfg.Instances, resolved)
+	}
+
+	// Only what an instance publishes to is resolved: the environment
+	// references of a definition nobody uses need not be set.
+	for _, name := range slices.Sorted(maps.Keys(used)) {
+		if !hasKey(notifiers, name) {
+			continue
+		}
+
+		notify, notifyErrs := resolvePluginByRef("notify", "notify", notifiers, name, nil)
+		errs = append(errs, notifyErrs...)
+
+		if cfg.Notify == nil {
+			cfg.Notify = make(map[string]Plugin, len(used))
+		}
+
+		cfg.Notify[name] = notify
 	}
 
 	if len(errs) > 0 {
@@ -191,10 +239,10 @@ func resolvePath(flagValue, envValue string, defaults []string) (string, error) 
 }
 
 // checkShape verifies the top-level layout of the document: known keys only,
-// pools of named tables, an array of instance tables. Definitions are checked
-// for a type.
-func checkShape(doc map[string]any) (retrievers, providers map[string]map[string]any, instances []map[string]any, errs []error) {
-	errs = unknownKeys(doc, "interval", "retriever", "provider", "instance")
+// pools of named tables, and an array of instance tables. Definitions are
+// checked for a type.
+func checkShape(doc map[string]any) (retrievers, providers, notifiers map[string]map[string]any, instances []map[string]any, errs []error) {
+	errs = unknownKeys(doc, "interval", "retriever", "provider", "instance", "notify")
 
 	var poolErrs []error
 
@@ -204,13 +252,16 @@ func checkShape(doc map[string]any) (retrievers, providers map[string]map[string
 	providers, poolErrs = checkPool("provider", doc["provider"])
 	errs = append(errs, poolErrs...)
 
+	notifiers, poolErrs = checkPool("notify", doc["notify"])
+	errs = append(errs, poolErrs...)
+
 	if value, ok := doc["instance"]; ok {
 		if instances, ok = asTables(value); !ok {
 			errs = append(errs, errors.New(`"instance" must be an array of tables: [[instance]]`))
 		}
 	}
 
-	return retrievers, providers, instances, errs
+	return retrievers, providers, notifiers, instances, errs
 }
 
 // checkPool verifies that a pool is a table of tables and that every
@@ -253,7 +304,7 @@ func checkPool(kind string, value any) (map[string]map[string]any, []error) {
 // checkInstance verifies the layout of one instance table: known keys and
 // value types.
 func checkInstance(table map[string]any) (rawInstance, []error) {
-	errs := unknownKeys(table, "name", "interval", "retriever", "provider")
+	errs := unknownKeys(table, "name", "interval", "ping_url", "retriever", "provider", "notify")
 
 	var in rawInstance
 
@@ -272,6 +323,15 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 		}
 	}
 
+	if value, ok := table["ping_url"]; ok {
+		text, isString := value.(string)
+		if !isString {
+			errs = append(errs, errors.New(`"ping_url" must be a string`))
+		} else {
+			in.PingURL = &text
+		}
+	}
+
 	if value, ok := table["retriever"]; ok {
 		if in.Retrievers, ok = asTables(value); !ok {
 			errs = append(errs, errors.New(`"retriever" must be an array of tables: [[instance.retriever]]`))
@@ -284,11 +344,17 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 		}
 	}
 
+	if value, ok := table["notify"]; ok {
+		if in.Notify, ok = asStrings(value); !ok {
+			errs = append(errs, errors.New(`"notify" must be an array of names of [notify.<name>] definitions, for example ["alerts"]`))
+		}
+	}
+
 	return in, errs
 }
 
 // resolveInstance validates one instance and resolves its references.
-func resolveInstance(in rawInstance, retrievers, providers map[string]map[string]any, global time.Duration) (Instance, []error) {
+func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, global time.Duration) (Instance, []error) {
 	inst := Instance{Name: in.Name, Interval: global}
 
 	var errs []error
@@ -303,6 +369,15 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 			errs = append(errs, err)
 		} else {
 			inst.Interval = interval
+		}
+	}
+
+	if in.PingURL != nil {
+		pingURL, err := expandString(*in.PingURL)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%q: %w", "ping_url", err))
+		} else {
+			inst.PingURL = pingURL
 		}
 	}
 
@@ -328,7 +403,49 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 
 	errs = append(errs, duplicateProviders(inst.Providers)...)
 
+	notify, notifyErrs := resolveNotify(in.Notify, notifiers)
+	errs = append(errs, notifyErrs...)
+	inst.Notify = notify
+
 	return inst, errs
+}
+
+// resolveNotify picks the notifiers of an instance from the names it lists:
+// every one it names must be defined, and none twice. An instance that lists
+// none at all, as opposed to an empty list, publishes to every definition.
+func resolveNotify(names []string, notifiers map[string]map[string]any) ([]string, []error) {
+	if names == nil {
+		return slices.Sorted(maps.Keys(notifiers)), nil
+	}
+
+	var errs []error
+
+	for i, name := range names {
+		switch {
+		case !hasKey(notifiers, name):
+			errs = append(errs, fmt.Errorf("notify %q is not defined (%s)", name, definedNotifiers(notifiers)))
+		case slices.Contains(names[:i], name):
+			errs = append(errs, fmt.Errorf("notify %q is listed twice", name))
+		}
+	}
+
+	return names, errs
+}
+
+func hasKey(pool map[string]map[string]any, name string) bool {
+	_, ok := pool[name]
+
+	return ok
+}
+
+// definedNotifiers renders the names of the notifier definitions for an error
+// message.
+func definedNotifiers(pool map[string]map[string]any) string {
+	if len(pool) == 0 {
+		return "no notifiers are defined"
+	}
+
+	return "defined: " + strings.Join(slices.Sorted(maps.Keys(pool)), ", ")
 }
 
 // parseInterval parses a duration such as "30s" or "5m" of at least MinInterval.
@@ -384,6 +501,25 @@ func asTables(value any) ([]map[string]any, bool) {
 	default:
 		return nil, false
 	}
+}
+
+// asStrings converts an array of strings. The decoder yields []any for an
+// array, and an empty one must stay an empty list, not become nil.
+func asStrings(value any) ([]string, bool) {
+	items, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+
+	names := make([]string, len(items))
+
+	for i, item := range items {
+		if names[i], ok = item.(string); !ok {
+			return nil, false
+		}
+	}
+
+	return names, true
 }
 
 func instanceLabel(index int, name string) string {

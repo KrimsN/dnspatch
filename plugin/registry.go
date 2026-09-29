@@ -15,6 +15,28 @@ type providerFactory func(params map[string]any) (Provider, error)
 // retrieverFactory builds a Retriever from raw configuration parameters.
 type retrieverFactory func(params map[string]any) (Retriever, error)
 
+// notifierFactory builds a Notifier from raw configuration parameters.
+type notifierFactory func(params map[string]any) (Notifier, error)
+
+// Kind is one of the kinds of plugin a Registry holds.
+type Kind string
+
+// The kinds of plugin. The values appear in error messages.
+const (
+	KindProvider  Kind = "provider"
+	KindRetriever Kind = "retriever"
+	KindNotifier  Kind = "notifier"
+)
+
+// Known is a plugin that exists in the source tree, whether or not this build
+// has it compiled in. Hint says how to get it, and is shown in place of a bare
+// "unknown type" when a configuration names it.
+type Known struct {
+	Kind Kind
+	Name string
+	Hint string
+}
+
 // entry[F] is one registered plugin: its factory and the type of its
 // configuration struct, kept for documentation generation.
 type entry[F any] struct {
@@ -29,6 +51,8 @@ type Registry struct {
 	mu         sync.RWMutex
 	providers  map[string]entry[providerFactory]
 	retrievers map[string]entry[retrieverFactory]
+	notifiers  map[string]entry[notifierFactory]
+	known      []Known
 }
 
 // Default is the package-level registry that built-in plugins register into
@@ -57,6 +81,13 @@ func RegisterProvider[C any](name string, build func(cfg C) (Provider, error)) {
 // RegisterRetriever registers a retriever type in Default. See RegisterProvider.
 func RegisterRetriever[C any](name string, build func(cfg C) (Retriever, error)) {
 	RegisterRetrieverIn(Default, name, build)
+}
+
+// RegisterNotifier registers a notifier type in Default. See RegisterProvider.
+// The configuration struct C must embed NotifierCommon, which supplies the
+// topic_prefix parameter every notifier takes.
+func RegisterNotifier[C TopicNamer](name string, build func(cfg C) (Notifier, error)) {
+	RegisterNotifierIn(Default, name, build)
 }
 
 // RegisterProviderIn registers a provider type in the given registry.
@@ -89,6 +120,28 @@ func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Ret
 	}
 
 	register(&r.mu, &r.retrievers, "retriever", name, entry[retrieverFactory]{factory: factory, configType: reflect.TypeFor[C]()})
+}
+
+// RegisterNotifierIn registers a notifier type in the given registry.
+// See RegisterNotifier.
+func RegisterNotifierIn[C TopicNamer](r *Registry, name string, build func(cfg C) (Notifier, error)) {
+	checkRegistration[C]("notifier", name, build == nil)
+
+	factory := func(params map[string]any) (Notifier, error) {
+		cfg, err := Decode[C](params)
+		if err != nil {
+			return nil, err
+		}
+
+		n, err := build(cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		return prefixed{Notifier: n, cfg: cfg}, nil
+	}
+
+	register(&r.mu, &r.notifiers, "notifier", name, entry[notifierFactory]{factory: factory, configType: reflect.TypeFor[C]()})
 }
 
 // checkRegistration rejects registration arguments that cannot work. C is the
@@ -132,14 +185,10 @@ func register[F any](mu *sync.RWMutex, entries *map[string]entry[F], kind, name 
 func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, error) {
 	r.mu.RLock()
 	found, ok := r.providers[name]
-	var names []string
-	if !ok {
-		names = keysOf(r.providers)
-	}
 	r.mu.RUnlock()
 
 	if !ok {
-		return nil, unknownTypeError("provider", name, names)
+		return nil, r.unknownType(KindProvider, name)
 	}
 
 	prv, err := found.factory(params)
@@ -155,14 +204,10 @@ func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, 
 func (r *Registry) BuildRetriever(name string, params map[string]any) (Retriever, error) {
 	r.mu.RLock()
 	found, ok := r.retrievers[name]
-	var names []string
-	if !ok {
-		names = keysOf(r.retrievers)
-	}
 	r.mu.RUnlock()
 
 	if !ok {
-		return nil, unknownTypeError("retriever", name, names)
+		return nil, r.unknownType(KindRetriever, name)
 	}
 
 	ret, err := found.factory(params)
@@ -171,6 +216,64 @@ func (r *Registry) BuildRetriever(name string, params map[string]any) (Retriever
 	}
 
 	return ret, nil
+}
+
+// BuildNotifier builds the notifier registered under name, decoding params
+// into its configuration struct. What it publishes goes under the topic the
+// configuration's topic_prefix gives.
+func (r *Registry) BuildNotifier(name string, params map[string]any) (Notifier, error) {
+	r.mu.RLock()
+	found, ok := r.notifiers[name]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, r.unknownType(KindNotifier, name)
+	}
+
+	n, err := found.factory(params)
+	if err != nil {
+		return nil, fmt.Errorf("notifier %q: %w", name, err)
+	}
+
+	return n, nil
+}
+
+// Declare records that a plugin exists in the source tree, so that a
+// configuration naming one this build lacks gets hint instead of a bare
+// "unknown type". Declaring a plugin does not register it.
+func (r *Registry) Declare(kind Kind, name, hint string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.known = append(r.known, Known{Kind: kind, Name: name, Hint: hint})
+}
+
+// Known lists every declared plugin, in the order they were declared.
+func (r *Registry) Known() []Known {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return slices.Clone(r.known)
+}
+
+// Registered reports whether a plugin of the kind is registered under name.
+func (r *Registry) Registered(kind Kind, name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	switch kind {
+	case KindProvider:
+		_, ok := r.providers[name]
+		return ok
+	case KindRetriever:
+		_, ok := r.retrievers[name]
+		return ok
+	case KindNotifier:
+		_, ok := r.notifiers[name]
+		return ok
+	default:
+		return false
+	}
 }
 
 // ProviderConfigTypes returns the configuration struct type of every
@@ -192,6 +295,15 @@ func (r *Registry) RetrieverConfigTypes() map[string]reflect.Type {
 	return configTypesOf(r.retrievers)
 }
 
+// NotifierConfigTypes returns the configuration struct type of every
+// registered notifier, keyed by type name.
+func (r *Registry) NotifierConfigTypes() map[string]reflect.Type {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return configTypesOf(r.notifiers)
+}
+
 // configTypesOf extracts the configuration types of a registry map.
 func configTypesOf[F any](entries map[string]entry[F]) map[string]reflect.Type {
 	types := make(map[string]reflect.Type, len(entries))
@@ -207,9 +319,29 @@ func keysOf[F any](entries map[string]entry[F]) []string {
 	return slices.Sorted(maps.Keys(entries))
 }
 
-// unknownTypeError explains an unregistered type name and lists the names
-// that are registered.
-func unknownTypeError(kind, name string, registered []string) error {
+// unknownType explains an unregistered type name. A plugin that is declared
+// but not compiled into this build says how to get it; otherwise the names that
+// are registered are listed, so that a typo is easy to spot.
+func (r *Registry) unknownType(kind Kind, name string) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var registered []string
+	switch kind {
+	case KindProvider:
+		registered = keysOf(r.providers)
+	case KindRetriever:
+		registered = keysOf(r.retrievers)
+	case KindNotifier:
+		registered = keysOf(r.notifiers)
+	}
+
+	for _, k := range r.known {
+		if k.Kind == kind && k.Name == name {
+			return fmt.Errorf("%s type %q is not compiled into this build: %s", kind, name, k.Hint)
+		}
+	}
+
 	if len(registered) == 0 {
 		return fmt.Errorf("unknown %s type %q (no %s types are registered)", kind, name, kind)
 	}

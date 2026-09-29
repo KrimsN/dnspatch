@@ -440,6 +440,34 @@ key = "${YANDEX_CLOUD_KEY}"
 # proxy = "socks5://user:pass@203.0.113.5:1080"
 
 # ----------------------------------------------------------------------------
+# Notifiers: full build only (the -full image or binary).
+# ----------------------------------------------------------------------------
+
+# Publishes a JSON event to a message broker whenever an instance flips between
+# success and failure, to the channel <topic_prefix><instance>. The lightweight
+# build rejects a config whose instances use a notifier. See README.md, section
+# Monitoring.
+#
+# Each [notify.<name>] definition is one broker connection, shared by the
+# instances that publish to it. Define several to reach several brokers, of
+# different types or of one type with different addresses, and name them in the
+# notify list of an instance.
+#
+# Each definition below is a template for one notifier: uncomment it, together
+# with the parameters you set and at least the ones marked Required.
+
+# [notify.redis]
+# type = "redis"
+
+# A redis:// or rediss:// URL, as accepted by go-redis: it carries the host,
+# an optional password and the database index. Required.
+# address = "${REDIS_URL}"
+
+# Prepended to the instance name to form the channel, topic or routing key an
+# event is published under
+# topic_prefix = "dnspatch.events."
+
+# ----------------------------------------------------------------------------
 # Instances: each one ties one or two retrievers to the providers it updates.
 # ----------------------------------------------------------------------------
 
@@ -447,6 +475,10 @@ key = "${YANDEX_CLOUD_KEY}"
 # set next to a ref override the definition, for example another zone.
 [[instance]]
 name = "home"
+# The notifiers this instance publishes to, by the name of their [notify.<name>]
+# definition. Without it an instance publishes to every notifier you define;
+# an empty list, [], publishes to none.
+# notify = ["redis"]
 
 [[instance.retriever]]
 ref = "2ip"

@@ -157,6 +157,7 @@ func TestRenderOutput(t *testing.T) {
 	got, err := render(
 		map[string]reflect.Type{"beta": reflect.TypeFor[betaConfig]()},
 		map[string]reflect.Type{"alpha": reflect.TypeFor[alphaConfig](), "beta": reflect.TypeFor[struct{}]()},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +169,7 @@ func TestRenderOutput(t *testing.T) {
 		"\n" +
 		"This file is generated from plugin struct tags, so manual edits are\n" +
 		"overwritten. After changing a plugin configuration, run `go generate ./...`.\n" +
-		"For a configuration to start from, copy [config.toml.example](../config.toml.example).\n" +
+		"For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml.example).\n" +
 		"\n" +
 		"## Contents\n" +
 		"\n" +
@@ -177,6 +178,7 @@ func TestRenderOutput(t *testing.T) {
 		"- [Providers](#providers)\n" +
 		"  - [alpha](#provider-alpha)\n" +
 		"  - [beta](#provider-beta)\n" +
+		"- [Notifiers](#notifiers)\n" +
 		"\n" +
 		"## Retrievers\n" +
 		"\n" +
@@ -198,7 +200,11 @@ func TestRenderOutput(t *testing.T) {
 		"\n" +
 		"### Provider `beta`\n" +
 		"\n" +
-		"No parameters.\n"
+		"No parameters.\n" +
+		"\n" +
+		"## Notifiers\n" +
+		"\n" +
+		"No notifiers are registered.\n"
 
 	if string(got) != want {
 		t.Errorf("render:\n%s\nwant:\n%s", got, want)
@@ -212,7 +218,7 @@ func TestRenderMarksRequiredParametersOfOptionalTables(t *testing.T) {
 		} `toml:"extra"`
 	}
 
-	got, err := render(nil, map[string]reflect.Type{"p": reflect.TypeFor[config]()})
+	got, err := render(nil, map[string]reflect.Type{"p": reflect.TypeFor[config]()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +229,7 @@ func TestRenderMarksRequiredParametersOfOptionalTables(t *testing.T) {
 }
 
 func TestRenderWithoutPlugins(t *testing.T) {
-	got, err := render(nil, nil)
+	got, err := render(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,13 +248,13 @@ func TestRenderIsRepeatable(t *testing.T) {
 		plugins[name] = reflect.TypeFor[alphaConfig]()
 	}
 
-	first, err := render(plugins, plugins)
+	first, err := render(plugins, plugins, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for range 50 {
-		again, err := render(plugins, plugins)
+		again, err := render(plugins, plugins, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,7 +270,7 @@ func TestRenderIsRepeatable(t *testing.T) {
 }
 
 func TestRenderNamesTheBadPlugin(t *testing.T) {
-	_, err := render(nil, map[string]reflect.Type{"broken": reflect.TypeFor[string]()})
+	_, err := render(nil, map[string]reflect.Type{"broken": reflect.TypeFor[string]()}, nil)
 	if err == nil || !strings.Contains(err.Error(), `provider "broken"`) {
 		t.Errorf("error %v does not name the plugin", err)
 	}
@@ -272,9 +278,23 @@ func TestRenderNamesTheBadPlugin(t *testing.T) {
 
 func TestRunWritesBothFilesAndCreatesTheirDirectories(t *testing.T) {
 	dir := t.TempDir()
-	docs, example := filepath.Join(dir, "docs", "PARAMETERS.md"), filepath.Join(dir, "etc", "config.toml.example")
+	docs, example := filepath.Join(dir, "docs", "PARAMETERS.md"), filepath.Join(dir, "etc", "dnspatch.toml.example")
 
-	if err := run(docs, example); err != nil {
+	err := run(docs, example)
+	if incomplete := checkComplete(plugin.Default); incomplete != nil {
+		// A build without some plugins must refuse to write, and write nothing.
+		if err == nil {
+			t.Fatal("run succeeded in a build that lacks plugins")
+		}
+
+		if _, statErr := os.Stat(docs); statErr == nil {
+			t.Error("run wrote the reference although it failed")
+		}
+
+		return
+	}
+
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,17 +320,24 @@ func TestRunWritesBothFilesAndCreatesTheirDirectories(t *testing.T) {
 // The check that CONTRIBUTING.md asks a contributor to keep green: a change to
 // a plugin configuration without go generate fails the ordinary test run, in
 // CI as well as locally.
+//
+// The files document every plugin, so the check needs a build that has them
+// all: without notify_all it is skipped here, and CI runs it with the tag.
 func TestCommittedFilesAreCurrent(t *testing.T) {
-	retrievers, providers := plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes()
+	if err := checkComplete(plugin.Default); err != nil {
+		t.Skip(err)
+	}
 
-	files := map[string]func(map[string]reflect.Type, map[string]reflect.Type) ([]byte, error){
-		"docs/PARAMETERS.md":  render,
-		"config.toml.example": renderExample,
+	retrievers, providers, notifiers := plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes(), plugin.Default.NotifierConfigTypes()
+
+	files := map[string]func(retrievers, providers, notifiers map[string]reflect.Type) ([]byte, error){
+		"docs/PARAMETERS.md":    render,
+		"dnspatch.toml.example": renderExample,
 	}
 
 	for name, generate := range files {
 		t.Run(name, func(t *testing.T) {
-			want, err := generate(retrievers, providers)
+			want, err := generate(retrievers, providers, notifiers)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -324,5 +351,41 @@ func TestCommittedFilesAreCurrent(t *testing.T) {
 				t.Errorf("%s is out of date; run go generate ./... and commit the result", name)
 			}
 		})
+	}
+}
+
+func TestRenderListsNotifiers(t *testing.T) {
+	got, err := render(nil, nil, map[string]reflect.Type{"broker": reflect.TypeFor[alphaConfig]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"- [Notifiers](#notifiers)\n  - [broker](#notifier-broker)\n", "## Notifiers\n\n### Notifier `broker`\n"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("output lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestCheckCompleteNamesWhatIsMissing(t *testing.T) {
+	r := plugin.NewRegistry()
+
+	if err := checkComplete(r); err == nil {
+		t.Error("checkComplete accepted a registry that declares nothing")
+	}
+
+	r.Declare(plugin.KindProvider, "here", "")
+	r.Declare(plugin.KindNotifier, "gone", "")
+	plugin.RegisterProviderIn(r, "here", func(struct{}) (plugin.Provider, error) { return nil, nil })
+
+	err := checkComplete(r)
+	if err == nil || !strings.Contains(err.Error(), "notifier gone") || strings.Contains(err.Error(), "here") {
+		t.Errorf("checkComplete error = %v, want it to name only the notifier gone", err)
+	}
+
+	plugin.RegisterNotifierIn(r, "gone", func(struct{ plugin.NotifierCommon }) (plugin.Notifier, error) { return nil, nil })
+
+	if err := checkComplete(r); err != nil {
+		t.Errorf("checkComplete of a complete registry = %v", err)
 	}
 }

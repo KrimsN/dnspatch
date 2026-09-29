@@ -1,193 +1,56 @@
 // Command dnspatch is a dynamic DNS daemon: it watches the public IP address
 // and patches DNS records when it changes.
+//
+// A plain "go build" gives the lightweight build: every retriever and provider,
+// but no monitoring hooks and no notifiers, so a config that sets ping_url or
+// publishes to a [notify.<name>] notifier is rejected. What goes into a build
+// is chosen with build tags:
+//
+//	ping           the ping_url hook (Healthchecks.io, Uptime Kuma push)
+//	notify_all     every notifier backend
+//	dnspatch_none  no retriever and no provider, except the ones named below
+//	providers_all  every provider, with dnspatch_none
+//	retrievers_all every retriever, with dnspatch_none
+//	<plugin>       one plugin, by its type name: redis, cloudflare, ipify, ...
+//
+// The tag of a plugin comes from plugins/all, which cmd/genplugins generates,
+// and README.md has the table. The release binaries and images come in two
+// flavours: this lightweight one and the -full one, built with -tags
+// "ping,notify_all".
 package main
 
 import (
 	"context"
-	"errors"
-	"flag"
-	"fmt"
-	"io"
-	"log/slog"
 	"os"
-	"runtime/debug"
-	"strings"
 
-	"github.com/KrimsN/dnspatch/internal/config"
+	"github.com/KrimsN/dnspatch/internal/app"
+	"github.com/KrimsN/dnspatch/internal/hooks/notify"
 	"github.com/KrimsN/dnspatch/internal/runner"
 	"github.com/KrimsN/dnspatch/plugin"
 	_ "github.com/KrimsN/dnspatch/plugins/all"
 )
 
-// Exit codes. A configuration problem is told apart from a runtime failure
-// so that service managers and scripts can react to them differently.
-const (
-	exitOK int = iota
-	exitFailure
-	exitConfig
-)
-
-// envLogLevel names the environment variable that holds the log level; the
-// --log-level flag takes precedence over it.
-const envLogLevel = "DNSPATCH_LOG_LEVEL"
-
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
+
+// hooks builds the per-instance monitoring hooks. It stays nil unless a build
+// tag file sets it, which is what makes the build reject ping_url.
+var hooks app.HookBuilder
+
+func options() app.Options {
+	return app.Options{
+		Registry: plugin.Default,
+		Version:  version,
+		Hooks:    hooks,
+		// Always set: with no backend compiled in, the registry has nothing to
+		// build and says so, naming the tag that brings the backend asked for.
+		Notify: notify.BuildHook,
+	}
+}
 
 func main() {
 	ctx, stop := runner.SignalContext(context.Background())
 	defer stop()
 
-	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr, plugin.Default))
-}
-
-// run is main without the process-wide parts, so that tests can drive it.
-func run(ctx context.Context, args []string, stdout, stderr io.Writer, registry *plugin.Registry) int {
-	flags := flag.NewFlagSet("dnspatch", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-
-	configPath := flags.String("config", "", "path to the config file (default: $"+config.EnvPath+", ./dnspatch.toml, /etc/dnspatch/config.toml)")
-	logLevel := flags.String("log-level", "", "log level: debug, info, warn or error (default: $"+envLogLevel+", then info)")
-	showVersion := flags.Bool("version", false, "print the version and exit")
-	checkConfig := flags.Bool("check-config", false, "validate the config and exit without starting the daemon")
-
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return exitOK
-		}
-		return exitConfig
-	}
-
-	if *showVersion {
-		_, _ = fmt.Fprintln(stdout, "dnspatch", buildVersion())
-		return exitOK
-	}
-
-	level, err := parseLogLevel(*logLevel, os.Getenv(envLogLevel))
-	if err != nil {
-		return fail(stderr, err, exitConfig)
-	}
-
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-
-	path, err := config.ResolvePath(*configPath)
-	if err != nil {
-		return fail(stderr, err, exitConfig)
-	}
-
-	cfg, err := config.Load(path)
-	if err != nil {
-		return fail(stderr, err, exitConfig)
-	}
-
-	instances, err := buildInstances(cfg, registry)
-	if err != nil {
-		return fail(stderr, err, exitConfig)
-	}
-
-	if err := runner.Validate(instances); err != nil {
-		return fail(stderr, err, exitConfig)
-	}
-
-	if *checkConfig {
-		printConfigSummary(stdout, path, cfg, instances, registry)
-		return exitOK
-	}
-
-	logger.Info("starting", "version", buildVersion(), "config", path, "instances", len(instances))
-
-	if err := runner.Run(ctx, instances, runner.Options{Logger: logger}); err != nil {
-		return fail(stderr, err, exitFailure)
-	}
-
-	logger.Info("stopped")
-
-	return exitOK
-}
-
-// parseLogLevel picks the log level: the flag value if set, otherwise the
-// environment value, otherwise info.
-func parseLogLevel(flagValue, envValue string) (slog.Level, error) {
-	name, source := flagValue, "--log-level"
-	if name == "" {
-		name, source = envValue, envLogLevel
-	}
-	if name == "" {
-		return slog.LevelInfo, nil
-	}
-
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(name)); err != nil {
-		return 0, fmt.Errorf("%s: %q is not a log level, use debug, info, warn or error", source, name)
-	}
-
-	return level, nil
-}
-
-// buildInstances turns the parsed configuration into runnable instances by
-// building every plugin through the registry. All problems are reported
-// together, each naming the instance it belongs to.
-func buildInstances(cfg config.Config, registry *plugin.Registry) ([]runner.Instance, error) {
-	var errs []error
-
-	instances := make([]runner.Instance, 0, len(cfg.Instances))
-
-	for _, in := range cfg.Instances {
-		built := runner.Instance{Name: in.Name, Interval: in.Interval}
-
-		for _, r := range in.Retrievers {
-			retriever, err := registry.BuildRetriever(r.Type, r.Params)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
-				continue
-			}
-
-			family, _ := r.Params["family"].(string)
-			built.Retrievers = append(built.Retrievers, runner.NamedRetriever{
-				Name:      r.Name(),
-				Retriever: retriever,
-				Family:    strings.ToLower(family),
-			})
-		}
-
-		for _, p := range in.Providers {
-			provider, err := registry.BuildProvider(p.Type, p.Params)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
-				continue
-			}
-
-			built.Providers = append(built.Providers, runner.NamedProvider{Name: p.Name(), Provider: provider})
-		}
-
-		instances = append(instances, built)
-	}
-
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-
-	return instances, nil
-}
-
-// fail reports a problem unambiguously as an error, prefixed apart from
-// dnspatch's other stderr output (a plain "dnspatch: <message>" that a first-
-// time user has no successful run to compare against), and returns code.
-func fail(stderr io.Writer, err error, code int) int {
-	_, _ = fmt.Fprintln(stderr, "dnspatch: error:", err)
-	return code
-}
-
-// buildVersion reports the version set at build time, falling back to the
-// module version recorded by `go install`.
-func buildVersion() string {
-	if version != "dev" {
-		return version
-	}
-
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		return info.Main.Version
-	}
-
-	return version
+	os.Exit(app.Run(ctx, os.Args[1:], os.Stdout, os.Stderr, options()))
 }

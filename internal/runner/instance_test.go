@@ -544,6 +544,49 @@ func TestWarnShortInterval(t *testing.T) {
 	}
 }
 
+func TestRunHooksNotifiesOnSuccessAndFailure(t *testing.T) {
+	provider := newFakeProvider()
+	hook := &fakeHook{}
+	in := newInstance(Instance{
+		Name:       "homelab",
+		Interval:   testInterval,
+		Retrievers: []NamedRetriever{{Name: "r", Retriever: newFakeRetriever("203.0.113.1")}},
+		Providers:  []NamedProvider{{Name: "p", Provider: provider}},
+		Hooks:      []Hook{hook},
+	}, Options{Logger: discardLogger(), Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
+
+	in.runHooks(context.Background(), nil)
+	in.runHooks(context.Background(), errBoom)
+
+	got := hook.all()
+	want := []CycleEvent{
+		{Instance: "homelab", Success: true},
+		{Instance: "homelab", Success: false, Err: errBoom},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+func TestRunHooksSkippedWhenContextIsCancelled(t *testing.T) {
+	hook := &fakeHook{}
+	in := newInstance(Instance{
+		Name:       "homelab",
+		Interval:   testInterval,
+		Retrievers: []NamedRetriever{{Name: "r", Retriever: newFakeRetriever("203.0.113.1")}},
+		Providers:  []NamedProvider{{Name: "p", Provider: newFakeProvider()}},
+		Hooks:      []Hook{hook},
+	}, Options{Logger: discardLogger(), Clock: newFakeClock(), AttemptTimeout: DefaultAttemptTimeout})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	in.runHooks(ctx, nil)
+
+	if got := hook.all(); len(got) != 0 {
+		t.Errorf("events = %+v, want none: a cycle cut short by shutdown is not reported", got)
+	}
+}
+
 func TestLogsIdentifyInstanceAndProvider(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, nil))

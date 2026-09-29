@@ -30,7 +30,7 @@ The image is built for `linux/amd64`, `linux/arm64` and `linux/arm/v7`. It runs 
 With Docker Compose ([compose.yml](compose.yml)):
 
 ```sh
-cp config.toml.example dnspatch.toml   # edit it
+cp dnspatch.toml.example dnspatch.toml   # edit it
 cp .env.example .env                   # put the secrets in it
 chmod 644 dnspatch.toml                # the container user must be able to read it
 docker compose up -d
@@ -50,6 +50,8 @@ docker run -d --name dnspatch --restart unless-stopped \
 
 The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
+There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the notifiers that publish to a message broker. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
+
 Things to know before running it in a container:
 
 - **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
@@ -66,18 +68,75 @@ Things to know before running it in a container:
   ```
 - **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
 - **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
+- **`HEALTHCHECK` needs a writable `/tmp`.** The image runs `dnspatch healthcheck` on its own (see [Monitoring](#monitoring)); with `read_only: true`, as `compose.yml` sets, mount `/tmp` as `tmpfs` too, or the check always reports the daemon as stuck.
 
-### From source
+### Building from source
 
 ```sh
 go install github.com/KrimsN/dnspatch/cmd/dnspatch@latest
 ```
 
-Requires Go 1.25 or newer.
+Requires Go 1.25 or newer. A plain `go build` gives the same daemon as the `dnspatch` image and binaries: every retriever and provider, none of the optional monitoring features. To get a smaller binary, or the features of the `-full` one, choose what goes in with build tags. This matters where size does: a Raspberry Pi, or a router running OpenWrt.
+
+Every plugin has a build tag named after its type, and there are more:
+
+- `dnspatch_none` leaves out every retriever and provider. Add the tags of the ones you need to bring those back, and nothing else is compiled in.
+- `providers_all` and `retrievers_all`, together with `dnspatch_none`, bring back every provider or every retriever, so `dnspatch_none,retrievers_all,cloudflare` is all the retrievers and one provider.
+- `ping` compiles in the `ping_url` hook.
+- `notify_all` compiles in every notifier backend; a backend's own tag, such as `redis`, compiles in only that one.
+
+```sh
+# Only the ipify retriever and the Cloudflare provider.
+go build -tags "dnspatch_none,ipify,cloudflare" -ldflags "-s -w" -o dnspatch ./cmd/dnspatch
+
+# The whole daemon plus monitoring, what the -full image is.
+go build -tags "ping,notify_all" -o dnspatch ./cmd/dnspatch
+```
+
+A build that lacks a plugin your configuration names refuses to start and says which tag to add, for example `provider type "cloudflare" is not compiled into this build: rebuild with the "cloudflare" build tag`. Every retriever and provider a configuration uses must be in the build, so the list of tags is easiest to write from the `type` lines of your `dnspatch.toml`.
+
+A few notes on the tags:
+
+- `nicru`, `noip`, `dyn` and `dynu` are `dyndns2` with the update URL filled in, so they share its code, and the type `dyndns2` is registered along with any of them. It costs nothing, since the code is in the binary anyway.
+- Expect a saving of a megabyte or two, not a tenfold one: the HTTP and TLS code of the standard library, which nearly every plugin needs, is most of the binary. For `amd64` with `-ldflags "-s -w"`, the plain build is about 8.4 MB, `dnspatch_none,ipify,cloudflare` about 7.2 MB, and the `-full` one about 10 MB. Measure the build you care about with `ls -l`.
+- Cross-compile with `GOOS` and `GOARCH`. For a Raspberry Pi that runs a 64-bit system that is `GOARCH=arm64`, on a 32-bit Raspberry Pi OS `GOARCH=arm GOARM=7`. Most OpenWrt routers are `GOOS=linux` with `GOARCH=mipsle GOMIPS=softfloat` (MediaTek, older Atheros), `GOARCH=mips GOMIPS=softfloat`, `arm` or `arm64`; `opkg print-architecture` on the router tells which. Keep `CGO_ENABLED=0`, so that the binary is static.
+- The Docker image takes the same tags as a build argument: `docker build --build-arg TAGS=dnspatch_none,ipify,cloudflare -t dnspatch-mini .`
+
+The tags of all built-in plugins:
+
+<!-- plugin-tags:start -->
+
+| Type | Kind | Build tag | In a plain build |
+|------|------|-----------|------------------|
+| `redis` | notifier | `redis` | no (`notify_all` brings it too) |
+| `beget` | provider | `beget` | yes |
+| `cloudflare` | provider | `cloudflare` | yes |
+| `duckdns` | provider | `duckdns` | yes |
+| `dyn` | provider | `dyn` | yes |
+| `dyndns2` | provider | `dyndns2` | yes |
+| `dynu` | provider | `dynu` | yes |
+| `namecheap` | provider | `namecheap` | yes |
+| `nicru` | provider | `nicru` | yes |
+| `noip` | provider | `noip` | yes |
+| `regru` | provider | `regru` | yes |
+| `rfc2136` | provider | `rfc2136` | yes |
+| `selectel` | provider | `selectel` | yes |
+| `timeweb` | provider | `timeweb` | yes |
+| `yandexcloud` | provider | `yandexcloud` | yes |
+| `2ip` | retriever | `2ip` | yes |
+| `icanhazip` | retriever | `icanhazip` | yes |
+| `identme` | retriever | `identme` | yes |
+| `ifconfigco` | retriever | `ifconfigco` | yes |
+| `interface` | retriever | `interface` | yes |
+| `ipify` | retriever | `ipify` | yes |
+
+<!-- plugin-tags:end -->
+
+This table is generated by `go generate ./...` from the plugin packages, so it lists what the code has: a plugin added to `plugins/` appears in it, and gets its tag, with no other change.
 
 ## Quick start
 
-Copy [config.toml.example](config.toml.example) to `dnspatch.toml`, fill it in and start the daemon:
+Copy [dnspatch.toml.example](dnspatch.toml.example) to `dnspatch.toml`, fill it in and start the daemon:
 
 ```sh
 dnspatch --config dnspatch.toml
@@ -87,7 +146,7 @@ Without `--config` the daemon uses `$DNSPATCH_CONFIG`, then `./dnspatch.toml`, t
 
 `dnspatch --check-config` validates the config and exits without starting the daemon (exit code 0 and a summary of every instance's retrievers and providers on success, code 2 and the problem on failure) — useful in a systemd `ExecStartPre` or after hand-editing the file, and it confirms the config was read the way it was written, not just that it parses. When an instance has several providers of one type, the summary also lists the parameters that tell them apart, for example `regru(zone=example.org, rr_name=office)`; the values of secret parameters such as passwords are never printed: they show up as `***` only when passwords alone tell the providers apart, and are left out whenever anything else differs.
 
-[examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file — each with its own README entry explaining what it shows.
+[examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file, the full build's ping and notify — each with its own README entry explaining what it shows.
 
 Logs go to stderr at the `info` level. `--log-level debug` (or `DNSPATCH_LOG_LEVEL=debug`; the flag wins) also shows why a provider was skipped: the address is unchanged, or the provider is backing off after a failure. Other levels are `warn` and `error`.
 
@@ -238,6 +297,59 @@ proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
 - Without `proxy`, a provider connects the way Go does by default, so `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` from the environment apply. With a URL or `direct`, the environment is ignored.
 - Retrievers take the same parameter, but it defaults to `direct` and they never follow the environment. Behind a proxy the address service reports the address the proxy connects from, not the address of this host, so give a retriever a proxy only when that is the address you want. With a proxy the retriever's `family` no longer pins the connection, it only checks the reply.
 - A malformed URL stops the daemon at startup. The URL is never printed in logs or errors, since it may hold a password.
+
+### Monitoring
+
+**Health check.** The daemon writes a status file per instance on every completed cycle (successful or not — a failing provider is still activity, already reported through logging and backoff), by default under `$TMPDIR/dnspatch-health` (`DNSPATCH_HEALTH_DIR` overrides it). `dnspatch healthcheck` re-reads the config to learn each instance's own interval, checks that every status file is fresh (at most twice the instance's interval old, at least 30s), and exits non-zero otherwise — no shell or curl needed, which a distroless image does not have. Both the lightweight and the full images already run it as their `HEALTHCHECK`.
+
+If the container's filesystem is `read_only`, mount `/tmp` (or wherever `DNSPATCH_HEALTH_DIR` points) as `tmpfs`, as [compose.yml](compose.yml) does — otherwise every write fails, and `healthcheck` reports the daemon as stuck even though it is working fine. A write failure never affects the DNS updates themselves, only the health check.
+
+**Monitoring pings.** `ping_url`, set on an instance, is called on every completed cycle — a GET request on success, and the same URL with `/fail` appended on failure — compatible with [Healthchecks.io](https://healthchecks.io) and [Uptime Kuma](https://github.com/louislam/uptime-kuma) push monitors. Unlike the health check above, this reaches an external service: it works as a dead man's switch, alerting when the ping stops arriving even if dnspatch's own process and container stay up.
+
+```toml
+[[instance]]
+name     = "home"
+ping_url = "${PING_URL}"   # for example https://hc-ping.com/<uuid>
+# ...
+```
+
+`ping_url` only works on a build with the `ping` tag (the full binary or image); the lightweight build rejects a config that sets it, rather than silently ignoring it, since the field would otherwise do nothing without any indication why.
+
+**Notifications.** A `[notify.<name>]` definition describes a message broker, and an instance that publishes to it sends an event whenever the instance's status flips between success and failure — not on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch):
+
+```toml
+[notify.alerts]
+type    = "redis"
+address = "${REDIS_URL}"   # a redis:// URL; carries auth and the database index
+```
+
+Notifiers are defined the way retrievers and providers are, and each instance names the ones it publishes to in its `notify` list. An instance with no `notify` key publishes to every notifier the file defines, and `notify = []` gives it none. Each definition is its own broker connection, shared by the instances that list it, with its own optional `topic_prefix`, so several can be of one type:
+
+```toml
+[notify.alerts]
+type    = "redis"
+address = "${REDIS_URL}"
+
+[notify.backup]
+type         = "redis"
+address      = "${REDIS_URL_BACKUP}"
+topic_prefix = "backup.dnspatch."
+
+[[instance]]
+name   = "home"
+notify = ["alerts"]             # only alerts
+
+[[instance]]
+name   = "office"
+notify = ["alerts", "backup"]
+
+[[instance]]
+name = "lab"                    # no notify key: alerts and backup
+```
+
+dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
+
+Like `ping_url`, a notifier needs a build that has its backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config whose instances use a notifier; a definition that no instance uses is ignored, and `dnspatch --check-config` shows the notifiers each instance publishes to. A build that lacks the backend a definition names says which tag brings it, and an error in one definition is reported by its name (`notify "backup" (redis): ...`). Adding another backend (RabbitMQ, MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
 
 ## Behaviour
 

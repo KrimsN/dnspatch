@@ -1,6 +1,6 @@
 # The smallest working config: one retriever, one provider, one instance.
 # Start here, copy the file to dnspatch.toml, replace the placeholders, and
-# read config.toml.example (or docs/PARAMETERS.md) once you need a parameter
+# read dnspatch.toml.example (or docs/PARAMETERS.md) once you need a parameter
 # that is not shown here.
 #
 # The retriever is declared inline, with "type" instead of "ref": that is

@@ -56,6 +56,8 @@ type instance struct {
 	// polled for. Computed once, since the retriever list does not change.
 	needV4, needV6 bool
 
+	hooks []Hook
+
 	clock   Clock
 	log     *slog.Logger
 	backoff backoff
@@ -77,6 +79,7 @@ func newInstance(cfg Instance, opts Options) *instance {
 		providers:  providers,
 		needV4:     needV4,
 		needV6:     needV6,
+		hooks:      cfg.Hooks,
 		clock:      opts.Clock,
 		log:        log,
 		backoff:    newBackoff(cfg.Interval),
@@ -135,13 +138,30 @@ func (in *instance) run(ctx context.Context) {
 	// Every failure is logged per provider inside tick, so the returned error
 	// is not reported again.
 	for ctx.Err() == nil {
-		_ = in.tick(ctx)
+		err := in.tick(ctx)
+		in.runHooks(ctx, err)
 		select {
 		case <-ctx.Done():
 		case <-ticker.C():
 		}
 	}
 	in.log.Info("instance stopped")
+}
+
+// runHooks notifies every hook of the cycle that just finished, unless the
+// context was already cancelled: a cycle cut short by shutdown is not a
+// result worth reporting. A hook's own failure (for example a ping request
+// that could not be sent) is its own responsibility to log; the runner does
+// not react to it.
+func (in *instance) runHooks(ctx context.Context, err error) {
+	if ctx.Err() != nil || len(in.hooks) == 0 {
+		return
+	}
+
+	ev := CycleEvent{Instance: in.name, Success: err == nil, Err: err}
+	for _, h := range in.hooks {
+		h.AfterCycle(ctx, ev)
+	}
 }
 
 // tick fetches the current address of every retriever and writes the result

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bytes"
@@ -43,8 +43,8 @@ type = "fake"
 
 	var stdout, stderr bytes.Buffer
 
-	if code := run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &stderr, registry); code != exitOK {
-		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitOK, stderr.String())
+	if code := Run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &stderr, runWith(registry, nil)); code != ExitOK {
+		t.Fatalf("exit code = %d, want %d; stderr: %s", code, ExitOK, stderr.String())
 	}
 
 	return stdout.String()
