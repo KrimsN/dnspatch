@@ -45,6 +45,12 @@ services:
     # For that, give the container an IPv6 network, or on Linux run it with
     # `network_mode: host`.
 
+    # The image's own HEALTHCHECK instruction needs somewhere writable for
+    # its status files; read_only below otherwise blocks it, silently, since
+    # a write failure only disables the check rather than crashing the daemon.
+    tmpfs:
+      - /tmp
+
     read_only: true
     cap_drop: [ALL]
     security_opt:

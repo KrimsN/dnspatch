@@ -30,6 +30,10 @@ jobs:
       # The tests include a check that docs/PARAMETERS.md and config.toml.example
       # match the plugin tags; run `go generate ./...` if it fails.
       - run: go test -race ./...
+      # The optional features live behind build tags, so the default build above
+      # never compiles them; this is the build the -full release ships.
+      - run: go vet -tags "ping,notify_all" ./...
+      - run: go test -race -tags "ping,notify_all" ./cmd/... ./internal/...
 
   # Branch protection requires a check named "build & test". The matrix above
   # names its jobs after the OS, so this job stands in for all of them and
@@ -127,7 +131,8 @@ jobs:
         with:
           go-version-file: go.mod
       - if: steps.changed.outputs.run == 'true'
-        run: go build -o /tmp/dnspatch ./cmd/dnspatch
+        # The full build: full-build.toml is rejected by the lightweight one.
+        run: go build -tags "ping,notify_all" -o /tmp/dnspatch ./cmd/dnspatch
       # Run from inside examples/ so secrets-from-files.toml's relative
       # "./secrets/..." path resolves; the other files don't care about cwd.
       - if: steps.changed.outputs.run == 'true'
@@ -135,6 +140,8 @@ jobs:
         env:
           PASSWORD: check-config-dummy
           PROXY_URL: direct
+          PING_URL: https://hc-ping.example/00000000-0000-0000-0000-000000000000
+          REDIS_URL: redis://localhost:6379/0
           TSIG_SECRET: Y2hlY2stY29uZmln
         run: |
           set -e
@@ -145,7 +152,15 @@ jobs:
           done
 
   image:
-    name: docker build
+    name: docker build (${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: minimal
+            tags: ""
+          - variant: full
+            tags: ping,notify_all
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -154,5 +169,6 @@ jobs:
         with:
           context: .
           push: false
+          build-args: TAGS=${{ matrix.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -50,6 +50,8 @@ docker run -d --name dnspatch --restart unless-stopped \
 
 The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
+There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the `[[notify]]` message-broker backends. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
+
 Things to know before running it in a container:
 
 - **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
@@ -66,6 +68,7 @@ Things to know before running it in a container:
   ```
 - **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
 - **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
+- **`HEALTHCHECK` needs a writable `/tmp`.** The image runs `dnspatch healthcheck` on its own (see [Monitoring](#monitoring)); with `read_only: true`, as `compose.yml` sets, mount `/tmp` as `tmpfs` too, or the check always reports the daemon as stuck.
 
 ### From source
 
@@ -87,7 +90,7 @@ Without `--config` the daemon uses `$DNSPATCH_CONFIG`, then `./dnspatch.toml`, t
 
 `dnspatch --check-config` validates the config and exits without starting the daemon (exit code 0 and a summary of every instance's retrievers and providers on success, code 2 and the problem on failure) — useful in a systemd `ExecStartPre` or after hand-editing the file, and it confirms the config was read the way it was written, not just that it parses. When an instance has several providers of one type, the summary also lists the parameters that tell them apart, for example `regru(zone=example.org, rr_name=office)`; the values of secret parameters such as passwords are never printed: they show up as `***` only when passwords alone tell the providers apart, and are left out whenever anything else differs.
 
-[examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file — each with its own README entry explaining what it shows.
+[examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file, the full build's ping and notify — each with its own README entry explaining what it shows.
 
 Logs go to stderr at the `info` level. `--log-level debug` (or `DNSPATCH_LOG_LEVEL=debug`; the flag wins) also shows why a provider was skipped: the address is unchanged, or the provider is backing off after a failure. Other levels are `warn` and `error`.
 
@@ -238,6 +241,48 @@ proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
 - Without `proxy`, a provider connects the way Go does by default, so `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` from the environment apply. With a URL or `direct`, the environment is ignored.
 - Retrievers take the same parameter, but it defaults to `direct` and they never follow the environment. Behind a proxy the address service reports the address the proxy connects from, not the address of this host, so give a retriever a proxy only when that is the address you want. With a proxy the retriever's `family` no longer pins the connection, it only checks the reply.
 - A malformed URL stops the daemon at startup. The URL is never printed in logs or errors, since it may hold a password.
+
+### Monitoring
+
+**Health check.** The daemon writes a status file per instance on every completed cycle (successful or not — a failing provider is still activity, already reported through logging and backoff), by default under `$TMPDIR/dnspatch-health` (`DNSPATCH_HEALTH_DIR` overrides it). `dnspatch healthcheck` re-reads the config to learn each instance's own interval, checks that every status file is fresh (at most twice the instance's interval old, at least 30s), and exits non-zero otherwise — no shell or curl needed, which a distroless image does not have. Both the lightweight and the full images already run it as their `HEALTHCHECK`.
+
+If the container's filesystem is `read_only`, mount `/tmp` (or wherever `DNSPATCH_HEALTH_DIR` points) as `tmpfs`, as [compose.yml](compose.yml) does — otherwise every write fails, and `healthcheck` reports the daemon as stuck even though it is working fine. A write failure never affects the DNS updates themselves, only the health check.
+
+**Monitoring pings.** `ping_url`, set on an instance, is called on every completed cycle — a GET request on success, and the same URL with `/fail` appended on failure — compatible with [Healthchecks.io](https://healthchecks.io) and [Uptime Kuma](https://github.com/louislam/uptime-kuma) push monitors. Unlike the health check above, this reaches an external service: it works as a dead man's switch, alerting when the ping stops arriving even if dnspatch's own process and container stay up.
+
+```toml
+[[instance]]
+name     = "home"
+ping_url = "${PING_URL}"   # for example https://hc-ping.com/<uuid>
+# ...
+```
+
+`ping_url` only works on a build with the `ping` tag (the full binary or image); the lightweight build rejects a config that sets it, rather than silently ignoring it, since the field would otherwise do nothing without any indication why.
+
+**Notifications.** Each top-level `[[notify]]` table publishes an event to a message broker whenever an instance's status flips between success and failure — not on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch):
+
+```toml
+[[notify]]
+type    = "redis"
+address = "${REDIS_URL}"   # a redis:// URL; carries auth and the database index
+```
+
+`[[notify]]` is an array of tables: repeat it to publish to several brokers at once, of different types or of one type with different addresses. Every instance publishes to every table, and each table is its own connection, with its own optional `topic_prefix`:
+
+```toml
+[[notify]]
+type    = "redis"
+address = "${REDIS_URL}"
+
+[[notify]]
+type         = "redis"
+address      = "${REDIS_URL_BACKUP}"
+topic_prefix = "backup.dnspatch."
+```
+
+dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
+
+Like `ping_url`, `[[notify]]` needs a build that has a backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config that sets `[[notify]]`; a build that has some backends but not the one asked for names the ones it does have, and an error in one table is reported with its position (`notify #2 (mqtt): ...`). Adding another backend (RabbitMQ, MQTT, ...) is an `internal/hooks/notify/<backend>` package that implements one small interface and registers itself in `init`, plus a tag file in `cmd/dnspatch` — see [internal/hooks/notify](internal/hooks/notify).
 
 ## Behaviour
 

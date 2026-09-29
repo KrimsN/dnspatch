@@ -1,0 +1,53 @@
+# The features that need the full build (the -full image or binary, or a build
+# with -tags "ping,notify_all"): a ping on every completed cycle, and status
+# changes published to a message broker. The lightweight build rejects this
+# file at startup instead of ignoring the two settings, so a config that uses
+# them never silently does nothing.
+#
+# Everything else in the file is the same as on the lightweight build.
+
+# Publishes a small JSON event to Redis Pub/Sub whenever an instance flips
+# between success and failure: {"instance": "home", "success": false,
+# "error": "...", "time": "..."}. It goes to the channel
+# dnspatch.events.<instance>; change the prefix with topic_prefix. Whatever
+# subscribes to it (a bot, a relay service) decides what to do with it.
+#
+# "address" is a redis:// or rediss:// URL; it carries the password and the
+# database index, so keep it in the environment, not in the file.
+[[notify]]
+type    = "redis"
+address = "${REDIS_URL}"
+# topic_prefix = "dnspatch.events."
+
+# Each [[notify]] table is its own broker connection, and every instance
+# publishes to all of them. Repeat the table to reach several brokers, of
+# different types or of one type with different addresses, for example a
+# second Redis for another subscriber. Uncomment to try it.
+# [[notify]]
+# type         = "redis"
+# address      = "${REDIS_URL_BACKUP}"
+# topic_prefix = "backup.dnspatch."
+
+[retriever.home]
+type = "ifconfigco"
+
+[provider.regru]
+type     = "regru"
+zone     = "example.com"
+rr_name  = "home"
+username = "CHANGE_ME"
+password = "${PASSWORD}"
+
+[[instance]]
+name = "home"
+# Called on every completed cycle (a GET on success, the same URL with /fail
+# appended on failure): a dead man's switch for Healthchecks.io or an Uptime
+# Kuma push monitor, which alerts when the pings stop arriving. The URL
+# usually holds a secret, so it comes from the environment too.
+ping_url = "${PING_URL}"
+
+[[instance.retriever]]
+ref = "home"
+
+[[instance.provider]]
+ref = "regru"

@@ -23,11 +23,15 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 ARG VERSION=dev
+# Optional features to compile in, as a comma-separated list of build tags
+# (see cmd/dnspatch/main.go). Empty is the lightweight build; the -full image
+# is built with TAGS="ping,notify_all".
+ARG TAGS
 # TARGETVARIANT is "v7" for linux/arm/v7 and empty elsewhere; GOARM wants "7".
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
-    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+    go build -trimpath -tags "${TAGS}" -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/dnspatch ./cmd/dnspatch
 
 # Static binary, CA certificates for the provider APIs, no shell, non-root.
@@ -46,6 +50,13 @@ LABEL org.opencontainers.image.title="dnspatch" \
       org.opencontainers.image.licenses="MIT"
 
 USER nonroot:nonroot
+
+# healthcheck reads the same config to learn each instance's interval and
+# checks the status file dnspatch itself writes on every completed cycle
+# (default $TMPDIR/dnspatch-health, override with DNSPATCH_HEALTH_DIR); no
+# shell or curl needed, which a distroless image does not have.
+HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
+    CMD ["/usr/local/bin/dnspatch", "healthcheck"]
 
 # The daemon looks for /etc/dnspatch/config.toml on its own; mount the file there.
 ENTRYPOINT ["/usr/local/bin/dnspatch"]

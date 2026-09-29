@@ -76,6 +76,24 @@ func TestExampleWithoutPluginsHasNoInstance(t *testing.T) {
 	}
 }
 
+// [[notify]] only works on the full build, so the example shows it commented out:
+// an active table would make the generated file unusable on the lightweight one.
+func TestExampleShowsNotifyCommentedOut(t *testing.T) {
+	got, err := renderExample(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"# [[notify]]\n", "# type = \"redis\"\n", "# address = \"${REDIS_URL}\"\n", "# topic_prefix = \"dnspatch.events.\"\n"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("example lacks %q:\n%s", want, got)
+		}
+	}
+
+	if regexp.MustCompile(`(?m)^\[\[notify\]\]`).Match(got) {
+		t.Errorf("[[notify]] is active in the example:\n%s", got)
+	}
+}
 func TestExampleIsRepeatable(t *testing.T) {
 	plugins := make(map[string]reflect.Type)
 	for _, name := range []string{"e", "b", "d", "a", "c"} {

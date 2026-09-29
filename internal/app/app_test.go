@@ -1,10 +1,12 @@
-package main
+package app
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,7 +21,10 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/config"
+	"github.com/KrimsN/dnspatch/internal/health"
+	"github.com/KrimsN/dnspatch/internal/runner"
 	"github.com/KrimsN/dnspatch/plugin"
+	_ "github.com/KrimsN/dnspatch/plugins/all"
 )
 
 // fakeWorld plays both external services: the IP echo and the REG.RU DNS API.
@@ -123,6 +128,14 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
+func runWith(registry *plugin.Registry, hooks HookBuilder) Options {
+	return Options{Registry: registry, Hooks: hooks}
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func TestDaemonEndToEnd(t *testing.T) {
 	world := &fakeWorld{ip: "203.0.113.7"}
 	srv := httptest.NewServer(world)
@@ -157,7 +170,7 @@ ref = "dns"
 	var stderr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- run(ctx, []string{"--config", path}, &bytes.Buffer{}, &syncBuffer{buf: &stderr}, plugin.Default)
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &syncBuffer{buf: &stderr}, runWith(plugin.Default, nil))
 	}()
 
 	waitFor(t, "first address written", func() bool {
@@ -183,11 +196,140 @@ ref = "dns"
 	cancel()
 	select {
 	case code := <-done:
-		if code != exitOK {
-			t.Errorf("exit code = %d, want %d", code, exitOK)
+		if code != ExitOK {
+			t.Errorf("exit code = %d, want %d", code, ExitOK)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not stop after the context was cancelled")
+	}
+}
+
+// TestDaemonRecordsHealthStatus checks that the daemon wires health.Recorder
+// into every instance on its own, with no config needed: unit coverage for
+// the recorder and the freshness check themselves lives in internal/health.
+func TestDaemonRecordsHealthStatus(t *testing.T) {
+	t.Setenv(health.EnvDir, t.TempDir())
+
+	world := &fakeWorld{ip: "203.0.113.7"}
+	srv := httptest.NewServer(world)
+	defer srv.Close()
+
+	path := writeConfig(t, fmt.Sprintf(`
+interval = "1s"
+
+[retriever.echo]
+type     = "ifconfigco"
+base_url = %[1]q
+
+[provider.dns]
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+base_url = %[1]q
+
+[[instance]]
+name = "home"
+[[instance.retriever]]
+ref = "echo"
+[[instance.provider]]
+ref = "dns"
+`, srv.URL))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan int, 1)
+	go func() {
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, runWith(plugin.Default, nil))
+	}()
+
+	waitFor(t, "the healthcheck subcommand to report healthy", func() bool {
+		var stdout bytes.Buffer
+		code := Run(context.Background(), []string{"healthcheck", "--config", path}, &stdout, &bytes.Buffer{}, runWith(plugin.Default, nil))
+		return code == ExitOK
+	})
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != ExitOK {
+			t.Errorf("exit code = %d, want %d", code, ExitOK)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not stop after the context was cancelled")
+	}
+}
+
+// minimalConfig defines one retriever and one provider definition, of types
+// that need not be registered: the healthcheck subcommand only parses the
+// config to learn each instance's name and interval, it never builds
+// plugins.
+const minimalConfig = `
+[retriever.home]
+type = "unused"
+
+[provider.main]
+type = "unused"
+`
+
+func TestHealthCheckSubcommandReportsUnhealthyWithNoStatusFile(t *testing.T) {
+	t.Setenv(health.EnvDir, t.TempDir())
+
+	path := writeConfig(t, minimalConfig+`
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"healthcheck", "--config", path}, &stdout, &stderr, runWith(plugin.Default, nil))
+
+	if code != ExitFailure {
+		t.Errorf("exit code = %d, want %d", code, ExitFailure)
+	}
+	if !strings.Contains(stderr.String(), `instance "a"`) {
+		t.Errorf("stderr = %q, want it to name the stuck instance", stderr.String())
+	}
+}
+
+func TestHealthCheckSubcommandReportsHealthyWithAFreshStatusFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(health.EnvDir, dir)
+	if err := os.WriteFile(filepath.Join(dir, "a"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	path := writeConfig(t, minimalConfig+`
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	var stdout bytes.Buffer
+	code := Run(context.Background(), []string{"healthcheck", "--config", path}, &stdout, &bytes.Buffer{}, runWith(plugin.Default, nil))
+
+	if code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
+	}
+	if !strings.Contains(stdout.String(), "healthy") {
+		t.Errorf("stdout = %q, want it to report healthy", stdout.String())
+	}
+}
+
+func TestHealthCheckSubcommandExitsWithConfigCodeOnAnInvalidConfig(t *testing.T) {
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"healthcheck", "--config", filepath.Join(t.TempDir(), "absent.toml")}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 }
 
@@ -264,7 +406,7 @@ ref = "dns"
 
 	done := make(chan int, 1)
 	go func() {
-		done <- run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, plugin.Default)
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, runWith(plugin.Default, nil))
 	}()
 
 	waitFor(t, "both records written", func() bool {
@@ -276,8 +418,8 @@ ref = "dns"
 	cancel()
 	select {
 	case code := <-done:
-		if code != exitOK {
-			t.Errorf("exit code = %d, want %d", code, exitOK)
+		if code != ExitOK {
+			t.Errorf("exit code = %d, want %d", code, ExitOK)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not stop after the context was cancelled")
@@ -347,15 +489,36 @@ ref = "dns"
 `,
 			wantErr: "repeats provider #1",
 		},
+		{
+			name: "ping_url set but the build has no hooks",
+			config: `
+[retriever.echo]
+type = "ifconfigco"
+[provider.dns]
+type     = "regru"
+username = "user"
+password = "secret"
+zone     = "example.com"
+rr_name  = "home"
+[[instance]]
+name     = "x"
+ping_url = "https://hc-ping.com/abc"
+[[instance.retriever]]
+ref = "echo"
+[[instance.provider]]
+ref = "dns"
+`,
+			wantErr: "does not support monitoring hooks",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stderr bytes.Buffer
 
-			code := run(context.Background(), []string{"--config", writeConfig(t, tt.config)}, &bytes.Buffer{}, &stderr, plugin.Default)
-			if code != exitConfig {
-				t.Errorf("exit code = %d, want %d", code, exitConfig)
+			code := Run(context.Background(), []string{"--config", writeConfig(t, tt.config)}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
+			if code != ExitConfig {
+				t.Errorf("exit code = %d, want %d", code, ExitConfig)
 			}
 			if !strings.Contains(stderr.String(), tt.wantErr) || !strings.Contains(stderr.String(), `instance "x"`) {
 				t.Errorf("stderr = %q, want it to name the instance and contain %q", stderr.String(), tt.wantErr)
@@ -415,7 +578,7 @@ ref = "main"
 		t.Fatalf("Parse: %v", err)
 	}
 
-	instances, err := buildInstances(cfg, registry)
+	instances, err := buildInstances(cfg, registry, nil, discardLogger())
 	if err != nil {
 		t.Fatalf("buildInstances: %v", err)
 	}
@@ -472,7 +635,7 @@ ref = "main"
 		t.Fatalf("Parse: %v", err)
 	}
 
-	instances, err := buildInstances(cfg, registry)
+	instances, err := buildInstances(cfg, registry, nil, discardLogger())
 	if err != nil {
 		t.Fatalf("buildInstances: %v", err)
 	}
@@ -527,7 +690,7 @@ ref = "regru"
 		t.Fatalf("Parse: %v", err)
 	}
 
-	instances, err := buildInstances(cfg, plugin.Default)
+	instances, err := buildInstances(cfg, plugin.Default, nil, discardLogger())
 	if err != nil {
 		t.Fatalf("buildInstances: %v", err)
 	}
@@ -538,6 +701,277 @@ ref = "regru"
 	}
 	if want := []string{"dual", "ipv6", "ipv4"}; !slices.Equal(families, want) {
 		t.Errorf("retriever families = %v, want %v", families, want)
+	}
+}
+
+// TestBuildInstancesWiresHooksFromPingURL checks that a build with a
+// HookBuilder attaches the hooks it returns to the right instance, and that
+// an instance without ping_url gets none.
+func TestBuildInstancesWiresHooksFromPingURL(t *testing.T) {
+	registry := plugin.NewRegistry()
+	plugin.RegisterRetrieverIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Retriever, error) {
+		return &fakeRetriever{}, nil
+	})
+	plugin.RegisterProviderIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Provider, error) {
+		return fakeProviderStub{}, nil
+	})
+
+	cfg, err := config.Parse([]byte(`
+[retriever.r]
+type = "fake"
+[provider.p]
+type = "fake"
+
+[[instance]]
+name     = "pinged"
+ping_url = "https://hc-ping.com/abc"
+[[instance.retriever]]
+ref = "r"
+[[instance.provider]]
+ref = "p"
+
+[[instance]]
+name = "plain"
+[[instance.retriever]]
+ref = "r"
+[[instance.provider]]
+ref = "p"
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	var built []config.Instance
+	fake := struct{ runner.Hook }{}
+	buildHooks := func(inst config.Instance, _ *slog.Logger) ([]runner.Hook, error) {
+		built = append(built, inst)
+		return []runner.Hook{fake}, nil
+	}
+
+	instances, err := buildInstances(cfg, registry, buildHooks, discardLogger())
+	if err != nil {
+		t.Fatalf("buildInstances: %v", err)
+	}
+
+	if len(built) != 1 || built[0].Name != "pinged" {
+		t.Fatalf("HookBuilder called for %+v, want only the instance with ping_url set", built)
+	}
+
+	if len(instances[0].Hooks) != 1 {
+		t.Errorf("pinged instance hooks = %d, want 1", len(instances[0].Hooks))
+	}
+	if len(instances[1].Hooks) != 0 {
+		t.Errorf("plain instance hooks = %d, want 0", len(instances[1].Hooks))
+	}
+}
+
+// notifyConfig builds a config with two instances and one [[notify]] table
+// per given type, using a registry with a "fake" retriever/provider type so
+// the test does not depend on any real plugin.
+func notifyConfig(t *testing.T, notifyTypes ...string) (string, *plugin.Registry) {
+	t.Helper()
+
+	registry := plugin.NewRegistry()
+	plugin.RegisterRetrieverIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Retriever, error) {
+		return &fakeRetriever{}, nil
+	})
+	plugin.RegisterProviderIn(registry, "fake", func(fakeRetrieverConfig) (plugin.Provider, error) {
+		return fakeProviderStub{}, nil
+	})
+
+	var notify strings.Builder
+	for _, typ := range notifyTypes {
+		fmt.Fprintf(&notify, "[[notify]]\ntype = %q\n\n", typ)
+	}
+
+	path := writeConfig(t, fmt.Sprintf(`
+[retriever.r]
+type = "fake"
+[provider.p]
+type = "fake"
+
+%s[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "r"
+[[instance.provider]]
+ref = "p"
+
+[[instance]]
+name = "b"
+[[instance.retriever]]
+ref = "r"
+[[instance.provider]]
+ref = "p"
+`, notify.String()))
+
+	return path, registry
+}
+
+func TestNotifyRejectedWhenBuildHasNoNotifyBackend(t *testing.T) {
+	path, registry := notifyConfig(t, "redis")
+
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, runWith(registry, nil))
+
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
+	}
+	if !strings.Contains(stderr.String(), `"redis"`) || !strings.Contains(stderr.String(), "does not support a notify backend") {
+		t.Errorf("stderr = %q, want it to name the type and explain why", stderr.String())
+	}
+}
+
+func TestNotifyBuilderErrorExitsWithConfigCode(t *testing.T) {
+	path, registry := notifyConfig(t, "redis")
+
+	opts := runWith(registry, nil)
+	opts.Notify = func(config.Plugin, *slog.Logger) (runner.Hook, error) {
+		return nil, errors.New("no such host")
+	}
+
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, opts)
+
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
+	}
+	if !strings.Contains(stderr.String(), "no such host") {
+		t.Errorf("stderr = %q, want it to contain the NotifyBuilder's error", stderr.String())
+	}
+}
+
+// recordingHook is a runner.Hook that records which instances it was
+// notified for.
+type recordingHook struct {
+	mu   sync.Mutex
+	seen map[string]bool
+}
+
+func (h *recordingHook) AfterCycle(_ context.Context, ev runner.CycleEvent) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.seen == nil {
+		h.seen = map[string]bool{}
+	}
+	h.seen[ev.Instance] = true
+}
+
+func (h *recordingHook) sawAll(instances ...string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, name := range instances {
+		if !h.seen[name] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestNotifyBuilderRunsOnceAndReachesEveryInstance checks that NotifyBuilder,
+// unlike HookBuilder, is called once per [[notify]] table rather than once per
+// instance, and that the hook it returns is attached to every instance, not
+// just one.
+func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
+	path, registry := notifyConfig(t, "redis")
+
+	var calls int
+	var gotType string
+	hook := &recordingHook{}
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		calls++
+		gotType = cfg.Type
+		return hook, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan int, 1)
+	go func() {
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, opts)
+	}()
+
+	waitFor(t, "the notify hook to see both instances", func() bool { return hook.sawAll("a", "b") })
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != ExitOK {
+			t.Errorf("exit code = %d, want %d", code, ExitOK)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not stop after the context was cancelled")
+	}
+
+	if calls != 1 {
+		t.Errorf("NotifyBuilder called %d times, want 1 (one [[notify]] table)", calls)
+	}
+	if gotType != "redis" {
+		t.Errorf("NotifyBuilder cfg.Type = %q, want %q", gotType, "redis")
+	}
+}
+
+// Every [[notify]] table gets its own hook, and each hook sees every instance.
+func TestSeveralNotifyTablesEachReachEveryInstance(t *testing.T) {
+	path, registry := notifyConfig(t, "redis", "mqtt")
+
+	hooks := map[string]*recordingHook{"redis": {}, "mqtt": {}}
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		return hooks[cfg.Type], nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan int, 1)
+	go func() {
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, opts)
+	}()
+
+	for typ, hook := range hooks {
+		waitFor(t, typ+" hook to see both instances", func() bool { return hook.sawAll("a", "b") })
+	}
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != ExitOK {
+			t.Errorf("exit code = %d, want %d", code, ExitOK)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not stop after the context was cancelled")
+	}
+}
+
+// A table the build cannot serve is reported with its position, and one bad
+// table does not hide the problem of another.
+func TestNotifyErrorsNameTheTableAndAreReportedTogether(t *testing.T) {
+	path, registry := notifyConfig(t, "redis", "mqtt", "amqp")
+
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		if cfg.Type == "redis" {
+			return &recordingHook{}, nil
+		}
+		return nil, errors.New("unknown backend")
+	}
+
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, opts)
+
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
+	}
+	for _, want := range []string{"notify #2 (mqtt): unknown backend", "notify #3 (amqp): unknown backend"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr = %q, want it to contain %q", stderr.String(), want)
+		}
+	}
+	if strings.Contains(stderr.String(), "notify #1") {
+		t.Errorf("stderr = %q, want no complaint about the working table", stderr.String())
 	}
 }
 
@@ -571,9 +1005,9 @@ ref = "dns"
 
 	var stdout bytes.Buffer
 
-	code := run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, plugin.Default)
-	if code != exitOK {
-		t.Errorf("exit code = %d, want %d", code, exitOK)
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, runWith(plugin.Default, nil))
+	if code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
 	}
 
 	if got := stdout.String(); !strings.Contains(got, path) ||
@@ -613,9 +1047,9 @@ ref = "main"
 
 	var stdout bytes.Buffer
 
-	code := run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, registry)
-	if code != exitOK {
-		t.Errorf("exit code = %d, want %d", code, exitOK)
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &bytes.Buffer{}, runWith(registry, nil))
+	if code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
 	}
 
 	if got := stdout.String(); !strings.Contains(got, "retrievers=[v4(ipv4)]") {
@@ -637,9 +1071,9 @@ ref = "echo"
 ref = "dns"
 `)
 
-	code := run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, plugin.Default)
-	if code != exitConfig {
-		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 	if !strings.Contains(stderr.String(), `instance "x"`) {
 		t.Errorf("stderr = %q, want it to name the invalid instance", stderr.String())
@@ -649,17 +1083,17 @@ ref = "dns"
 func TestMissingConfigFile(t *testing.T) {
 	var stderr bytes.Buffer
 
-	code := run(context.Background(), []string{"--config", filepath.Join(t.TempDir(), "absent.toml")}, &bytes.Buffer{}, &stderr, plugin.Default)
-	if code != exitConfig {
-		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	code := Run(context.Background(), []string{"--config", filepath.Join(t.TempDir(), "absent.toml")}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 }
 
 func TestVersionFlag(t *testing.T) {
 	var stdout bytes.Buffer
 
-	if code := run(context.Background(), []string{"--version"}, &stdout, &bytes.Buffer{}, plugin.Default); code != exitOK {
-		t.Errorf("exit code = %d, want %d", code, exitOK)
+	if code := Run(context.Background(), []string{"--version"}, &stdout, &bytes.Buffer{}, runWith(plugin.Default, nil)); code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
 	}
 	if !strings.HasPrefix(stdout.String(), "dnspatch ") {
 		t.Errorf("stdout = %q", stdout.String())
@@ -667,8 +1101,8 @@ func TestVersionFlag(t *testing.T) {
 }
 
 func TestUnknownFlag(t *testing.T) {
-	if code := run(context.Background(), []string{"--nope"}, &bytes.Buffer{}, &bytes.Buffer{}, plugin.Default); code != exitConfig {
-		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	if code := Run(context.Background(), []string{"--nope"}, &bytes.Buffer{}, &bytes.Buffer{}, runWith(plugin.Default, nil)); code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 }
 
@@ -682,6 +1116,13 @@ func (s *syncBuffer) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.buf.String()
 }
 
 func waitFor(t *testing.T, what string, cond func() bool) {
@@ -711,7 +1152,7 @@ func TestParseLogLevel(t *testing.T) {
 		{name: "flag beats env", flag: "error", env: "debug", want: slog.LevelError},
 		{name: "case does not matter", flag: "DEBUG", want: slog.LevelDebug},
 		{name: "bad flag", flag: "loud", wantErr: "--log-level"},
-		{name: "bad env", env: "loud", wantErr: envLogLevel},
+		{name: "bad env", env: "loud", wantErr: EnvLogLevel},
 	}
 
 	for _, tt := range tests {
@@ -736,9 +1177,9 @@ func TestParseLogLevel(t *testing.T) {
 func TestBadLogLevelExitsWithConfigCode(t *testing.T) {
 	var stderr bytes.Buffer
 
-	code := run(context.Background(), []string{"--log-level", "loud"}, &bytes.Buffer{}, &stderr, plugin.Default)
-	if code != exitConfig {
-		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	code := Run(context.Background(), []string{"--log-level", "loud"}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 	if !strings.Contains(stderr.String(), "--log-level") {
 		t.Errorf("stderr = %q, want it to name the flag", stderr.String())

@@ -30,10 +30,50 @@ builds:
       - goos: windows
         goarch: arm
 
+  # The same binary with the optional features compiled in (see
+  # cmd/dnspatch/main.go), shipped as its own archives.
+  - id: dnspatch-full
+    main: ./cmd/dnspatch
+    binary: dnspatch
+    tags:
+      - ping
+      - notify_all
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+
 archives:
-  - formats:
+  - id: dnspatch
+    ids:
+      - dnspatch
+    formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+  - id: dnspatch-full
+    ids:
+      - dnspatch-full
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}-full_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats:
@@ -66,12 +106,19 @@ release:
     docker pull ghcr.io/krimsn/dnspatch:{{ .Version }}
     ```
 
+    The `-full` tag is the same image with `ping_url` and the `[[notify]]` backends compiled in:
+
+    ```sh
+    docker pull krimsn/dnspatch:{{ .Version }}-full
+    ```
+
     **Go:**
 
     ```sh
     go install github.com/KrimsN/dnspatch/cmd/dnspatch@{{ .Tag }}
+    go install -tags "ping,notify_all" github.com/KrimsN/dnspatch/cmd/dnspatch@{{ .Tag }}   # the full build
     ```
 
-    **Binary:** download the archive for your platform below and check it against `checksums.txt`.
+    **Binary:** download the archive for your platform below and check it against `checksums.txt`. `dnspatch_*` is the lightweight build, `dnspatch-full_*` the one with `ping_url` and the `[[notify]]` backends.
 
 # The container image is built from the Dockerfile by .github/workflows/release.yml.

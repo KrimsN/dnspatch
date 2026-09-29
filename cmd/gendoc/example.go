@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/KrimsN/dnspatch/internal/config"
+	"github.com/KrimsN/dnspatch/internal/hooks/notify"
 	"github.com/KrimsN/dnspatch/internal/paramspec"
 )
 
@@ -59,6 +60,7 @@ func renderExample(retrievers, providers map[string]reflect.Type) ([]byte, error
 	}
 
 	writeInstance(&b, retrieverNames, providerNames)
+	writeNotify(&b)
 
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n"), nil
 }
@@ -161,6 +163,31 @@ func writeInstance(b *strings.Builder, retrieverNames, providerNames []string) {
 	b.WriteString("# A second [[instance.retriever]] table adds a retriever for the other address\n")
 	b.WriteString("# family; each instance accepts one or two retrievers, one per family.\n")
 	fmt.Fprintf(b, "[[instance.provider]]\nref = %s\n", tomlString(providerNames[0]))
+}
+
+// writeNotify writes the top-level [[notify]] tables, commented out: they only
+// works on a build with a notify backend compiled in (the full image or
+// binary), and the lightweight build rejects a config that sets it, so
+// leaving it active would make the example unusable there.
+func writeNotify(b *strings.Builder) {
+	b.WriteString("\n")
+	writeBanner(b, "Notifications: full build only (the -full image or binary).")
+
+	b.WriteString("# Publishes a JSON event to a message broker whenever an instance flips between\n")
+	b.WriteString("# success and failure, to the channel <topic_prefix><instance>. The lightweight\n")
+	b.WriteString("# build rejects a config that sets [[notify]]. See README.md, section Monitoring.\n")
+	b.WriteString("#\n")
+	b.WriteString("# Each [[notify]] table is one broker connection that every instance publishes\n")
+	b.WriteString("# to. Repeat the table to publish to several brokers, of different types or of\n")
+	b.WriteString("# one type with different addresses.\n")
+	b.WriteString("#\n")
+	b.WriteString("# [[notify]]\n")
+	b.WriteString("# Backend to publish to. Only redis is available so far.\n")
+	b.WriteString("# type = \"redis\"\n")
+	b.WriteString("# A redis:// or rediss:// URL; it carries the password and the database index.\n")
+	b.WriteString("# address = \"${REDIS_URL}\"\n")
+	b.WriteString("# Prepended to the instance name to form the channel.\n")
+	fmt.Fprintf(b, "# topic_prefix = %s\n", tomlString(notify.DefaultTopicPrefix))
 }
 
 func writeBanner(b *strings.Builder, title string) {

@@ -455,3 +455,23 @@ ref = "2ip"
 # family; each instance accepts one or two retrievers, one per family.
 [[instance.provider]]
 ref = "beget"
+
+# ----------------------------------------------------------------------------
+# Notifications: full build only (the -full image or binary).
+# ----------------------------------------------------------------------------
+
+# Publishes a JSON event to a message broker whenever an instance flips between
+# success and failure, to the channel <topic_prefix><instance>. The lightweight
+# build rejects a config that sets [[notify]]. See README.md, section Monitoring.
+#
+# Each [[notify]] table is one broker connection that every instance publishes
+# to. Repeat the table to publish to several brokers, of different types or of
+# one type with different addresses.
+#
+# [[notify]]
+# Backend to publish to. Only redis is available so far.
+# type = "redis"
+# A redis:// or rediss:// URL; it carries the password and the database index.
+# address = "${REDIS_URL}"
+# Prepended to the instance name to form the channel.
+# topic_prefix = "dnspatch.events."

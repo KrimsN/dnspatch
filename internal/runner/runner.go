@@ -56,6 +56,9 @@ type Instance struct {
 	Interval   time.Duration
 	Retrievers []NamedRetriever
 	Providers  []NamedProvider
+	// Hooks are notified after every completed cycle of this instance. Empty
+	// by default: the daemon builds no hooks unless something wires them in.
+	Hooks []Hook
 }
 
 // Options tune the runner; the zero value is ready to use.

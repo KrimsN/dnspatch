@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bytes"
@@ -20,13 +20,6 @@ const (
 	// apiHost resolves nowhere: only the test proxy knows where it leads.
 	apiHost = "api.regru.test"
 )
-
-func (s *syncBuffer) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.buf.String()
-}
 
 // proxyConfig is a daemon configuration whose retriever talks to echo
 // directly and whose provider talks to the DNS API at apiHost through
@@ -74,7 +67,7 @@ func TestDaemonSendsOnlyProviderThroughProxy(t *testing.T) {
 	log := &syncBuffer{buf: &stderr}
 	done := make(chan int, 1)
 	go func() {
-		done <- run(ctx, []string{"--config", path}, &bytes.Buffer{}, log, plugin.Default)
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, log, runWith(plugin.Default, nil))
 	}()
 
 	waitFor(t, "address written through the proxy", func() bool {
@@ -91,8 +84,8 @@ func TestDaemonSendsOnlyProviderThroughProxy(t *testing.T) {
 	}
 
 	cancel()
-	if code := <-done; code != exitOK {
-		t.Errorf("exit code = %d, want %d", code, exitOK)
+	if code := <-done; code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
 	}
 	if strings.Contains(log.String(), proxyPass) {
 		t.Errorf("log leaks the proxy password:\n%s", log.String())
@@ -121,7 +114,7 @@ func TestDaemonSurvivesUnreachableProxy(t *testing.T) {
 	log := &syncBuffer{buf: &stderr}
 	done := make(chan int, 1)
 	go func() {
-		done <- run(ctx, []string{"--config", path}, &bytes.Buffer{}, log, plugin.Default)
+		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, log, runWith(plugin.Default, nil))
 	}()
 
 	waitFor(t, "failure to be reported", func() bool {
@@ -147,8 +140,8 @@ func TestDaemonSurvivesUnreachableProxy(t *testing.T) {
 	}
 
 	cancel()
-	if code := <-done; code != exitOK {
-		t.Errorf("exit code = %d, want %d", code, exitOK)
+	if code := <-done; code != ExitOK {
+		t.Errorf("exit code = %d, want %d", code, ExitOK)
 	}
 }
 
@@ -156,10 +149,10 @@ func TestBadProxyFailsAtStartup(t *testing.T) {
 	var stderr bytes.Buffer
 
 	cfg := proxyConfig("http://127.0.0.1:1", "ftp://proxyuser:"+proxyPass+"@proxy.example.com")
-	code := run(context.Background(), []string{"--config", writeConfig(t, cfg)}, &bytes.Buffer{}, &stderr, plugin.Default)
+	code := Run(context.Background(), []string{"--config", writeConfig(t, cfg)}, &bytes.Buffer{}, &stderr, runWith(plugin.Default, nil))
 
-	if code != exitConfig {
-		t.Errorf("exit code = %d, want %d", code, exitConfig)
+	if code != ExitConfig {
+		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 	if !strings.Contains(stderr.String(), "proxy") || !strings.Contains(stderr.String(), `instance "home"`) {
 		t.Errorf("stderr = %q, want a proxy error naming the instance", stderr.String())

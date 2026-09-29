@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -215,6 +216,24 @@ func (p *fakeProvider) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.writes)
+}
+
+// fakeHook records every CycleEvent it is notified of.
+type fakeHook struct {
+	mu     sync.Mutex
+	events []CycleEvent
+}
+
+func (h *fakeHook) AfterCycle(_ context.Context, ev CycleEvent) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.events = append(h.events, ev)
+}
+
+func (h *fakeHook) all() []CycleEvent {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.events)
 }
 
 func discardLogger() *slog.Logger {

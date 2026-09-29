@@ -43,7 +43,17 @@ jobs:
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
 
   image:
-    name: image
+    name: image (${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: minimal
+            tags: ""
+            suffix: ""
+          - variant: full
+            tags: ping,notify_all
+            suffix: "-full"
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -67,6 +77,8 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
+          # The full flavour gets "-full" appended to every tag.
+          flavor: suffix=${{ matrix.suffix }}
           # The same tags go to both registries.
           images: |
             ghcr.io/${{ github.repository }}
@@ -82,4 +94,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            TAGS=${{ matrix.tags }}

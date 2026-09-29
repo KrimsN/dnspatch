@@ -43,6 +43,14 @@ type Config struct {
 	// Interval is the polling interval instances fall back to.
 	Interval  time.Duration
 	Instances []Instance
+	// Notify lists the backends a build with monitoring hooks publishes every
+	// instance's success/failure transitions to (for example Redis), one per
+	// top-level [[notify]] table; a build that has none rejects a config that
+	// sets any, the same way an unsupported PingURL is rejected. Unlike
+	// PingURL this is a setting for the whole daemon, not per instance: each
+	// entry is one broker connection shared by every instance. Several entries
+	// may be of one type, for example two Redis servers.
+	Notify []Plugin
 }
 
 // Instance ties one or more retrievers to one or more providers. Retrievers
@@ -55,6 +63,13 @@ type Instance struct {
 	Interval   time.Duration
 	Retrievers []Plugin
 	Providers  []Plugin
+	// PingURL, when set, is called on every completed cycle of this instance
+	// by a build that supports monitoring hooks (the ping build tag); a build
+	// that does not rejects a config that sets it rather than silently
+	// ignoring it. Environment and file references ("${NAME}", "${file:PATH}")
+	// are expanded, same as a plugin parameter, since the URL commonly embeds
+	// a secret token (Healthchecks.io, Uptime Kuma).
+	PingURL string
 }
 
 // Plugin is a plugin type together with its final parameters: the named
@@ -82,6 +97,7 @@ func (p Plugin) Name() string {
 type rawInstance struct {
 	Name       string
 	Interval   *string
+	PingURL    *string
 	Retrievers []map[string]any
 	Providers  []map[string]any
 }
@@ -110,7 +126,7 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, err
 	}
 
-	retrievers, providers, tables, shapeErrs := checkShape(doc)
+	retrievers, providers, notifyTables, tables, shapeErrs := checkShape(doc)
 	if len(shapeErrs) > 0 {
 		return Config{}, errors.Join(shapeErrs...)
 	}
@@ -132,6 +148,16 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	cfg := Config{Interval: global}
+
+	for i, table := range notifyTables {
+		notify, notifyErrs := resolvePluginInline("notify", fmt.Sprintf("notify #%d", i+1), table)
+		if len(notifyErrs) > 0 {
+			errs = append(errs, notifyErrs...)
+		} else {
+			cfg.Notify = append(cfg.Notify, notify)
+		}
+	}
+
 	seen := make(map[string]bool, len(tables))
 
 	for i, table := range tables {
@@ -191,10 +217,10 @@ func resolvePath(flagValue, envValue string, defaults []string) (string, error) 
 }
 
 // checkShape verifies the top-level layout of the document: known keys only,
-// pools of named tables, an array of instance tables. Definitions are checked
-// for a type.
-func checkShape(doc map[string]any) (retrievers, providers map[string]map[string]any, instances []map[string]any, errs []error) {
-	errs = unknownKeys(doc, "interval", "retriever", "provider", "instance")
+// pools of named tables, an array of instance tables, and the optional array
+// of [[notify]] tables. Definitions are checked for a type.
+func checkShape(doc map[string]any) (retrievers, providers map[string]map[string]any, notify []map[string]any, instances []map[string]any, errs []error) {
+	errs = unknownKeys(doc, "interval", "retriever", "provider", "instance", "notify")
 
 	var poolErrs []error
 
@@ -204,13 +230,19 @@ func checkShape(doc map[string]any) (retrievers, providers map[string]map[string
 	providers, poolErrs = checkPool("provider", doc["provider"])
 	errs = append(errs, poolErrs...)
 
+	if value, ok := doc["notify"]; ok {
+		if notify, ok = asTables(value); !ok {
+			errs = append(errs, errors.New(`"notify" must be an array of tables: [[notify]]`))
+		}
+	}
+
 	if value, ok := doc["instance"]; ok {
 		if instances, ok = asTables(value); !ok {
 			errs = append(errs, errors.New(`"instance" must be an array of tables: [[instance]]`))
 		}
 	}
 
-	return retrievers, providers, instances, errs
+	return retrievers, providers, notify, instances, errs
 }
 
 // checkPool verifies that a pool is a table of tables and that every
@@ -253,7 +285,7 @@ func checkPool(kind string, value any) (map[string]map[string]any, []error) {
 // checkInstance verifies the layout of one instance table: known keys and
 // value types.
 func checkInstance(table map[string]any) (rawInstance, []error) {
-	errs := unknownKeys(table, "name", "interval", "retriever", "provider")
+	errs := unknownKeys(table, "name", "interval", "ping_url", "retriever", "provider")
 
 	var in rawInstance
 
@@ -269,6 +301,15 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 			errs = append(errs, errIntervalType)
 		} else {
 			in.Interval = &text
+		}
+	}
+
+	if value, ok := table["ping_url"]; ok {
+		text, isString := value.(string)
+		if !isString {
+			errs = append(errs, errors.New(`"ping_url" must be a string`))
+		} else {
+			in.PingURL = &text
 		}
 	}
 
@@ -303,6 +344,15 @@ func resolveInstance(in rawInstance, retrievers, providers map[string]map[string
 			errs = append(errs, err)
 		} else {
 			inst.Interval = interval
+		}
+	}
+
+	if in.PingURL != nil {
+		pingURL, err := expandString(*in.PingURL)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%q: %w", "ping_url", err))
+		} else {
+			inst.PingURL = pingURL
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -347,6 +348,174 @@ ref = "main"
 `)
 	if custom.Interval != time.Minute || custom.Instances[0].Interval != time.Minute {
 		t.Errorf("global interval not inherited: %v / %v", custom.Interval, custom.Instances[0].Interval)
+	}
+}
+
+func TestPingURL(t *testing.T) {
+	t.Setenv("PING_TOKEN", "abc123")
+
+	cfg := mustParse(t, header+`
+[[instance]]
+name     = "a"
+ping_url = "https://hc-ping.com/${PING_TOKEN}"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+
+[[instance]]
+name = "b"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if got := cfg.Instances[0].PingURL; got != "https://hc-ping.com/abc123" {
+		t.Errorf("ping_url = %q, want the expanded URL", got)
+	}
+	if got := cfg.Instances[1].PingURL; got != "" {
+		t.Errorf("ping_url = %q, want empty when not set", got)
+	}
+}
+
+func TestPingURLMustBeAString(t *testing.T) {
+	got := parseError(t, header+`
+[[instance]]
+name     = "a"
+ping_url = 123
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `"ping_url" must be a string`) {
+		t.Errorf("error = %q, want it to complain about ping_url's type", got)
+	}
+}
+
+func TestPingURLReportsAnUnsetEnvironmentVariable(t *testing.T) {
+	got := parseError(t, header+`
+[[instance]]
+name     = "a"
+ping_url = "https://hc-ping.com/${NOT_SET}"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `"ping_url"`) || !strings.Contains(got, `"NOT_SET"`) {
+		t.Errorf("error = %q, want it to name ping_url and the unset variable", got)
+	}
+}
+
+func TestNotify(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+
+	cfg := mustParse(t, header+`
+[[notify]]
+type    = "redis"
+address = "${REDIS_URL}"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if len(cfg.Notify) != 1 {
+		t.Fatalf("Notify = %+v, want one entry", cfg.Notify)
+	}
+	if cfg.Notify[0].Type != "redis" {
+		t.Errorf("Notify[0].Type = %q, want %q", cfg.Notify[0].Type, "redis")
+	}
+	if got := cfg.Notify[0].Params["address"]; got != "redis://localhost:6379/0" {
+		t.Errorf(`Notify[0].Params["address"] = %v, want the expanded URL`, got)
+	}
+}
+
+// Several entries may share a type, told apart by their parameters, and keep
+// the order they are written in.
+func TestNotifyTakesSeveralEntriesOfOneType(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[notify]]
+type    = "redis"
+address = "redis://one:6379/0"
+
+[[notify]]
+type    = "redis"
+address = "redis://two:6379/1"
+
+[[notify]]
+type = "mqtt"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	var got []string
+	for _, n := range cfg.Notify {
+		address, _ := n.Params["address"].(string)
+		got = append(got, n.Type+" "+address)
+	}
+
+	want := []string{"redis redis://one:6379/0", "redis redis://two:6379/1", "mqtt "}
+	if !slices.Equal(got, want) {
+		t.Errorf("Notify = %q, want %q", got, want)
+	}
+}
+
+func TestNotifyAbsentByDefault(t *testing.T) {
+	cfg := loadFull(t)
+
+	if len(cfg.Notify) != 0 {
+		t.Errorf("Notify = %+v, want none: full.toml sets no [[notify]] table", cfg.Notify)
+	}
+}
+
+func TestNotifyRequiresAType(t *testing.T) {
+	got := parseError(t, header+`
+[[notify]]
+address = "redis://localhost:6379/0"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `notify #1: "type" must be a string`) {
+		t.Errorf("error = %q, want it to name the entry and complain about the missing type", got)
+	}
+}
+
+// A single [notify] table, the shape before it became an array, is rejected
+// with a pointer to the new one rather than read leniently.
+func TestNotifyMustBeAnArrayOfTables(t *testing.T) {
+	got := parseError(t, header+`
+[notify]
+type = "redis"
+
+[[instance]]
+name = "a"
+[[instance.retriever]]
+ref = "home"
+[[instance.provider]]
+ref = "main"
+`)
+
+	if !strings.Contains(got, `"notify" must be an array of tables: [[notify]]`) {
+		t.Errorf("error = %q, want it to complain about notify's shape", got)
 	}
 }
 
