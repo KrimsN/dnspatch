@@ -14,16 +14,17 @@
 #
 # "address" is a redis:// or rediss:// URL; it carries the password and the
 # database index, so keep it in the environment, not in the file.
-[[notify]]
+[notify.alerts]
 type    = "redis"
 address = "${REDIS_URL}"
 # topic_prefix = "dnspatch.events."
 
-# Each [[notify]] table is its own broker connection, and every instance
-# publishes to all of them. Repeat the table to reach several brokers, of
-# different types or of one type with different addresses, for example a
-# second Redis for another subscriber. Uncomment to try it.
-# [[notify]]
+# Each [notify.<name>] definition is its own broker connection, shared by the
+# instances that list it in their notify key. Define more to reach several
+# brokers, of different types or of one type with different addresses, for
+# example a second Redis for another subscriber. Uncomment to try it, and add
+# "backup" to the notify list of the instance below.
+# [notify.backup]
 # type         = "redis"
 # address      = "${REDIS_URL_BACKUP}"
 # topic_prefix = "backup.dnspatch."
@@ -40,6 +41,9 @@ password = "${PASSWORD}"
 
 [[instance]]
 name = "home"
+# The notifiers this instance publishes to. Without this key it publishes to
+# every notifier defined above; [] publishes to none.
+notify = ["alerts"]
 # Called on every completed cycle (a GET on success, the same URL with /fail
 # appended on failure): a dead man's switch for Healthchecks.io or an Uptime
 # Kuma push monitor, which alerts when the pings stop arriving. The URL

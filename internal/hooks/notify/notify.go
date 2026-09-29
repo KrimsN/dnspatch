@@ -1,5 +1,5 @@
 // Package notify publishes instance status changes to whatever message broker
-// an operator configured with a [[notify]] table. The brokers are notifier
+// an operator configured with a [notify.<name>] definition. The brokers are notifier
 // plugins (plugin.Notifier, registered with plugin.RegisterNotifier; Redis
 // today, RabbitMQ or MQTT can be added later as their own package under
 // plugins/, without touching this package or the runner). BuildHook selects one
@@ -19,7 +19,7 @@ import (
 	"github.com/KrimsN/dnspatch/plugin"
 )
 
-// BuildHook builds the runner.Hook behind one [[notify]] table from the
+// BuildHook builds the runner.Hook behind one [notify.<name>] definition from the
 // notifiers registered in plugin.Default. It has the signature app.NotifyBuilder
 // wants.
 func BuildHook(cfg config.Plugin, log *slog.Logger) (runner.Hook, error) {

@@ -144,3 +144,27 @@ func (b *syncBuffer) String() string {
 	defer b.mu.Unlock()
 	return string(b.buf)
 }
+
+type closeRecorder struct {
+	recordingPublisher
+	closed int
+}
+
+func (c *closeRecorder) Close() error {
+	c.closed++
+	return nil
+}
+
+// The daemon closes the hooks that can be closed when it stops, so the Hook
+// has to hand that on to the notifier and its connection.
+func TestHookCloseClosesTheNotifier(t *testing.T) {
+	pub := &closeRecorder{}
+
+	if err := NewHook(pub, discardLogger()).Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if pub.closed != 1 {
+		t.Errorf("notifier closed %d times, want 1", pub.closed)
+	}
+}

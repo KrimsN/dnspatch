@@ -48,6 +48,12 @@ func NewHook(pub plugin.Notifier, log *slog.Logger) *Hook {
 	}
 }
 
+// Close releases the connection of the notifier the Hook publishes through. The
+// daemon closes every hook that has it when it stops.
+func (h *Hook) Close() error {
+	return h.pub.Close()
+}
+
 // AfterCycle implements runner.Hook.
 func (h *Hook) AfterCycle(ctx context.Context, ev runner.CycleEvent) {
 	if !h.changed(ev) {

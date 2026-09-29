@@ -32,8 +32,13 @@ func printConfigSummary(stdout io.Writer, path string, cfg config.Config, instan
 	params := providerParams(registry)
 
 	for i, in := range instances {
-		_, _ = fmt.Fprintf(stdout, "  %s: interval=%s retrievers=%s providers=%s\n",
-			in.Name, in.Interval, describeRetrievers(in.Retrievers), describeProviders(cfg.Instances[i].Providers, params))
+		notify := ""
+		if names := cfg.Instances[i].Notify; len(names) > 0 {
+			notify = " notify=[" + strings.Join(names, ", ") + "]"
+		}
+
+		_, _ = fmt.Fprintf(stdout, "  %s: interval=%s retrievers=%s providers=%s%s\n",
+			in.Name, in.Interval, describeRetrievers(in.Retrievers), describeProviders(cfg.Instances[i].Providers, params), notify)
 	}
 }
 

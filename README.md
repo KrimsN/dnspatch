@@ -50,7 +50,7 @@ docker run -d --name dnspatch --restart unless-stopped \
 
 The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
-There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the `[[notify]]` message-broker backends. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
+There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the notifiers that publish to a message broker. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
 
 Things to know before running it in a container:
 
@@ -83,7 +83,7 @@ Every plugin has a build tag named after its type, and there are more:
 - `dnspatch_none` leaves out every retriever and provider. Add the tags of the ones you need to bring those back, and nothing else is compiled in.
 - `providers_all` and `retrievers_all`, together with `dnspatch_none`, bring back every provider or every retriever, so `dnspatch_none,retrievers_all,cloudflare` is all the retrievers and one provider.
 - `ping` compiles in the `ping_url` hook.
-- `notify_all` compiles in every `[[notify]]` backend; a backend's own tag, such as `redis`, compiles in only that one.
+- `notify_all` compiles in every notifier backend; a backend's own tag, such as `redis`, compiles in only that one.
 
 ```sh
 # Only the ipify retriever and the Cloudflare provider.
@@ -315,30 +315,41 @@ ping_url = "${PING_URL}"   # for example https://hc-ping.com/<uuid>
 
 `ping_url` only works on a build with the `ping` tag (the full binary or image); the lightweight build rejects a config that sets it, rather than silently ignoring it, since the field would otherwise do nothing without any indication why.
 
-**Notifications.** Each top-level `[[notify]]` table publishes an event to a message broker whenever an instance's status flips between success and failure — not on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch):
+**Notifications.** A `[notify.<name>]` definition describes a message broker, and an instance that publishes to it sends an event whenever the instance's status flips between success and failure — not on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch):
 
 ```toml
-[[notify]]
+[notify.alerts]
 type    = "redis"
 address = "${REDIS_URL}"   # a redis:// URL; carries auth and the database index
 ```
 
-`[[notify]]` is an array of tables: repeat it to publish to several brokers at once, of different types or of one type with different addresses. Every instance publishes to every table, and each table is its own connection, with its own optional `topic_prefix`:
+Notifiers are defined the way retrievers and providers are, and each instance names the ones it publishes to in its `notify` list. An instance with no `notify` key publishes to every notifier the file defines, and `notify = []` gives it none. Each definition is its own broker connection, shared by the instances that list it, with its own optional `topic_prefix`, so several can be of one type:
 
 ```toml
-[[notify]]
+[notify.alerts]
 type    = "redis"
 address = "${REDIS_URL}"
 
-[[notify]]
+[notify.backup]
 type         = "redis"
 address      = "${REDIS_URL_BACKUP}"
 topic_prefix = "backup.dnspatch."
+
+[[instance]]
+name   = "home"
+notify = ["alerts"]             # only alerts
+
+[[instance]]
+name   = "office"
+notify = ["alerts", "backup"]
+
+[[instance]]
+name = "lab"                    # no notify key: alerts and backup
 ```
 
 dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
 
-Like `ping_url`, `[[notify]]` needs a build that has a backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config that sets `[[notify]]`; a build that has some backends but not the one asked for names the ones it does have, and an error in one table is reported with its position (`notify #2 (mqtt): ...`). Adding another backend (RabbitMQ, MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
+Like `ping_url`, a notifier needs a build that has its backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config whose instances use a notifier; a definition that no instance uses is ignored, and `dnspatch --check-config` shows the notifiers each instance publishes to. A build that lacks the backend a definition names says which tag brings it, and an error in one definition is reported by its name (`notify "backup" (redis): ...`). Adding another backend (RabbitMQ, MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
 
 ## Behaviour
 

@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,14 +45,14 @@ const EnvLogLevel = "DNSPATCH_LOG_LEVEL"
 // attributes.
 type HookBuilder func(inst config.Instance, log *slog.Logger) ([]runner.Hook, error)
 
-// NotifyBuilder builds the runner.Hook that publishes every instance's
-// success/failure transitions to an external broker, from one top-level
-// [[notify]] table (cfg.Type is the table's "type", cfg.Params its other
+// NotifyBuilder builds the runner.Hook that publishes instances'
+// success/failure transitions to an external broker, from one [notify.<name>]
+// definition (cfg.Ref is its name, cfg.Type its "type", cfg.Params its other
 // parameters). A build with no such backend passes a nil NotifyBuilder: Run
-// then rejects a config that sets [[notify]] instead of silently ignoring it,
-// the same way an unsupported PingURL is rejected. Unlike Hooks, this runs
-// once per [[notify]] table, not once per instance: each table is one broker
-// connection, built once and attached to every instance.
+// then rejects a config whose instances use a notifier instead of silently
+// ignoring it, the same way an unsupported PingURL is rejected. Unlike Hooks,
+// this runs once per definition, not once per instance: each definition is one
+// broker connection, built once and attached to every instance that lists it.
 type NotifyBuilder func(cfg config.Plugin, log *slog.Logger) (runner.Hook, error)
 
 // Options configures one build of the daemon.
@@ -63,8 +65,8 @@ type Options struct {
 	// Hooks builds monitoring hooks per instance. Nil means this build
 	// supports none.
 	Hooks HookBuilder
-	// Notify builds the hook behind each top-level [[notify]] table. Nil
-	// means this build supports no notify backend.
+	// Notify builds the hook behind each [notify.<name>] definition an
+	// instance uses. Nil means this build supports no notify backend.
 	Notify NotifyBuilder
 }
 
@@ -129,7 +131,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, opts Opti
 		return fail(stderr, err, ExitConfig)
 	}
 
-	closeNotify, err := attachNotify(instances, cfg.Notify, opts.Notify, logger)
+	closeNotify, err := attachNotify(instances, cfg, opts.Notify, logger)
 	if err != nil {
 		return fail(stderr, err, ExitConfig)
 	}
@@ -185,35 +187,42 @@ func parseLogLevel(flagValue, envValue string) (slog.Level, error) {
 	return level, nil
 }
 
-// attachNotify builds one hook per [[notify]] table and appends every one of
-// them to every instance, so each instance's status changes reach each broker.
-// Problems in all the tables are reported together. The returned function
-// closes the connections the hooks hold; it is safe to call even when err is
-// set, and does nothing when there is no [[notify]] table.
-func attachNotify(instances []runner.Instance, tables []config.Plugin, build NotifyBuilder, log *slog.Logger) (closeAll func(), err error) {
+// attachNotify builds one hook per notifier definition that an instance uses
+// and appends to each instance the hooks of the notifiers it lists, so its
+// status changes reach those brokers and no others. A definition shared by
+// several instances is built once. Problems in all the definitions are reported
+// together. The returned function closes the connections the hooks hold; it is
+// safe to call even when err is set, and does nothing when no instance uses a
+// notifier. instances is in the order of cfg.Instances.
+func attachNotify(instances []runner.Instance, cfg config.Config, build NotifyBuilder, log *slog.Logger) (closeAll func(), err error) {
 	closeAll = func() {}
 
-	if len(tables) == 0 {
+	if len(cfg.Notify) == 0 {
 		return closeAll, nil
 	}
 
+	names := slices.Sorted(maps.Keys(cfg.Notify))
+
 	if build == nil {
-		return closeAll, fmt.Errorf("notify: [[notify]] is set (type %q), but this build does not support a notify backend; use a build with the notify_all tag (the -full image or binary)", tables[0].Type)
+		first := cfg.Notify[names[0]]
+
+		return closeAll, fmt.Errorf("notify: notifier %q (type %q) is used, but this build does not support a notify backend; use a build with the notify_all tag (the -full image or binary)", names[0], first.Type)
 	}
 
-	var (
-		hooks []runner.Hook
-		errs  []error
-	)
+	var errs []error
 
-	for i, table := range tables {
+	hooks := make(map[string]runner.Hook, len(names))
+
+	for _, name := range names {
+		table := cfg.Notify[name]
+
 		hook, err := build(table, log)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("notify #%d (%s): %w", i+1, table.Type, err))
+			errs = append(errs, fmt.Errorf("notify %q (%s): %w", name, table.Type, err))
 			continue
 		}
 
-		hooks = append(hooks, hook)
+		hooks[name] = hook
 	}
 
 	closeAll = func() {
@@ -228,8 +237,10 @@ func attachNotify(instances []runner.Instance, tables []config.Plugin, build Not
 		return closeAll, err
 	}
 
-	for i := range instances {
-		instances[i].Hooks = append(instances[i].Hooks, hooks...)
+	for i, in := range cfg.Instances {
+		for _, name := range in.Notify {
+			instances[i].Hooks = append(instances[i].Hooks, hooks[name])
+		}
 	}
 
 	return closeAll, nil

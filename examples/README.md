@@ -15,7 +15,7 @@ with `--config`.
 | [rfc2136.toml](rfc2136.toml) | Updating a record on your own name server (BIND, Knot, PowerDNS, ...) with RFC 2136 dynamic updates signed with a TSIG key. |
 | [secrets-from-files.toml](secrets-from-files.toml) | Reading a secret from a file (`${file:/path}`) instead of an environment variable, the way Docker/Kubernetes secrets are mounted. |
 | [multi-provider.toml](multi-provider.toml) | Several instances and providers in one process: two sites, two DNS hosts, independent polling intervals. |
-| [full-build.toml](full-build.toml) | The two features that only exist in the full build: `ping_url` (a ping on every cycle) and `[[notify]]` (status changes published to Redis). |
+| [full-build.toml](full-build.toml) | The two features that only exist in the full build: `ping_url` (a ping on every cycle) and `[notify.<name>]` (status changes published to Redis, per instance). |
 
 For the full parameter reference of every plugin see
 [../docs/PARAMETERS.md](../docs/PARAMETERS.md). The general syntax

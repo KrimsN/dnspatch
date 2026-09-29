@@ -3,10 +3,11 @@
 //
 // A plain "go build" gives the lightweight build: every retriever and provider,
 // but no monitoring hooks and no notifiers, so a config that sets ping_url or
-// [[notify]] is rejected. What goes into a build is chosen with build tags:
+// publishes to a [notify.<name>] notifier is rejected. What goes into a build
+// is chosen with build tags:
 //
 //	ping           the ping_url hook (Healthchecks.io, Uptime Kuma push)
-//	notify_all     every [[notify]] backend
+//	notify_all     every notifier backend
 //	dnspatch_none  no retriever and no provider, except the ones named below
 //	providers_all  every provider, with dnspatch_none
 //	retrievers_all every retriever, with dnspatch_none

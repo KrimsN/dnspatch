@@ -765,10 +765,19 @@ ref = "p"
 	}
 }
 
-// notifyConfig builds a config with two instances and one [[notify]] table
-// per given type, using a registry with a "fake" retriever/provider type so
-// the test does not depend on any real plugin.
+// notifyConfig builds a config with two instances, a and b, and one
+// [notify.<type>] definition per given type, using a registry with a "fake"
+// retriever/provider type so the test does not depend on any real plugin. Both
+// instances get every definition.
 func notifyConfig(t *testing.T, notifyTypes ...string) (string, *plugin.Registry) {
+	t.Helper()
+
+	return notifyConfigWith(t, notifyTypes, "", "")
+}
+
+// notifyConfigWith is notifyConfig with the given extra lines in instance a and
+// in instance b, for example `notify = ["redis"]`.
+func notifyConfigWith(t *testing.T, notifyTypes []string, aExtra, bExtra string) (string, *plugin.Registry) {
 	t.Helper()
 
 	registry := plugin.NewRegistry()
@@ -781,7 +790,7 @@ func notifyConfig(t *testing.T, notifyTypes ...string) (string, *plugin.Registry
 
 	var notify strings.Builder
 	for _, typ := range notifyTypes {
-		fmt.Fprintf(&notify, "[[notify]]\ntype = %q\n\n", typ)
+		fmt.Fprintf(&notify, "[notify.%[1]s]\ntype = %[1]q\n\n", typ)
 	}
 
 	path := writeConfig(t, fmt.Sprintf(`
@@ -790,20 +799,20 @@ type = "fake"
 [provider.p]
 type = "fake"
 
-%s[[instance]]
+%[1]s[[instance]]
 name = "a"
-[[instance.retriever]]
+%[2]s[[instance.retriever]]
 ref = "r"
 [[instance.provider]]
 ref = "p"
 
 [[instance]]
 name = "b"
-[[instance.retriever]]
+%[3]s[[instance.retriever]]
 ref = "r"
 [[instance.provider]]
 ref = "p"
-`, notify.String()))
+`, notify.String(), aExtra, bExtra))
 
 	return path, registry
 }
@@ -818,7 +827,19 @@ func TestNotifyRejectedWhenBuildHasNoNotifyBackend(t *testing.T) {
 		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
 	if !strings.Contains(stderr.String(), `"redis"`) || !strings.Contains(stderr.String(), "does not support a notify backend") {
-		t.Errorf("stderr = %q, want it to name the type and explain why", stderr.String())
+		t.Errorf("stderr = %q, want it to name the notifier and explain why", stderr.String())
+	}
+}
+
+// A definition no instance uses is not something the build has to support.
+func TestUnusedNotifierIsAcceptedByABuildWithoutBackends(t *testing.T) {
+	path, registry := notifyConfigWith(t, []string{"redis"}, "notify = []\n", "notify = []\n")
+
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--config", path, "--check-config"}, &bytes.Buffer{}, &stderr, runWith(registry, nil))
+
+	if code != ExitOK {
+		t.Errorf("exit code = %d, want %d; stderr: %s", code, ExitOK, stderr.String())
 	}
 }
 
@@ -868,22 +889,14 @@ func (h *recordingHook) sawAll(instances ...string) bool {
 	return true
 }
 
-// TestNotifyBuilderRunsOnceAndReachesEveryInstance checks that NotifyBuilder,
-// unlike HookBuilder, is called once per [[notify]] table rather than once per
-// instance, and that the hook it returns is attached to every instance, not
-// just one.
-func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
-	path, registry := notifyConfig(t, "redis")
+func (h *recordingHook) saw(instance string) bool {
+	return h.sawAll(instance)
+}
 
-	var calls int
-	var gotType string
-	hook := &recordingHook{}
-	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
-		calls++
-		gotType = cfg.Type
-		return hook, nil
-	}
+// runNotifyDaemon runs the daemon on a config until every wanted hook has
+// seen the instances it is expected to see, then stops it.
+func runNotifyDaemon(t *testing.T, path string, opts Options, ready func() bool) {
+	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -893,7 +906,7 @@ func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
 		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, opts)
 	}()
 
-	waitFor(t, "the notify hook to see both instances", func() bool { return hook.sawAll("a", "b") })
+	waitFor(t, "the notify hooks to see their instances", ready)
 
 	cancel()
 	select {
@@ -904,17 +917,38 @@ func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not stop after the context was cancelled")
 	}
+}
+
+// TestNotifyBuilderRunsOnceAndReachesEveryInstance checks that NotifyBuilder,
+// unlike HookBuilder, is called once per definition rather than once per
+// instance, and that the hook it returns is attached to every instance that
+// lists it, not just one.
+func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
+	path, registry := notifyConfig(t, "redis")
+
+	var calls int
+	var gotType, gotName string
+	hook := &recordingHook{}
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		calls++
+		gotType, gotName = cfg.Type, cfg.Name()
+		return hook, nil
+	}
+
+	runNotifyDaemon(t, path, opts, func() bool { return hook.sawAll("a", "b") })
 
 	if calls != 1 {
-		t.Errorf("NotifyBuilder called %d times, want 1 (one [[notify]] table)", calls)
+		t.Errorf("NotifyBuilder called %d times, want 1 (one definition)", calls)
 	}
-	if gotType != "redis" {
-		t.Errorf("NotifyBuilder cfg.Type = %q, want %q", gotType, "redis")
+	if gotType != "redis" || gotName != "redis" {
+		t.Errorf("NotifyBuilder got type %q and name %q, want redis for both", gotType, gotName)
 	}
 }
 
-// Every [[notify]] table gets its own hook, and each hook sees every instance.
-func TestSeveralNotifyTablesEachReachEveryInstance(t *testing.T) {
+// Every definition gets its own hook, and an instance that does not list
+// notifiers reaches all of them.
+func TestSeveralNotifiersEachReachEveryInstance(t *testing.T) {
 	path, registry := notifyConfig(t, "redis", "mqtt")
 
 	hooks := map[string]*recordingHook{"redis": {}, "mqtt": {}}
@@ -923,32 +957,55 @@ func TestSeveralNotifyTablesEachReachEveryInstance(t *testing.T) {
 		return hooks[cfg.Type], nil
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	runNotifyDaemon(t, path, opts, func() bool {
+		return hooks["redis"].sawAll("a", "b") && hooks["mqtt"].sawAll("a", "b")
+	})
+}
 
-	done := make(chan int, 1)
-	go func() {
-		done <- Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, opts)
-	}()
+// An instance publishes to the notifiers it lists and to no others, and a
+// notifier that two instances list is one connection, built once.
+func TestInstancesPublishOnlyToTheNotifiersTheyList(t *testing.T) {
+	path, registry := notifyConfigWith(t, []string{"redis", "mqtt"}, `notify = ["redis"]`+"\n", `notify = ["redis", "mqtt"]`+"\n")
 
-	for typ, hook := range hooks {
-		waitFor(t, typ+" hook to see both instances", func() bool { return hook.sawAll("a", "b") })
+	hooks := map[string]*recordingHook{"redis": {}, "mqtt": {}}
+	built := map[string]int{}
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		built[cfg.Type]++
+		return hooks[cfg.Type], nil
 	}
 
-	cancel()
-	select {
-	case code := <-done:
-		if code != ExitOK {
-			t.Errorf("exit code = %d, want %d", code, ExitOK)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("daemon did not stop after the context was cancelled")
+	runNotifyDaemon(t, path, opts, func() bool {
+		return hooks["redis"].sawAll("a", "b") && hooks["mqtt"].saw("b")
+	})
+
+	if hooks["mqtt"].saw("a") {
+		t.Error("instance a published to mqtt, which it does not list")
+	}
+	if built["redis"] != 1 || built["mqtt"] != 1 {
+		t.Errorf("notifiers built %v, want each once", built)
 	}
 }
 
-// A table the build cannot serve is reported with its position, and one bad
-// table does not hide the problem of another.
-func TestNotifyErrorsNameTheTableAndAreReportedTogether(t *testing.T) {
+// A definition that no instance lists is never built.
+func TestNotifierNoInstanceListsIsNotBuilt(t *testing.T) {
+	path, registry := notifyConfigWith(t, []string{"redis", "mqtt"}, `notify = ["redis"]`+"\n", `notify = ["redis"]`+"\n")
+
+	hook := &recordingHook{}
+	opts := runWith(registry, nil)
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+		if cfg.Type == "mqtt" {
+			t.Error("the mqtt notifier was built, but no instance lists it")
+		}
+		return hook, nil
+	}
+
+	runNotifyDaemon(t, path, opts, func() bool { return hook.sawAll("a", "b") })
+}
+
+// A definition the build cannot serve is reported by name, and one bad
+// definition does not hide the problem of another.
+func TestNotifyErrorsNameTheDefinitionAndAreReportedTogether(t *testing.T) {
 	path, registry := notifyConfig(t, "redis", "mqtt", "amqp")
 
 	opts := runWith(registry, nil)
@@ -965,13 +1022,13 @@ func TestNotifyErrorsNameTheTableAndAreReportedTogether(t *testing.T) {
 	if code != ExitConfig {
 		t.Errorf("exit code = %d, want %d", code, ExitConfig)
 	}
-	for _, want := range []string{"notify #2 (mqtt): unknown backend", "notify #3 (amqp): unknown backend"} {
+	for _, want := range []string{`notify "mqtt" (mqtt): unknown backend`, `notify "amqp" (amqp): unknown backend`} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("stderr = %q, want it to contain %q", stderr.String(), want)
 		}
 	}
-	if strings.Contains(stderr.String(), "notify #1") {
-		t.Errorf("stderr = %q, want no complaint about the working table", stderr.String())
+	if strings.Contains(stderr.String(), `notify "redis"`) {
+		t.Errorf("stderr = %q, want no complaint about the working notifier", stderr.String())
 	}
 }
 
@@ -1183,5 +1240,27 @@ func TestBadLogLevelExitsWithConfigCode(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "--log-level") {
 		t.Errorf("stderr = %q, want it to name the flag", stderr.String())
+	}
+}
+
+// --check-config shows which notifiers an instance publishes to, so that a
+// name that reached the wrong instance is visible before the daemon runs.
+func TestCheckConfigShowsTheNotifiersOfEachInstance(t *testing.T) {
+	path, registry := notifyConfigWith(t, []string{"redis", "mqtt"}, `notify = ["mqtt"]`+"\n", "notify = []\n")
+
+	opts := runWith(registry, nil)
+	opts.Notify = func(config.Plugin, *slog.Logger) (runner.Hook, error) { return &recordingHook{}, nil }
+
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &stderr, opts); code != ExitOK {
+		t.Fatalf("exit code = %d, want %d; stderr: %s", code, ExitOK, stderr.String())
+	}
+
+	lines := strings.Split(stdout.String(), "\n")
+	if !strings.HasSuffix(lines[1], "providers=[p] notify=[mqtt]") {
+		t.Errorf("summary of a = %q, want it to end with the notifier it lists", lines[1])
+	}
+	if strings.Contains(lines[2], "notify") {
+		t.Errorf("summary of b = %q, want no notifier: it lists none", lines[2])
 	}
 }

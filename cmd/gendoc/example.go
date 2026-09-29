@@ -58,11 +58,11 @@ func renderExample(retrievers, providers, notifiers map[string]reflect.Type) ([]
 		return nil, err
 	}
 
-	writeInstance(&b, retrieverNames, providerNames)
-
 	if err := writeNotify(&b, notifiers); err != nil {
 		return nil, err
 	}
+
+	writeInstance(&b, retrieverNames, providerNames, sortedNames(notifiers))
 
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n"), nil
 }
@@ -111,8 +111,13 @@ func writeParam(b *strings.Builder, p param, commentOut bool) error {
 	}
 
 	text := summary(p.doc)
-	if p.required && p.optionalTable != "" {
+
+	switch {
+	case p.required && p.optionalTable != "":
 		text = strings.TrimSpace(text + " Required once " + p.optionalTable + " is set.")
+	case p.required && commentOut:
+		// A commented parameter cannot show it is required by being active.
+		text = strings.TrimRight(text, ".") + ". Required."
 	}
 
 	for _, line := range wrap(text, commentWidth-2) {
@@ -149,8 +154,9 @@ func exampleValue(p param) (string, error) {
 	}
 }
 
-// writeInstance writes an instance using the first retriever and provider.
-func writeInstance(b *strings.Builder, retrieverNames, providerNames []string) {
+// writeInstance writes an instance using the first retriever and provider, and
+// shows how it would pick notifiers when there are any.
+func writeInstance(b *strings.Builder, retrieverNames, providerNames, notifierNames []string) {
 	writeBanner(b, "Instances: each one ties one or two retrievers to the providers it updates.")
 
 	if len(retrieverNames) == 0 || len(providerNames) == 0 {
@@ -161,28 +167,46 @@ func writeInstance(b *strings.Builder, retrieverNames, providerNames []string) {
 	b.WriteString("# Add more [[instance.provider]] tables to update several providers. Parameters\n")
 	b.WriteString("# set next to a ref override the definition, for example another zone.\n")
 	b.WriteString("[[instance]]\n")
-	b.WriteString("name = \"home\"\n\n")
+	b.WriteString("name = \"home\"\n")
+
+	if len(notifierNames) > 0 {
+		b.WriteString("# The notifiers this instance publishes to, by the name of their [notify.<name>]\n")
+		b.WriteString("# definition. Without it an instance publishes to every notifier you define;\n")
+		b.WriteString("# an empty list, [], publishes to none.\n")
+		fmt.Fprintf(b, "# notify = [%s]\n", tomlString(notifierNames[0]))
+	}
+
+	b.WriteString("\n")
 	fmt.Fprintf(b, "[[instance.retriever]]\nref = %s\n\n", tomlString(retrieverNames[0]))
 	b.WriteString("# A second [[instance.retriever]] table adds a retriever for the other address\n")
 	b.WriteString("# family; each instance accepts one or two retrievers, one per family.\n")
 	fmt.Fprintf(b, "[[instance.provider]]\nref = %s\n", tomlString(providerNames[0]))
 }
 
-// writeNotify writes the top-level [[notify]] tables, one per notifier and
-// commented out: they only work on a build with a notifier compiled in (the
-// full image or binary), and the lightweight build rejects a config that sets
-// one, so leaving it active would make the example unusable there.
+// writeNotify writes a [notify.<name>] definition for every notifier, commented
+// out: they only work on a build with a notifier compiled in (the full image or
+// binary), and the lightweight build rejects a config whose instances use one,
+// so leaving it active would make the example unusable there. A build with no
+// notifier registered has nothing to show, and the section is left out.
 func writeNotify(b *strings.Builder, notifiers map[string]reflect.Type) error {
-	b.WriteString("\n")
-	writeBanner(b, "Notifications: full build only (the -full image or binary).")
+	if len(notifiers) == 0 {
+		return nil
+	}
+
+	writeBanner(b, "Notifiers: full build only (the -full image or binary).")
 
 	b.WriteString("# Publishes a JSON event to a message broker whenever an instance flips between\n")
 	b.WriteString("# success and failure, to the channel <topic_prefix><instance>. The lightweight\n")
-	b.WriteString("# build rejects a config that sets [[notify]]. See README.md, section Monitoring.\n")
+	b.WriteString("# build rejects a config whose instances use a notifier. See README.md, section\n")
+	b.WriteString("# Monitoring.\n")
 	b.WriteString("#\n")
-	b.WriteString("# Each [[notify]] table is one broker connection that every instance publishes\n")
-	b.WriteString("# to. Repeat the table to publish to several brokers, of different types or of\n")
-	b.WriteString("# one type with different addresses.\n\n")
+	b.WriteString("# Each [notify.<name>] definition is one broker connection, shared by the\n")
+	b.WriteString("# instances that publish to it. Define several to reach several brokers, of\n")
+	b.WriteString("# different types or of one type with different addresses, and name them in the\n")
+	b.WriteString("# notify list of an instance.\n")
+	b.WriteString("#\n")
+	b.WriteString("# Each definition below is a template for one notifier: uncomment it, together\n")
+	b.WriteString("# with the parameters you set and at least the ones marked Required.\n\n")
 
 	for _, name := range sortedNames(notifiers) {
 		if !bareKey.MatchString(name) {
@@ -194,7 +218,7 @@ func writeNotify(b *strings.Builder, notifiers map[string]reflect.Type) error {
 			return fmt.Errorf("notifier %q: %w", name, err)
 		}
 
-		fmt.Fprintf(b, "# [[notify]]\n# type = %s\n", tomlString(name))
+		fmt.Fprintf(b, "# [notify.%s]\n# type = %s\n\n", name, tomlString(name))
 
 		for _, p := range params {
 			if err := writeParam(b, p, true); err != nil {
