@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // roundTripFunc lets a test build an http.Client whose RoundTrip is a plain

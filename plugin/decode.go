@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/KrimsN/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
 )
 
 // Decode converts a plugin's raw parameters into its configuration struct.

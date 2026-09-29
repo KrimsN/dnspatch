@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/KrimsN/dnspatch/internal/hooks/ping"
+import "github.com/dnspatch/dnspatch/internal/hooks/ping"
 
 func init() {
 	hooks = ping.BuildHooks

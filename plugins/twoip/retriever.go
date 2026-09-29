@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/httpx"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/httpx"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // maxBody caps how much of a response is read: the JSON body is a few

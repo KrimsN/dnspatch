@@ -23,11 +23,11 @@ import (
 	"context"
 	"os"
 
-	"github.com/KrimsN/dnspatch/internal/app"
-	"github.com/KrimsN/dnspatch/internal/hooks/notify"
-	"github.com/KrimsN/dnspatch/internal/runner"
-	"github.com/KrimsN/dnspatch/plugin"
-	_ "github.com/KrimsN/dnspatch/plugins/all"
+	"github.com/dnspatch/dnspatch/internal/app"
+	"github.com/dnspatch/dnspatch/internal/hooks/notify"
+	"github.com/dnspatch/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/plugin"
+	_ "github.com/dnspatch/dnspatch/plugins/all"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

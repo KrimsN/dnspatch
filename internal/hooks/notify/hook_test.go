@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/internal/runner"
 )
 
 func discardLogger() *slog.Logger {

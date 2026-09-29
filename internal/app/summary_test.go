@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/internal/paramspec"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // fakeDNSConfig has one parameter of each kind the summary tells apart: a

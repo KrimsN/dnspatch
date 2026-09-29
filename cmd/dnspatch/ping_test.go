@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/app"
+	"github.com/dnspatch/dnspatch/internal/app"
 )
 
 // pingCounter counts the requests it receives, telling success pings

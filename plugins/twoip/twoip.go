@@ -12,7 +12,7 @@
 // proxy is the one wanted.
 package twoip
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the retriever in the configuration file.
 const Name = "2ip"

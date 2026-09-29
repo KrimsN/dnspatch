@@ -47,8 +47,8 @@ COPY --from=build /out/dnspatch /usr/local/bin/dnspatch
 # labelled too. "source" is also what links the ghcr.io package to the repository.
 LABEL org.opencontainers.image.title="dnspatch" \
       org.opencontainers.image.description="Dynamic DNS daemon in Go with a pluggable retriever/provider architecture" \
-      org.opencontainers.image.source="https://github.com/KrimsN/dnspatch" \
-      org.opencontainers.image.documentation="https://pkg.go.dev/github.com/KrimsN/dnspatch" \
+      org.opencontainers.image.source="https://github.com/dnspatch/dnspatch" \
+      org.opencontainers.image.documentation="https://pkg.go.dev/github.com/dnspatch/dnspatch" \
       org.opencontainers.image.licenses="MIT"
 
 USER nonroot:nonroot

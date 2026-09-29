@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/socks5test"
+	"github.com/dnspatch/dnspatch/internal/socks5test"
 )
 
 const secret = "hunter2"

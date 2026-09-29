@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 func TestRedisBackendIsCompiledIn(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 const testInterval = time.Minute

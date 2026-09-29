@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/internal/health"
-	"github.com/KrimsN/dnspatch/internal/runner"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/internal/health"
+	"github.com/dnspatch/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // Exit codes. A configuration problem is told apart from a runtime failure

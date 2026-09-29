@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 const (

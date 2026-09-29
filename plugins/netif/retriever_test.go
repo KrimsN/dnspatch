@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 func addrs(t *testing.T, cidrs ...string) lookupFunc {

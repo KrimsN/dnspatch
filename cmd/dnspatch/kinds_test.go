@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // retrievers_all brings back every retriever and nothing else, so it can be

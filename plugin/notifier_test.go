@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 type fakeNotifierConfig struct {

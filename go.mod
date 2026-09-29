@@ -1,4 +1,4 @@
-module github.com/KrimsN/dnspatch
+module github.com/dnspatch/dnspatch
 
 go 1.25.0
 

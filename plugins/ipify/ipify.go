@@ -14,7 +14,7 @@
 // since the proxy chooses it; the reply is still checked against it.
 package ipify
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the retriever in the configuration file.
 const Name = "ipify"

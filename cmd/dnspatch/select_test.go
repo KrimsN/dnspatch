@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // With dnspatch_none, only the plugins whose own tag is set are compiled in,

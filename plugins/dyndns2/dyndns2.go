@@ -11,7 +11,7 @@
 // is a provider of its own that fills in the update URL and calls NewForService.
 package dyndns2
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "dyndns2"

@@ -6,7 +6,7 @@
 // itself for another service, or to point this one at a different URL.
 package dynu
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "dynu"

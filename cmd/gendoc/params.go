@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/KrimsN/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
 )
 
 // param is one documented parameter of a plugin configuration.

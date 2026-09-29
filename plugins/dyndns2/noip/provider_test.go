@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 func TestBuildSendsBothAddressesToTheService(t *testing.T) {
