@@ -130,7 +130,7 @@ func TestFileNameRejectsPathTraversal(t *testing.T) {
 	rec.AfterCycle(context.Background(), runner.CycleEvent{Instance: "..", Success: true})
 	rec.AfterCycle(context.Background(), runner.CycleEvent{Instance: "../escaped", Success: true})
 
-	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escaped")); err == nil {
+	if _, statErr := os.Stat(filepath.Join(filepath.Dir(dir), "escaped")); statErr == nil {
 		t.Fatal("a status file escaped the health directory")
 	}
 	entries, err := os.ReadDir(dir)

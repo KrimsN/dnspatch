@@ -127,7 +127,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, opts Opti
 		return fail(stderr, err, ExitConfig)
 	}
 
-	if err := runner.Validate(instances); err != nil {
+	if err = runner.Validate(instances); err != nil {
 		return fail(stderr, err, ExitConfig)
 	}
 
@@ -285,13 +285,18 @@ func buildInstances(cfg config.Config, registry *plugin.Registry, buildHooks Hoo
 			built.Providers = append(built.Providers, runner.NamedProvider{Name: p.Name(), Provider: provider})
 		}
 
-		if in.PingURL == "" {
+		switch {
+		case in.PingURL == "":
 			// Nothing to wire, in any build.
-		} else if buildHooks == nil {
+		case buildHooks == nil:
 			errs = append(errs, fmt.Errorf("instance %q: ping_url is set, but this build does not support monitoring hooks; use a build with the ping tag (the -full image or binary)", in.Name))
-		} else if hooks, err := buildHooks(in, log); err != nil {
-			errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
-		} else {
+		default:
+			hooks, err := buildHooks(in, log)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("instance %q: %w", in.Name, err))
+				break
+			}
+
 			built.Hooks = hooks
 		}
 

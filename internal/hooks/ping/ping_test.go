@@ -24,7 +24,7 @@ type pingServer struct {
 	paths []string
 }
 
-func (s *pingServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+func (s *pingServer) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.paths = append(s.paths, r.URL.Path)
 	s.mu.Unlock()
