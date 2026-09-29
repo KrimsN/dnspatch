@@ -50,7 +50,7 @@ docker run -d --name dnspatch --restart unless-stopped \
 
 The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
-There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the `[[notify]]` message-broker backends. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
+There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the `[[notify]]` message-broker backends. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
 
 Things to know before running it in a container:
 
@@ -70,13 +70,69 @@ Things to know before running it in a container:
 - **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
 - **`HEALTHCHECK` needs a writable `/tmp`.** The image runs `dnspatch healthcheck` on its own (see [Monitoring](#monitoring)); with `read_only: true`, as `compose.yml` sets, mount `/tmp` as `tmpfs` too, or the check always reports the daemon as stuck.
 
-### From source
+### Building from source
 
 ```sh
 go install github.com/KrimsN/dnspatch/cmd/dnspatch@latest
 ```
 
-Requires Go 1.25 or newer.
+Requires Go 1.25 or newer. A plain `go build` gives the same daemon as the `dnspatch` image and binaries: every retriever and provider, none of the optional monitoring features. To get a smaller binary, or the features of the `-full` one, choose what goes in with build tags. This matters where size does: a Raspberry Pi, or a router running OpenWrt.
+
+Every plugin has a build tag named after its type, and there are more:
+
+- `dnspatch_none` leaves out every retriever and provider. Add the tags of the ones you need to bring those back, and nothing else is compiled in.
+- `providers_all` and `retrievers_all`, together with `dnspatch_none`, bring back every provider or every retriever, so `dnspatch_none,retrievers_all,cloudflare` is all the retrievers and one provider.
+- `ping` compiles in the `ping_url` hook.
+- `notify_all` compiles in every `[[notify]]` backend; a backend's own tag, such as `redis`, compiles in only that one.
+
+```sh
+# Only the ipify retriever and the Cloudflare provider.
+go build -tags "dnspatch_none,ipify,cloudflare" -ldflags "-s -w" -o dnspatch ./cmd/dnspatch
+
+# The whole daemon plus monitoring, what the -full image is.
+go build -tags "ping,notify_all" -o dnspatch ./cmd/dnspatch
+```
+
+A build that lacks a plugin your configuration names refuses to start and says which tag to add, for example `provider type "cloudflare" is not compiled into this build: rebuild with the "cloudflare" build tag`. Every retriever and provider a configuration uses must be in the build, so the list of tags is easiest to write from the `type` lines of your `dnspatch.toml`.
+
+A few notes on the tags:
+
+- `nicru`, `noip`, `dyn` and `dynu` are `dyndns2` with the update URL filled in, so they share its code, and the type `dyndns2` is registered along with any of them. It costs nothing, since the code is in the binary anyway.
+- Expect a saving of a megabyte or two, not a tenfold one: the HTTP and TLS code of the standard library, which nearly every plugin needs, is most of the binary. For `amd64` with `-ldflags "-s -w"`, the plain build is about 8.4 MB, `dnspatch_none,ipify,cloudflare` about 7.2 MB, and the `-full` one about 10 MB. Measure the build you care about with `ls -l`.
+- Cross-compile with `GOOS` and `GOARCH`. For a Raspberry Pi that runs a 64-bit system that is `GOARCH=arm64`, on a 32-bit Raspberry Pi OS `GOARCH=arm GOARM=7`. Most OpenWrt routers are `GOOS=linux` with `GOARCH=mipsle GOMIPS=softfloat` (MediaTek, older Atheros), `GOARCH=mips GOMIPS=softfloat`, `arm` or `arm64`; `opkg print-architecture` on the router tells which. Keep `CGO_ENABLED=0`, so that the binary is static.
+- The Docker image takes the same tags as a build argument: `docker build --build-arg TAGS=dnspatch_none,ipify,cloudflare -t dnspatch-mini .`
+
+The tags of all built-in plugins:
+
+<!-- plugin-tags:start -->
+
+| Type | Kind | Build tag | In a plain build |
+|------|------|-----------|------------------|
+| `redis` | notifier | `redis` | no (`notify_all` brings it too) |
+| `beget` | provider | `beget` | yes |
+| `cloudflare` | provider | `cloudflare` | yes |
+| `duckdns` | provider | `duckdns` | yes |
+| `dyn` | provider | `dyn` | yes |
+| `dyndns2` | provider | `dyndns2` | yes |
+| `dynu` | provider | `dynu` | yes |
+| `namecheap` | provider | `namecheap` | yes |
+| `nicru` | provider | `nicru` | yes |
+| `noip` | provider | `noip` | yes |
+| `regru` | provider | `regru` | yes |
+| `rfc2136` | provider | `rfc2136` | yes |
+| `selectel` | provider | `selectel` | yes |
+| `timeweb` | provider | `timeweb` | yes |
+| `yandexcloud` | provider | `yandexcloud` | yes |
+| `2ip` | retriever | `2ip` | yes |
+| `icanhazip` | retriever | `icanhazip` | yes |
+| `identme` | retriever | `identme` | yes |
+| `ifconfigco` | retriever | `ifconfigco` | yes |
+| `interface` | retriever | `interface` | yes |
+| `ipify` | retriever | `ipify` | yes |
+
+<!-- plugin-tags:end -->
+
+This table is generated by `go generate ./...` from the plugin packages, so it lists what the code has: a plugin added to `plugins/` appears in it, and gets its tag, with no other change.
 
 ## Quick start
 
@@ -282,7 +338,7 @@ topic_prefix = "backup.dnspatch."
 
 dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
 
-Like `ping_url`, `[[notify]]` needs a build that has a backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config that sets `[[notify]]`; a build that has some backends but not the one asked for names the ones it does have, and an error in one table is reported with its position (`notify #2 (mqtt): ...`). Adding another backend (RabbitMQ, MQTT, ...) is an `internal/hooks/notify/<backend>` package that implements one small interface and registers itself in `init`, plus a tag file in `cmd/dnspatch` — see [internal/hooks/notify](internal/hooks/notify).
+Like `ping_url`, `[[notify]]` needs a build that has a backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config that sets `[[notify]]`; a build that has some backends but not the one asked for names the ones it does have, and an error in one table is reported with its position (`notify #2 (mqtt): ...`). Adding another backend (RabbitMQ, MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
 
 ## Behaviour
 

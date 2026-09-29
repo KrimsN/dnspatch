@@ -36,7 +36,7 @@ type exampleSample struct {
 }
 
 func TestExampleShowsEveryKindOfParameter(t *testing.T) {
-	got, err := renderExample(nil, map[string]reflect.Type{"sample": reflect.TypeFor[exampleSample]()})
+	got, err := renderExample(nil, map[string]reflect.Type{"sample": reflect.TypeFor[exampleSample]()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestExampleShowsEveryKindOfParameter(t *testing.T) {
 }
 
 func TestExampleWithoutPluginsHasNoInstance(t *testing.T) {
-	got, err := renderExample(nil, nil)
+	got, err := renderExample(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +77,9 @@ func TestExampleWithoutPluginsHasNoInstance(t *testing.T) {
 }
 
 // [[notify]] only works on the full build, so the example shows it commented out:
-// an active table would make the generated file unusable on the lightweight one.
-func TestExampleShowsNotifyCommentedOut(t *testing.T) {
-	got, err := renderExample(nil, nil)
+// an active table would make the file unusable on the lightweight build.
+func TestExampleShowsNotifiersCommentedOut(t *testing.T) {
+	got, err := renderExample(nil, nil, map[string]reflect.Type{"redis": reflect.TypeFor[exampleNotifier]()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,23 +90,41 @@ func TestExampleShowsNotifyCommentedOut(t *testing.T) {
 		}
 	}
 
-	if regexp.MustCompile(`(?m)^\[\[notify\]\]`).Match(got) {
-		t.Errorf("[[notify]] is active in the example:\n%s", got)
+	if regexp.MustCompile(`(?m)^\[\[notify\]\]`).Match(got) || regexp.MustCompile(`(?m)^address`).Match(got) {
+		t.Errorf("a notifier is active in the example:\n%s", got)
 	}
 }
+
+func TestExampleWithoutNotifiersShowsNoTable(t *testing.T) {
+	got, err := renderExample(nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(got), "# [[notify]]") {
+		t.Errorf("example shows a notify table with no notifier registered:\n%s", got)
+	}
+}
+
+type exampleNotifier struct {
+	Address string `toml:"address,required" example:"${REDIS_URL}" doc:"Where the broker is."`
+
+	plugin.NotifierCommon
+}
+
 func TestExampleIsRepeatable(t *testing.T) {
 	plugins := make(map[string]reflect.Type)
 	for _, name := range []string{"e", "b", "d", "a", "c"} {
 		plugins[name] = reflect.TypeFor[exampleSample]()
 	}
 
-	first, err := renderExample(plugins, plugins)
+	first, err := renderExample(plugins, plugins, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for range 50 {
-		again, err := renderExample(plugins, plugins)
+		again, err := renderExample(plugins, plugins, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -157,7 +175,7 @@ func TestExampleRejectsParametersItCannotShow(t *testing.T) {
 
 	for name, typ := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := renderExample(nil, map[string]reflect.Type{"broken": typ})
+			_, err := renderExample(nil, map[string]reflect.Type{"broken": typ}, nil)
 			if err == nil || !strings.Contains(err.Error(), `provider "broken"`) {
 				t.Errorf("error %v does not reject and name the plugin", err)
 			}
@@ -219,7 +237,7 @@ func TestTOMLString(t *testing.T) {
 // A user copies the file, edits the values and runs it. Whatever the plugins
 // need to start has to be in it, and it has to load and build as written.
 func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
-	doc, err := renderExample(plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes())
+	doc, err := renderExample(plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +274,7 @@ func TestExampleLoadsAndBuildsAsWritten(t *testing.T) {
 func TestExampleDefinitionsAllBuild(t *testing.T) {
 	retrievers, providers := plugin.Default.RetrieverConfigTypes(), plugin.Default.ProviderConfigTypes()
 
-	doc, err := renderExample(retrievers, providers)
+	doc, err := renderExample(retrievers, providers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

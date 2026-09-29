@@ -30,6 +30,8 @@ For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml
   - [selectel](#provider-selectel)
   - [timeweb](#provider-timeweb)
   - [yandexcloud](#provider-yandexcloud)
+- [Notifiers](#notifiers)
+  - [redis](#notifier-redis)
 
 ## Retrievers
 
@@ -236,3 +238,12 @@ For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml
 | `key` | yes | — | Authorized key of the service account as JSON, the file that yc iam key create writes. The account needs the dns.editor role on the folder of the zone |
 | `iam_url` | no | `https://iam.api.cloud.yandex.net/iam/v1/tokens` | URL of the IAM API endpoint that exchanges a signed JWT for an IAM token |
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
+
+## Notifiers
+
+### Notifier `redis`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `address` | yes | — | A redis:// or rediss:// URL, as accepted by go-redis: it carries the host, an optional password and the database index |
+| `topic_prefix` | no | `dnspatch.events.` | Prepended to the instance name to form the channel, topic or routing key an event is published under |

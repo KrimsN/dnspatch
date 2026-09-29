@@ -46,6 +46,31 @@ jobs:
     steps:
       - run: test "${{ needs.test.result }}" = success
 
+  # A build made of chosen plugins is a supported way to get a small binary, so
+  # the choice has to keep working: no plugin may depend on another one being
+  # compiled in. Each one is built alone, which also proves that its tag exists.
+  plugin-tags:
+    name: build with chosen plugins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go vet -tags "dnspatch_none,cloudflare,ipify" ./cmd/dnspatch
+      - run: go test -tags "dnspatch_none,cloudflare,ipify" ./cmd/dnspatch
+      - run: go test -tags "dnspatch_none,retrievers_all,cloudflare" ./cmd/dnspatch
+      - run: go build -tags dnspatch_none -o /dev/null ./cmd/dnspatch
+      - run: |
+          set -e
+          for f in plugins/all/provider_*.go plugins/all/retriever_*.go; do
+            name="${f##*_}"
+            name="${name%.go}"
+            echo "::group::$name"
+            go build -tags "dnspatch_none,$name" -o /dev/null ./cmd/dnspatch
+            echo "::endgroup::"
+          done
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest

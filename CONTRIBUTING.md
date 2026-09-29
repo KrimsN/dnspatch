@@ -203,8 +203,16 @@ func init() {
 ```
 
 The name must be unique among providers (and among retrievers): registering a
-name twice panics at start-up. Add a blank import of the package to
-`plugins/all/all.go`, otherwise the binary does not contain it.
+name twice panics at start-up. The name is also the build tag that selects the
+plugin (see step 6), so it must be unique among all plugins, and a package
+registers exactly one. Register it with a string literal or a `Name` constant,
+which is how `go generate` reads it without compiling the package.
+
+A notification backend is a plugin as well: it implements `plugin.Notifier`,
+registers with `plugin.RegisterNotifier`, and its configuration struct embeds
+`plugin.NotifierCommon`, which supplies `topic_prefix`. Because it brings the
+client library of a broker, it is off in a plain build; `notify_all` or its own
+tag turns it on.
 
 ### 4. Implement it
 
@@ -245,18 +253,30 @@ cancelled context, and every validation error of the constructor.
 Use `plugin.NewRegistry()` rather than `plugin.Default` in tests, so that
 registrations do not leak between them.
 
-### 6. Regenerate the documentation
+### 6. Regenerate the generated files
 
-`docs/PARAMETERS.md` and `dnspatch.toml.example` are generated from the tags. After
-adding a plugin or changing a `Config`, run
+Several files are generated. After adding a plugin or changing a `Config`, run
 
 ```
 go generate ./...
 ```
 
-and commit the result. The test `TestCommittedFilesAreCurrent` (part of
-`go test ./...`, so of CI) fails when the committed files are out of date.
-Never edit the generated files by hand.
+and commit the result. It runs two generators:
+
+- `cmd/genplugins` finds the plugins by their registration call and writes,
+  into `plugins/all`, a file that imports each one under its build tag, and a
+  catalog that lets a build without a plugin say which tag brings it. It also
+  updates the table of build tags in the README. This is what makes a new
+  plugin selectable with `-tags`, and part of the default build, with no edit
+  of a list.
+- `cmd/gendoc` writes `docs/PARAMETERS.md` and `dnspatch.toml.example` from the
+  struct tags. It has to see every plugin, so `go generate` builds it with the
+  `notify_all` tag; it refuses to write from a build that lacks one.
+
+The tests `TestCommittedFilesAreCurrent` of both (part of `go test ./...`, so
+of CI) fail when the committed files are out of date; the one of `cmd/gendoc`
+needs `-tags notify_all` to run, and CI passes it. Never edit the generated
+files by hand.
 
 ### Plugins outside this repository
 

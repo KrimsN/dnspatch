@@ -4,58 +4,67 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/KrimsN/dnspatch/internal/config"
+	"github.com/KrimsN/dnspatch/internal/runner"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
-type fakePublisher struct{}
+// topicRecorder is the notifier the tests register; it remembers the topics it
+// was asked to publish under.
+type topicRecorder struct{ topics *[]string }
 
-func (fakePublisher) Publish(context.Context, string, []byte) error { return nil }
-func (fakePublisher) Close() error                                  { return nil }
+func (r topicRecorder) Publish(_ context.Context, topic string, _ []byte) error {
+	*r.topics = append(*r.topics, topic)
+	return nil
+}
 
-func TestRegistryBuildUsesTheRegisteredFactory(t *testing.T) {
-	registry := NewRegistry()
-	var gotParams map[string]any
-	registry.Register("fake", func(params map[string]any) (Publisher, error) {
-		gotParams = params
-		return fakePublisher{}, nil
+func (topicRecorder) Close() error { return nil }
+
+type fakeConfig struct {
+	plugin.NotifierCommon
+}
+
+var published []string
+
+func init() {
+	plugin.RegisterNotifier("fake", func(fakeConfig) (plugin.Notifier, error) {
+		return topicRecorder{topics: &published}, nil
 	})
+}
 
-	pub, err := registry.Build("fake", map[string]any{"address": "x"})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	if pub == nil {
-		t.Fatal("Build returned a nil Publisher with no error")
-	}
-	if gotParams["address"] != "x" {
-		t.Errorf("params passed to the factory = %v, want address=x", gotParams)
+func TestBuildHookPublishesUnderTheTopicPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+		want   string
+	}{
+		{"default prefix", nil, "dnspatch.events.home"},
+		{"custom prefix", map[string]any{"topic_prefix": "custom."}, "custom.home"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			published = nil
+
+			hook, err := BuildHook(config.Plugin{Type: "fake", Params: tc.params}, discardLogger())
+			if err != nil {
+				t.Fatalf("BuildHook: %v", err)
+			}
+
+			hook.AfterCycle(context.Background(), runner.CycleEvent{Instance: "home", Success: false})
+
+			if len(published) != 1 || published[0] != tc.want {
+				t.Errorf("published topics = %v, want [%s]", published, tc.want)
+			}
+		})
 	}
 }
 
-func TestRegistryBuildRejectsAnUnknownType(t *testing.T) {
-	registry := NewRegistry()
-	registry.Register("redis", func(map[string]any) (Publisher, error) { return fakePublisher{}, nil })
-
-	_, err := registry.Build("rabbitmq", nil)
+func TestBuildHookRejectsAnUnknownType(t *testing.T) {
+	_, err := BuildHook(config.Plugin{Type: "rabbitmq"}, discardLogger())
 	if err == nil {
-		t.Fatal("Build succeeded, want an error")
+		t.Fatal("BuildHook succeeded, want an error")
 	}
-	if !strings.Contains(err.Error(), `"rabbitmq"`) || !strings.Contains(err.Error(), "redis") {
+	if !strings.Contains(err.Error(), `"rabbitmq"`) || !strings.Contains(err.Error(), "fake") {
 		t.Errorf("error = %v, want it to name the unknown type and what is registered", err)
-	}
-}
-
-func TestTopicPrefixFallsBackToTheDefault(t *testing.T) {
-	if got := TopicPrefix(nil); got != DefaultTopicPrefix {
-		t.Errorf("TopicPrefix(nil) = %q, want %q", got, DefaultTopicPrefix)
-	}
-	if got := TopicPrefix(map[string]any{"topic_prefix": ""}); got != DefaultTopicPrefix {
-		t.Errorf("TopicPrefix with an empty override = %q, want the default", got)
-	}
-}
-
-func TestTopicPrefixUsesTheOverride(t *testing.T) {
-	got := TopicPrefix(map[string]any{"topic_prefix": "custom."})
-	if got != "custom." {
-		t.Errorf("TopicPrefix = %q, want %q", got, "custom.")
 	}
 }

@@ -22,10 +22,11 @@ type section struct {
 // render builds the whole document. Plugins are listed by name and parameters
 // in declaration order, so the output does not depend on map iteration order
 // and repeated runs give the same bytes.
-func render(retrievers, providers map[string]reflect.Type) ([]byte, error) {
+func render(retrievers, providers, notifiers map[string]reflect.Type) ([]byte, error) {
 	sections := []section{
 		{title: "Retrievers", kind: "Retriever", plugins: retrievers},
 		{title: "Providers", kind: "Provider", plugins: providers},
+		{title: "Notifiers", kind: "Notifier", plugins: notifiers},
 	}
 
 	var b strings.Builder

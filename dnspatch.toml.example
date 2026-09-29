@@ -467,11 +467,13 @@ ref = "beget"
 # Each [[notify]] table is one broker connection that every instance publishes
 # to. Repeat the table to publish to several brokers, of different types or of
 # one type with different addresses.
-#
+
 # [[notify]]
-# Backend to publish to. Only redis is available so far.
 # type = "redis"
-# A redis:// or rediss:// URL; it carries the password and the database index.
+# A redis:// or rediss:// URL, as accepted by go-redis: it carries the host,
+# an optional password and the database index
 # address = "${REDIS_URL}"
-# Prepended to the instance name to form the channel.
+
+# Prepended to the instance name to form the channel, topic or routing key an
+# event is published under
 # topic_prefix = "dnspatch.events."

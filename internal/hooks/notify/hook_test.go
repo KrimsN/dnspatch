@@ -51,7 +51,7 @@ func (p *recordingPublisher) all() (topics []string, events []Event) {
 
 func TestHookDoesNotPublishOnAFirstSuccessfulCycle(t *testing.T) {
 	pub := &recordingPublisher{}
-	hook := NewHook(pub, "prefix.", discardLogger())
+	hook := NewHook(pub, discardLogger())
 
 	hook.AfterCycle(context.Background(), runner.CycleEvent{Instance: "home", Success: true})
 
@@ -62,7 +62,7 @@ func TestHookDoesNotPublishOnAFirstSuccessfulCycle(t *testing.T) {
 
 func TestHookPublishesOnAFirstFailingCycle(t *testing.T) {
 	pub := &recordingPublisher{}
-	hook := NewHook(pub, "prefix.", discardLogger())
+	hook := NewHook(pub, discardLogger())
 	boom := errors.New("boom")
 
 	hook.AfterCycle(context.Background(), runner.CycleEvent{Instance: "home", Success: false, Err: boom})
@@ -71,8 +71,8 @@ func TestHookPublishesOnAFirstFailingCycle(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("events = %+v, want exactly 1", events)
 	}
-	if topics[0] != "prefix.home" {
-		t.Errorf("topic = %q, want %q", topics[0], "prefix.home")
+	if topics[0] != "home" {
+		t.Errorf("topic = %q, want %q", topics[0], "home")
 	}
 	if events[0].Instance != "home" || events[0].Success || events[0].Error != "boom" {
 		t.Errorf("event = %+v, want instance=home success=false error=boom", events[0])
@@ -81,7 +81,7 @@ func TestHookPublishesOnAFirstFailingCycle(t *testing.T) {
 
 func TestHookPublishesOnlyOnATransition(t *testing.T) {
 	pub := &recordingPublisher{}
-	hook := NewHook(pub, "prefix.", discardLogger())
+	hook := NewHook(pub, discardLogger())
 	ctx := context.Background()
 
 	hook.AfterCycle(ctx, runner.CycleEvent{Instance: "home", Success: true})  // first success: no event
@@ -101,7 +101,7 @@ func TestHookPublishesOnlyOnATransition(t *testing.T) {
 
 func TestHookTracksEachInstanceIndependently(t *testing.T) {
 	pub := &recordingPublisher{}
-	hook := NewHook(pub, "prefix.", discardLogger())
+	hook := NewHook(pub, discardLogger())
 	ctx := context.Background()
 
 	hook.AfterCycle(ctx, runner.CycleEvent{Instance: "a", Success: true})
@@ -117,7 +117,7 @@ func TestHookLogsAPublishFailureAndDoesNotPanic(t *testing.T) {
 	pub := &recordingPublisher{fail: errors.New("unreachable")}
 	var buf syncBuffer
 	log := slog.New(slog.NewTextHandler(&buf, nil))
-	hook := NewHook(pub, "prefix.", log)
+	hook := NewHook(pub, log)
 
 	hook.AfterCycle(context.Background(), runner.CycleEvent{Instance: "home", Success: false})
 

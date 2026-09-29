@@ -1,17 +1,21 @@
 // Command dnspatch is a dynamic DNS daemon: it watches the public IP address
 // and patches DNS records when it changes.
 //
-// A plain "go build" gives the lightweight build: no monitoring hooks and no
-// notify backends, so a config that sets ping_url or [[notify]] is rejected.
-// Optional features are compiled in with build tags, each in its own file so
-// that its dependencies stay out of a build that does not ask for them:
+// A plain "go build" gives the lightweight build: every retriever and provider,
+// but no monitoring hooks and no notifiers, so a config that sets ping_url or
+// [[notify]] is rejected. What goes into a build is chosen with build tags:
 //
-//	ping        the ping_url hook (Healthchecks.io, Uptime Kuma push)
-//	redis       the [[notify]] backend publishing to Redis Pub/Sub
-//	notify_all  every notify backend
+//	ping           the ping_url hook (Healthchecks.io, Uptime Kuma push)
+//	notify_all     every [[notify]] backend
+//	dnspatch_none  no retriever and no provider, except the ones named below
+//	providers_all  every provider, with dnspatch_none
+//	retrievers_all every retriever, with dnspatch_none
+//	<plugin>       one plugin, by its type name: redis, cloudflare, ipify, ...
 //
-// The release binaries and images come in two flavours: this lightweight one
-// and the -full one, built with -tags "ping,notify_all".
+// The tag of a plugin comes from plugins/all, which cmd/genplugins generates,
+// and README.md has the table. The release binaries and images come in two
+// flavours: this lightweight one and the -full one, built with -tags
+// "ping,notify_all".
 package main
 
 import (
@@ -37,8 +41,8 @@ func options() app.Options {
 		Registry: plugin.Default,
 		Version:  version,
 		Hooks:    hooks,
-		// Always set: with no backend compiled in, notify.Default has nothing
-		// to build and says so, naming the backends this build does have.
+		// Always set: with no backend compiled in, the registry has nothing to
+		// build and says so, naming the tag that brings the backend asked for.
 		Notify: notify.BuildHook,
 	}
 }

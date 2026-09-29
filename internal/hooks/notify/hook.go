@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/KrimsN/dnspatch/internal/runner"
+	"github.com/KrimsN/dnspatch/plugin"
 )
 
 // Event is the JSON payload published for one instance whose success/failure
@@ -30,21 +31,20 @@ type Event struct {
 // value is shared across every instance, so it tracks each one's last known
 // status itself.
 type Hook struct {
-	pub         Publisher
-	topicPrefix string
-	log         *slog.Logger
+	pub plugin.Notifier
+	log *slog.Logger
 
 	mu    sync.Mutex
 	state map[string]bool // instance -> last known Success
 }
 
-// NewHook returns a Hook that publishes to topicPrefix+instance.
-func NewHook(pub Publisher, topicPrefix string, log *slog.Logger) *Hook {
+// NewHook returns a Hook that publishes through pub, under the name of the
+// instance; pub adds the topic prefix.
+func NewHook(pub plugin.Notifier, log *slog.Logger) *Hook {
 	return &Hook{
-		pub:         pub,
-		topicPrefix: topicPrefix,
-		log:         log,
-		state:       make(map[string]bool),
+		pub:   pub,
+		log:   log,
+		state: make(map[string]bool),
 	}
 }
 
@@ -65,7 +65,7 @@ func (h *Hook) AfterCycle(ctx context.Context, ev runner.CycleEvent) {
 		return
 	}
 
-	if err := h.pub.Publish(ctx, h.topicPrefix+ev.Instance, payload); err != nil {
+	if err := h.pub.Publish(ctx, ev.Instance, payload); err != nil {
 		h.log.Warn("could not publish notify event", "instance", ev.Instance, "err", err)
 	}
 }
