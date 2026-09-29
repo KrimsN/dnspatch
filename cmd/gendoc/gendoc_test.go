@@ -168,7 +168,7 @@ func TestRenderOutput(t *testing.T) {
 		"\n" +
 		"This file is generated from plugin struct tags, so manual edits are\n" +
 		"overwritten. After changing a plugin configuration, run `go generate ./...`.\n" +
-		"For a configuration to start from, copy [config.toml.example](../config.toml.example).\n" +
+		"For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml.example).\n" +
 		"\n" +
 		"## Contents\n" +
 		"\n" +
@@ -272,7 +272,7 @@ func TestRenderNamesTheBadPlugin(t *testing.T) {
 
 func TestRunWritesBothFilesAndCreatesTheirDirectories(t *testing.T) {
 	dir := t.TempDir()
-	docs, example := filepath.Join(dir, "docs", "PARAMETERS.md"), filepath.Join(dir, "etc", "config.toml.example")
+	docs, example := filepath.Join(dir, "docs", "PARAMETERS.md"), filepath.Join(dir, "etc", "dnspatch.toml.example")
 
 	if err := run(docs, example); err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestCommittedFilesAreCurrent(t *testing.T) {
 
 	files := map[string]func(map[string]reflect.Type, map[string]reflect.Type) ([]byte, error){
 		"docs/PARAMETERS.md":  render,
-		"config.toml.example": renderExample,
+		"dnspatch.toml.example": renderExample,
 	}
 
 	for name, generate := range files {

@@ -1,6 +1,6 @@
 // Command gendoc writes the files generated from the configuration types of
 // the built-in plugins: docs/PARAMETERS.md, the reference of their parameters,
-// and config.toml.example, a configuration to copy and edit.
+// and dnspatch.toml.example, a configuration to copy and edit.
 //
 // It is run by go generate; see generate.go in the repository root.
 package main
@@ -17,7 +17,7 @@ import (
 
 func main() {
 	docs := flag.String("docs", filepath.Join("docs", "PARAMETERS.md"), "parameter reference to write, relative to the working directory")
-	example := flag.String("example", "config.toml.example", "example configuration to write, relative to the working directory")
+	example := flag.String("example", "dnspatch.toml.example", "example configuration to write, relative to the working directory")
 	flag.Parse()
 
 	if err := run(*docs, *example); err != nil {

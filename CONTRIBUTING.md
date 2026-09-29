@@ -153,7 +153,7 @@ Notes:
 #### Order and names of parameters
 
 The order of the fields of `Config` is the order of the parameters in
-`docs/PARAMETERS.md`, in `config.toml.example` and in the signature that
+`docs/PARAMETERS.md`, in `dnspatch.toml.example` and in the signature that
 `--check-config` prints for a provider. So that a reader finds the same thing in
 the same place in every plugin, the order goes from the general to the
 particular, with secrets and `proxy` at the end:
@@ -247,7 +247,7 @@ registrations do not leak between them.
 
 ### 6. Regenerate the documentation
 
-`docs/PARAMETERS.md` and `config.toml.example` are generated from the tags. After
+`docs/PARAMETERS.md` and `dnspatch.toml.example` are generated from the tags. After
 adding a plugin or changing a `Config`, run
 
 ```

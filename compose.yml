@@ -1,6 +1,6 @@
 # Runs dnspatch in a container.
 #
-#   cp config.toml.example dnspatch.toml   # edit it
+#   cp dnspatch.toml.example dnspatch.toml   # edit it
 #   cp .env.example .env                   # put the secrets in it
 #   docker compose up -d
 #

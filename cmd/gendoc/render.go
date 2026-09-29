@@ -34,7 +34,7 @@ func render(retrievers, providers map[string]reflect.Type) ([]byte, error) {
 	b.WriteString("# Plugin parameters\n\n")
 	b.WriteString("This file is generated from plugin struct tags, so manual edits are\n")
 	b.WriteString("overwritten. After changing a plugin configuration, run `go generate ./...`.\n")
-	b.WriteString("For a configuration to start from, copy [config.toml.example](../config.toml.example).\n\n")
+	b.WriteString("For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml.example).\n\n")
 
 	writeContents(&b, sections)
 

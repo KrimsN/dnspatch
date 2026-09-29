@@ -30,7 +30,7 @@ The image is built for `linux/amd64`, `linux/arm64` and `linux/arm/v7`. It runs 
 With Docker Compose ([compose.yml](compose.yml)):
 
 ```sh
-cp config.toml.example dnspatch.toml   # edit it
+cp dnspatch.toml.example dnspatch.toml   # edit it
 cp .env.example .env                   # put the secrets in it
 chmod 644 dnspatch.toml                # the container user must be able to read it
 docker compose up -d
@@ -80,7 +80,7 @@ Requires Go 1.25 or newer.
 
 ## Quick start
 
-Copy [config.toml.example](config.toml.example) to `dnspatch.toml`, fill it in and start the daemon:
+Copy [dnspatch.toml.example](dnspatch.toml.example) to `dnspatch.toml`, fill it in and start the daemon:
 
 ```sh
 dnspatch --config dnspatch.toml

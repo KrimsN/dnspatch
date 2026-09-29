@@ -4,7 +4,7 @@
 
 This file is generated from plugin struct tags, so manual edits are
 overwritten. After changing a plugin configuration, run `go generate ./...`.
-For a configuration to start from, copy [config.toml.example](../config.toml.example).
+For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml.example).
 
 ## Contents
 
