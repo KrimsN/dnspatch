@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 type fakeConfig struct {

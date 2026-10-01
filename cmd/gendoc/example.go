@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
 )
 
 const (

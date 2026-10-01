@@ -15,7 +15,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // Name is the type name of the notifier in the configuration file.

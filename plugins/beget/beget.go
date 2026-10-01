@@ -12,7 +12,7 @@
 // configuration to offer and ignores plugin.RecordOptions.TTL.
 package beget
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "beget"

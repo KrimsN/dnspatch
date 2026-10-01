@@ -3,7 +3,7 @@ package plugin
 import (
 	"reflect"
 
-	"github.com/KrimsN/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
 )
 
 // configFields lists the configurable fields of a struct type. It panics on

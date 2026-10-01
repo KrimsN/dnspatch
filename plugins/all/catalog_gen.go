@@ -2,7 +2,7 @@
 
 package all
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Every plugin of the source tree is declared, whether or not this build
 // compiled it in: that is what lets a configuration that names a missing one

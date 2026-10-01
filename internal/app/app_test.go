@@ -20,11 +20,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/internal/health"
-	"github.com/KrimsN/dnspatch/internal/runner"
-	"github.com/KrimsN/dnspatch/plugin"
-	_ "github.com/KrimsN/dnspatch/plugins/all"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/internal/health"
+	"github.com/dnspatch/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/plugin"
+	_ "github.com/dnspatch/dnspatch/plugins/all"
 )
 
 // fakeWorld plays both external services: the IP echo and the REG.RU DNS API.

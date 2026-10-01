@@ -20,7 +20,7 @@
 // limit; an instance that polls more often gets a warning in the log.
 package ifconfigco
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the retriever in the configuration file.
 const Name = "ifconfigco"

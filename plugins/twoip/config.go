@@ -1,6 +1,6 @@
 package twoip
 
-import "github.com/KrimsN/dnspatch/internal/httpx"
+import "github.com/dnspatch/dnspatch/internal/httpx"
 
 // Config holds the parameters of the 2ip.io retriever.
 type Config struct {

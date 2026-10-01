@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/internal/runner"
 )
 
 // Timeout bounds a single ping request, so an unreachable or slow monitoring

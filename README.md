@@ -1,15 +1,15 @@
 # dnspatch
 
-[![CI](https://img.shields.io/github/actions/workflow/status/KrimsN/dnspatch/ci.yml?branch=main&label=CI)](https://github.com/KrimsN/dnspatch/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/KrimsN/dnspatch)](https://github.com/KrimsN/dnspatch/releases/latest)
-[![Go Reference](https://pkg.go.dev/badge/github.com/KrimsN/dnspatch.svg)](https://pkg.go.dev/github.com/KrimsN/dnspatch)
+[![CI](https://img.shields.io/github/actions/workflow/status/dnspatch/dnspatch/ci.yml?branch=main&label=CI)](https://github.com/dnspatch/dnspatch/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dnspatch/dnspatch)](https://github.com/dnspatch/dnspatch/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/dnspatch/dnspatch.svg)](https://pkg.go.dev/github.com/dnspatch/dnspatch)
 [![Docker pulls](https://img.shields.io/docker/pulls/krimsn/dnspatch)](https://hub.docker.com/r/krimsn/dnspatch)
-[![License](https://img.shields.io/github/license/KrimsN/dnspatch)](LICENSE)
-[![Hits](https://hits.sh/github.com/KrimsN/dnspatch.svg)](https://hits.sh/github.com/KrimsN/dnspatch/)
+[![License](https://img.shields.io/github/license/dnspatch/dnspatch)](LICENSE)
+[![Hits](https://hits.sh/github.com/dnspatch/dnspatch.svg)](https://hits.sh/github.com/dnspatch/dnspatch/)
 
 A dynamic DNS daemon in Go: it watches your public IP address and patches your DNS records when it changes.
 
-[Releases](https://github.com/KrimsN/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/KrimsN/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/KrimsN/dnspatch) · [Issues](https://github.com/KrimsN/dnspatch/issues)
+[Releases](https://github.com/dnspatch/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/dnspatch/dnspatch) · [Issues](https://github.com/dnspatch/dnspatch/issues)
 
 - One static binary or a container image of a few megabytes, no runtime dependencies.
 - Several independent instances in one process: track more than one site, update more than one provider.
@@ -21,7 +21,7 @@ A dynamic DNS daemon in Go: it watches your public IP address and patches your D
 
 ### Binary
 
-Download the archive for your platform from the [releases page](https://github.com/KrimsN/dnspatch/releases): Linux (amd64, arm64, armv7), macOS and Windows (amd64, arm64). Each release carries a `checksums.txt`.
+Download the archive for your platform from the [releases page](https://github.com/dnspatch/dnspatch/releases): Linux (amd64, arm64, armv7), macOS and Windows (amd64, arm64). Each release carries a `checksums.txt`.
 
 ### Docker
 
@@ -48,7 +48,7 @@ docker run -d --name dnspatch --restart unless-stopped \
   krimsn/dnspatch:latest
 ```
 
-The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/krimsn/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
+The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/dnspatch/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
 
 There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the notifiers that publish to a message broker. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
 
@@ -73,7 +73,7 @@ Things to know before running it in a container:
 ### Building from source
 
 ```sh
-go install github.com/KrimsN/dnspatch/cmd/dnspatch@latest
+go install github.com/dnspatch/dnspatch/cmd/dnspatch@latest
 ```
 
 Requires Go 1.25 or newer. A plain `go build` gives the same daemon as the `dnspatch` image and binaries: every retriever and provider, none of the optional monitoring features. To get a smaller binary, or the features of the `-full` one, choose what goes in with build tags. This matters where size does: a Raspberry Pi, or a router running OpenWrt.
@@ -399,7 +399,7 @@ A plugin is a configuration struct plus a constructor; struct tags declare the p
 
 ## Contributing
 
-Bug reports and ideas go to [GitHub Issues](https://github.com/KrimsN/dnspatch/issues). [CONTRIBUTING.md](CONTRIBUTING.md) covers commit messages, pull requests, how branch names and `Linear: DNS-N` lines in pull requests relate to the maintainer's task tracker, and how to write a plugin.
+Bug reports and ideas go to [GitHub Issues](https://github.com/dnspatch/dnspatch/issues). [CONTRIBUTING.md](CONTRIBUTING.md) covers commit messages, pull requests, how branch names and `Linear: DNS-N` lines in pull requests relate to the maintainer's task tracker, and how to write a plugin.
 
 ## License
 

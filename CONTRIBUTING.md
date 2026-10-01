@@ -35,7 +35,7 @@ is filtered out by `.goreleaser.yaml`.
 
 ## Issues, branches and Linear
 
-Bug reports, questions and ideas go to [GitHub Issues](https://github.com/KrimsN/dnspatch/issues).
+Bug reports, questions and ideas go to [GitHub Issues](https://github.com/dnspatch/dnspatch/issues).
 That is all an outside contributor needs.
 
 The maintainer plans the work in [Linear](https://linear.app), a task tracker: a

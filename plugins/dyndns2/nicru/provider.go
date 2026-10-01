@@ -1,8 +1,8 @@
 package nicru
 
 import (
-	"github.com/KrimsN/dnspatch/plugin"
-	"github.com/KrimsN/dnspatch/plugins/dyndns2"
+	"github.com/dnspatch/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugins/dyndns2"
 )
 
 // endpoint is the update URL of the NIC.RU Dynamic DNS service.

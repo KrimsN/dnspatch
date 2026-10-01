@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/httpx"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/httpx"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 const (

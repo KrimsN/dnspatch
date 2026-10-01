@@ -10,7 +10,7 @@
 // applies both or neither.
 package rfc2136
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "rfc2136"

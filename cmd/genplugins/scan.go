@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // registrars maps the registration functions of package plugin to the kind of

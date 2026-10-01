@@ -103,7 +103,7 @@ release:
 
     ```sh
     docker pull krimsn/dnspatch:{{ .Version }}
-    docker pull ghcr.io/krimsn/dnspatch:{{ .Version }}
+    docker pull ghcr.io/dnspatch/dnspatch:{{ .Version }}
     ```
 
     The `-full` tag is the same image with `ping_url` and the notifier backends compiled in:
@@ -115,8 +115,8 @@ release:
     **Go:**
 
     ```sh
-    go install github.com/KrimsN/dnspatch/cmd/dnspatch@{{ .Tag }}
-    go install -tags "ping,notify_all" github.com/KrimsN/dnspatch/cmd/dnspatch@{{ .Tag }}   # the full build
+    go install github.com/dnspatch/dnspatch/cmd/dnspatch@{{ .Tag }}
+    go install -tags "ping,notify_all" github.com/dnspatch/dnspatch/cmd/dnspatch@{{ .Tag }}   # the full build
     ```
 
     **Binary:** download the archive for your platform below and check it against `checksums.txt`. `dnspatch_*` is the lightweight build, `dnspatch-full_*` the one with `ping_url` and the notifier backends.

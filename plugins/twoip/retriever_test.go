@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 func newTestRetriever(t *testing.T, handler http.HandlerFunc) *retriever {

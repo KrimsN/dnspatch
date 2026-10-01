@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 var epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

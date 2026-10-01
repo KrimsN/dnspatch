@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 const (
@@ -67,7 +67,7 @@ func hint(p found) string {
 func renderCatalog(plugins []found) []byte {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "%s\n\npackage all\n\nimport \"github.com/KrimsN/dnspatch/plugin\"\n\n", header)
+	fmt.Fprintf(&b, "%s\n\npackage all\n\nimport \"github.com/dnspatch/dnspatch/plugin\"\n\n", header)
 	b.WriteString("// Every plugin of the source tree is declared, whether or not this build\n")
 	b.WriteString("// compiled it in: that is what lets a configuration that names a missing one\n")
 	b.WriteString("// be told which build tag brings it.\n")

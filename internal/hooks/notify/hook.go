@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/runner"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // Event is the JSON payload published for one instance whose success/failure

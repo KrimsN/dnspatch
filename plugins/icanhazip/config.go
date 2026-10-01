@@ -1,6 +1,6 @@
 package icanhazip
 
-import "github.com/KrimsN/dnspatch/internal/httpx"
+import "github.com/dnspatch/dnspatch/internal/httpx"
 
 // Config holds the parameters of the icanhazip retriever.
 type Config struct {

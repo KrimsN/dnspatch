@@ -1,6 +1,6 @@
 package ifconfigco
 
-import "github.com/KrimsN/dnspatch/internal/httpx"
+import "github.com/dnspatch/dnspatch/internal/httpx"
 
 // Config holds the parameters of the ifconfigco retriever.
 type Config struct {

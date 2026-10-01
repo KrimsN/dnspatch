@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // errAttemptTimeout is the cancellation cause of an attempt that ran out of

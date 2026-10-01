@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // DefaultAttemptTimeout bounds a single retrieval or a single provider write.

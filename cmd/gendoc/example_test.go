@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 type exampleSample struct {

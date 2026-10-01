@@ -5,7 +5,7 @@
 // a record cannot be set through it: REG.RU keeps a single TTL per zone.
 package regru
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "regru"

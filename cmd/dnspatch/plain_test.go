@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // The plain build must not carry the optional features: that is what keeps its

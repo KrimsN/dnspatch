@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 func build(t *testing.T, params map[string]any) (plugin.Notifier, error) {

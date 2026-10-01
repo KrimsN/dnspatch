@@ -6,7 +6,7 @@
 // of dyndns2's good/nochg vocabulary, so it needs its own plugin.
 package duckdns
 
-import "github.com/KrimsN/dnspatch/plugin"
+import "github.com/dnspatch/dnspatch/plugin"
 
 // Name is the type name of the provider in the configuration file.
 const Name = "duckdns"

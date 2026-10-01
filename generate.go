@@ -4,12 +4,12 @@
 //
 // dnspatch is a dynamic DNS daemon: it watches the public IP address and
 // patches DNS records when it changes. The daemon is the command
-// github.com/KrimsN/dnspatch/cmd/dnspatch. Its retrievers and providers are
+// github.com/dnspatch/dnspatch/cmd/dnspatch. Its retrievers and providers are
 // plugins that implement the interfaces of the public package
-// github.com/KrimsN/dnspatch/plugin; the built-in ones live under
-// github.com/KrimsN/dnspatch/plugins.
+// github.com/dnspatch/dnspatch/plugin; the built-in ones live under
+// github.com/dnspatch/dnspatch/plugins.
 //
-// Source, releases and container images: https://github.com/KrimsN/dnspatch.
+// Source, releases and container images: https://github.com/dnspatch/dnspatch.
 package dnspatch
 
 //go:generate go run ./cmd/genplugins

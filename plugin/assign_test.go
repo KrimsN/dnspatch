@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // kinds has one field of every kind Decode knows how to fill.

@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/KrimsN/dnspatch/plugins/netif"
+import _ "github.com/dnspatch/dnspatch/plugins/netif"

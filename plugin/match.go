@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/KrimsN/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
 )
 
 // paramMatch is one configurable field together with the value given for it,

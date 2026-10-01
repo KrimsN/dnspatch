@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/KrimsN/dnspatch/plugin"
-	_ "github.com/KrimsN/dnspatch/plugins/all"
+	"github.com/dnspatch/dnspatch/plugin"
+	_ "github.com/dnspatch/dnspatch/plugins/all"
 )
 
 func main() {

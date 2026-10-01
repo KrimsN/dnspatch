@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/KrimsN/dnspatch/internal/config"
-	"github.com/KrimsN/dnspatch/internal/paramspec"
-	"github.com/KrimsN/dnspatch/internal/runner"
-	"github.com/KrimsN/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/internal/config"
+	"github.com/dnspatch/dnspatch/internal/paramspec"
+	"github.com/dnspatch/dnspatch/internal/runner"
+	"github.com/dnspatch/dnspatch/plugin"
 )
 
 // maskedValue stands in for the value of a secret parameter.

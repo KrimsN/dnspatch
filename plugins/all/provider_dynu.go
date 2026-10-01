@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/KrimsN/dnspatch/plugins/dyndns2/dynu"
+import _ "github.com/dnspatch/dnspatch/plugins/dyndns2/dynu"
