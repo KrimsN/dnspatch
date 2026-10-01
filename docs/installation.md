@@ -29,8 +29,10 @@ Releases ship two builds of the daemon:
 
 | Build | Archive | Image tags | What it is |
 |-------|---------|------------|------------|
-| lightweight | `dnspatch_*` | `0.1.0`, `0.1`, `latest` | every retriever and provider, none of the optional monitoring features |
-| full | `dnspatch-full_*` | `0.1.0-full`, `latest-full` | the same, plus the `ping_url` hook and the notifiers that publish to a message broker (see [Monitoring](operations/monitoring.md)) |
+| lightweight | `dnspatch_*` | `0.4.0`, `0.4`, `latest` | every retriever and provider, none of the optional monitoring features |
+| full | `dnspatch-full_*` | `0.4.0-full`, `0.4-full`, `latest-full` | the same, plus the `ping_url` hook and the notifiers that publish to a message broker (see [Monitoring](operations/monitoring.md)) |
+
+The full build exists from 0.4.0 on. Releases 0.1 to 0.3 had a single build, the lightweight one.
 
 Nothing else changes between them, and a config that uses none of the optional features behaves identically on both.
 
