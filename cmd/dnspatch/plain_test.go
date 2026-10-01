@@ -9,13 +9,9 @@ import (
 	"github.com/dnspatch/dnspatch/plugin"
 )
 
-// The plain build must not carry the optional features: that is what keeps its
+// The plain build must not carry the notifier backends: that is what keeps its
 // binary and image small, and what makes a config using them fail loudly.
-func TestPlainBuildHasNoOptionalFeatures(t *testing.T) {
-	if options().Hooks != nil {
-		t.Error("Hooks is set in a build without the ping tag")
-	}
-
+func TestPlainBuildHasNoNotifiers(t *testing.T) {
 	_, err := plugin.Default.BuildNotifier("redis", map[string]any{"address": "redis://localhost:6379/0"})
 	if err == nil || !strings.Contains(err.Error(), "not compiled into this build") {
 		t.Errorf("BuildNotifier(redis) error = %v, want it to say the backend is not compiled in", err)

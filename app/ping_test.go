@@ -1,6 +1,6 @@
 //go:build ping
 
-package main
+package app
 
 import (
 	"bytes"
@@ -14,7 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dnspatch/dnspatch/internal/app"
+	iapp "github.com/dnspatch/dnspatch/internal/app"
+	_ "github.com/dnspatch/dnspatch/plugins/all"
 )
 
 // pingCounter counts the requests it receives, telling success pings
@@ -99,7 +100,7 @@ ref = "dns"
 
 	done := make(chan int, 1)
 	go func() {
-		done <- app.Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, options())
+		done <- iapp.Run(ctx, []string{"--config", path}, &bytes.Buffer{}, &bytes.Buffer{}, options(settings{}))
 	}()
 
 	waitFor(t, "at least two successful pings", func() bool {
@@ -110,8 +111,8 @@ ref = "dns"
 	cancel()
 	select {
 	case code := <-done:
-		if code != app.ExitOK {
-			t.Errorf("exit code = %d, want %d", code, app.ExitOK)
+		if code != iapp.ExitOK {
+			t.Errorf("exit code = %d, want %d", code, iapp.ExitOK)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not stop after the context was cancelled")

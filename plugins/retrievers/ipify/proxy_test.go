@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dnspatch/dnspatch/internal/httpx"
+	"github.com/dnspatch/dnspatch/httpx"
 	"github.com/dnspatch/dnspatch/internal/socks5test"
 	"github.com/dnspatch/dnspatch/plugin"
 )

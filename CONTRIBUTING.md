@@ -99,3 +99,5 @@ mkdocs serve
 ## Writing a plugin
 
 The step-by-step guide lives in the documentation: [Writing a plugin](https://dnspatch.github.io/dnspatch/development/writing-a-plugin/), source in [docs/development/writing-a-plugin.md](docs/development/writing-a-plugin.md). After adding a plugin or changing a `Config`, run `go generate ./...` and commit the result: it rewrites `docs/PARAMETERS.md`, `dnspatch.toml.example`, `plugins/all` and the table of build tags. The tests `TestCommittedFilesAreCurrent` of `cmd/gendoc` (which needs `-tags notify_all`) and `cmd/genplugins` fail when the committed files are out of date.
+
+A plugin can also live in your own module and ship in a binary of your own, with `app.Main` and `httpx` from this module: see [Plugins outside the repository](https://dnspatch.github.io/dnspatch/development/external-plugins/). Those two packages and `plugin` are the public API; keep their surface minimal, because everything exported there is a compatibility promise.

@@ -1,6 +1,6 @@
 package cloudflare
 
-import "github.com/dnspatch/dnspatch/internal/httpx"
+import "github.com/dnspatch/dnspatch/httpx"
 
 // Config holds the parameters of the cloudflare provider.
 type Config struct {
