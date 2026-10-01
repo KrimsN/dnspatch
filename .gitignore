@@ -13,3 +13,6 @@ config.toml
 # Secrets and the local configuration
 .env
 dnspatch.toml
+
+# Documentation site build output
+/site/

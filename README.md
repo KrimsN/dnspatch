@@ -9,159 +9,35 @@
 
 A dynamic DNS daemon in Go: it watches your public IP address and patches your DNS records when it changes.
 
-[Releases](https://github.com/dnspatch/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/dnspatch/dnspatch) · [Issues](https://github.com/dnspatch/dnspatch/issues)
+[Documentation](https://dnspatch.github.io/dnspatch/) · [Releases](https://github.com/dnspatch/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/dnspatch/dnspatch) · [Issues](https://github.com/dnspatch/dnspatch/issues)
 
 - One static binary or a container image of a few megabytes, no runtime dependencies.
 - Several independent instances in one process: track more than one site, update more than one provider.
 - Retrievers and providers are plugins. The plugin contract is a public Go package, so you can add your own without forking.
 
-> **Versioning.** dnspatch follows [semantic versioning](https://semver.org), and it is in the `v0.x` series on purpose: the plugin contract has not been proven by many plugins yet. Until `v1.0.0`, a minor release (`v0.1` to `v0.2`) may change the public API of the `plugin` package and the configuration format; patch releases will not. Breaking changes are called out in the release notes and described in the [migration guides](docs/migrations/). Pin the version you tested.
+> **Versioning.** dnspatch follows [semantic versioning](https://semver.org), and it is in the `v0.x` series on purpose: the plugin contract has not been proven by many plugins yet. Until `v1.0.0`, a minor release (`v0.1` to `v0.2`) may change the public API of the `plugin` package and the configuration format; patch releases will not. Breaking changes are called out in the release notes and described in the [migration guides](https://dnspatch.github.io/dnspatch/migrations/0.2-to-0.3/). Pin the version you tested.
 
 ## Install
 
-### Binary
-
-Download the archive for your platform from the [releases page](https://github.com/dnspatch/dnspatch/releases): Linux (amd64, arm64, armv7), macOS and Windows (amd64, arm64). Each release carries a `checksums.txt`.
-
-### Docker
-
-The image is built for `linux/amd64`, `linux/arm64` and `linux/arm/v7`. It runs as an unprivileged user (uid 65532) and looks for its configuration at `/etc/dnspatch/config.toml`. The configuration is not baked into the image: mount it, and changing a setting means editing the file and restarting the container, never rebuilding.
-
-With Docker Compose ([compose.yml](compose.yml)):
+Download a binary from the [releases page](https://github.com/dnspatch/dnspatch/releases) (Linux, macOS and Windows), or run the container image:
 
 ```sh
-cp dnspatch.toml.example dnspatch.toml   # edit it
-cp .env.example .env                   # put the secrets in it
-chmod 644 dnspatch.toml                # the container user must be able to read it
-docker compose up -d
+docker run -d --name dnspatch --restart unless-stopped   -v "$PWD/dnspatch.toml:/etc/dnspatch/config.toml:ro"   --env-file .env   krimsn/dnspatch:latest
 ```
 
-Every variable in `.env` reaches the container, and `dnspatch.toml` refers to it as `${NAME}`. After editing `dnspatch.toml`, run `docker compose restart`. After editing `.env`, run `docker compose up -d`, which recreates the container with the new environment; `restart` does not re-read it.
-
-Without Compose:
-
-```sh
-docker run -d --name dnspatch --restart unless-stopped \
-  -v "$PWD/dnspatch.toml:/etc/dnspatch/config.toml:ro" \
-  --env-file .env \
-  --log-opt max-size=10m --log-opt max-file=3 \
-  krimsn/dnspatch:latest
-```
-
-The image is published to [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) (`krimsn/dnspatch`) and mirrored to the GitHub Container Registry (`ghcr.io/dnspatch/dnspatch`) under the same tags: `0.1.0`, `0.1` and `latest`. `latest` follows the newest stable release; pin a version tag in production, since a `v0.x` minor release may change the configuration format.
-
-There is also a **full** build: the same daemon with the optional monitoring features compiled in (see [Monitoring](#monitoring)): the `ping_url` hook and the notifiers that publish to a message broker. Nothing else changes, and a config that uses none of them behaves identically on both. Optional features are Go build tags (`ping`, `redis`, `notify_all`), so the lightweight binary and image stay as small as the daemon itself, with no monitoring dependencies in their build; [Building from source](#building-from-source) tells how to choose the tags, and so the plugins, of your own build. Releases ship both: the image tag `0.1.0` is the lightweight one and `0.1.0-full` (also `latest-full`) the full one; the binary archives are `dnspatch_*` and `dnspatch-full_*`. To build your own, pick the tags you need: `go build -tags "ping,redis" ./cmd/dnspatch`, or `docker build --build-arg TAGS=ping,notify_all .`.
-
-Things to know before running it in a container:
-
-- **Keep secrets out of `dnspatch.toml`.** The `chmod 644` above makes the file readable by every user on the host, so a password written into it is readable too. Write `password = "${PASSWORD}"` and put the value in `.env`, which stays private (`chmod 600 .env`).
-- **`.env` is not a vault.** The values become environment variables of the container, and `docker inspect` prints them. Whoever can talk to the Docker daemon can read your secrets. Docker/Swarm and Kubernetes secrets avoid this: they are mounted as files, not environment variables. Write `password = "${file:/run/secrets/password}"` instead, and add the secret to `compose.yml`:
-
-  ```yaml
-  services:
-    dnspatch:
-      secrets:
-        - password
-  secrets:
-    password:
-      file: ./secrets/password.txt
-  ```
-- **Limit the logs.** Docker keeps container logs without a size limit unless told otherwise. `compose.yml` rotates them at three files of 10 MB; the `--log-opt` flags above do the same for `docker run`.
-- **No IPv6 by default.** The default bridge network of Docker has no IPv6, so a retriever with `family = "ipv6"` cannot reach ifconfig.co and fails on every tick. Give the container a network with IPv6 enabled, or on Linux run it with `network_mode: host`. `family = "ipv4"` (the default) needs nothing.
-- **`HEALTHCHECK` needs a writable `/tmp`.** The image runs `dnspatch healthcheck` on its own (see [Monitoring](#monitoring)); with `read_only: true`, as `compose.yml` sets, mount `/tmp` as `tmpfs` too, or the check always reports the daemon as stuck.
-
-### Building from source
+The image is published to Docker Hub (`krimsn/dnspatch`) and the GitHub Container Registry (`ghcr.io/dnspatch/dnspatch`). Or build from source with Go 1.25 or newer:
 
 ```sh
 go install github.com/dnspatch/dnspatch/cmd/dnspatch@latest
 ```
 
-Requires Go 1.25 or newer. A plain `go build` gives the same daemon as the `dnspatch` image and binaries: every retriever and provider, none of the optional monitoring features. To get a smaller binary, or the features of the `-full` one, choose what goes in with build tags. This matters where size does: a Raspberry Pi, or a router running OpenWrt.
-
-Every plugin has a build tag named after its type, and there are more:
-
-- `dnspatch_none` leaves out every retriever and provider. Add the tags of the ones you need to bring those back, and nothing else is compiled in.
-- `providers_all` and `retrievers_all`, together with `dnspatch_none`, bring back every provider or every retriever, so `dnspatch_none,retrievers_all,cloudflare` is all the retrievers and one provider.
-- `ping` compiles in the `ping_url` hook.
-- `notify_all` compiles in every notifier backend; a backend's own tag, such as `redis`, compiles in only that one.
-
-```sh
-# Only the ipify retriever and the Cloudflare provider.
-go build -tags "dnspatch_none,ipify,cloudflare" -ldflags "-s -w" -o dnspatch ./cmd/dnspatch
-
-# The whole daemon plus monitoring, what the -full image is.
-go build -tags "ping,notify_all" -o dnspatch ./cmd/dnspatch
-```
-
-A build that lacks a plugin your configuration names refuses to start and says which tag to add, for example `provider type "cloudflare" is not compiled into this build: rebuild with the "cloudflare" build tag`. Every retriever and provider a configuration uses must be in the build, so the list of tags is easiest to write from the `type` lines of your `dnspatch.toml`.
-
-A few notes on the tags:
-
-- `nicru`, `noip`, `dyn` and `dynu` are `dyndns2` with the update URL filled in, so they share its code, and the type `dyndns2` is registered along with any of them. It costs nothing, since the code is in the binary anyway.
-- Expect a saving of a megabyte or two, not a tenfold one: the HTTP and TLS code of the standard library, which nearly every plugin needs, is most of the binary. For `amd64` with `-ldflags "-s -w"`, the plain build is about 8.4 MB, `dnspatch_none,ipify,cloudflare` about 7.2 MB, and the `-full` one about 10 MB. Measure the build you care about with `ls -l`.
-- Cross-compile with `GOOS` and `GOARCH`. For a Raspberry Pi that runs a 64-bit system that is `GOARCH=arm64`, on a 32-bit Raspberry Pi OS `GOARCH=arm GOARM=7`. Most OpenWrt routers are `GOOS=linux` with `GOARCH=mipsle GOMIPS=softfloat` (MediaTek, older Atheros), `GOARCH=mips GOMIPS=softfloat`, `arm` or `arm64`; `opkg print-architecture` on the router tells which. Keep `CGO_ENABLED=0`, so that the binary is static.
-- The Docker image takes the same tags as a build argument: `docker build --build-arg TAGS=dnspatch_none,ipify,cloudflare -t dnspatch-mini .`
-
-The tags of all built-in plugins:
-
-<!-- plugin-tags:start -->
-
-| Type | Kind | Build tag | In a plain build |
-|------|------|-----------|------------------|
-| `rabbitmq` | notifier | `rabbitmq` | no (`notify_all` brings it too) |
-| `redis` | notifier | `redis` | no (`notify_all` brings it too) |
-| `beget` | provider | `beget` | yes |
-| `cloudflare` | provider | `cloudflare` | yes |
-| `duckdns` | provider | `duckdns` | yes |
-| `dyn` | provider | `dyn` | yes |
-| `dyndns2` | provider | `dyndns2` | yes |
-| `dynu` | provider | `dynu` | yes |
-| `namecheap` | provider | `namecheap` | yes |
-| `nicru` | provider | `nicru` | yes |
-| `noip` | provider | `noip` | yes |
-| `regru` | provider | `regru` | yes |
-| `rfc2136` | provider | `rfc2136` | yes |
-| `selectel` | provider | `selectel` | yes |
-| `timeweb` | provider | `timeweb` | yes |
-| `yandexcloud` | provider | `yandexcloud` | yes |
-| `2ip` | retriever | `2ip` | yes |
-| `icanhazip` | retriever | `icanhazip` | yes |
-| `identme` | retriever | `identme` | yes |
-| `ifconfigco` | retriever | `ifconfigco` | yes |
-| `interface` | retriever | `interface` | yes |
-| `ipify` | retriever | `ipify` | yes |
-
-<!-- plugin-tags:end -->
-
-This table is generated by `go generate ./...` from the plugin packages, so it lists what the code has: a plugin added under `plugins/` appears in it, and gets its tag, with no other change.
+Docker Compose, the `-full` build with monitoring, build tags for a smaller binary and cross-compiling are in the [documentation](https://dnspatch.github.io/dnspatch/installation/).
 
 ## Quick start
 
-Copy [dnspatch.toml.example](dnspatch.toml.example) to `dnspatch.toml`, fill it in and start the daemon:
-
-```sh
-dnspatch --config dnspatch.toml
-```
-
-Without `--config` the daemon uses `$DNSPATCH_CONFIG`, then `./dnspatch.toml`, then `/etc/dnspatch/config.toml`. `dnspatch --version` prints the version.
-
-`dnspatch --check-config` validates the config and exits without starting the daemon (exit code 0 and a summary of every instance's retrievers and providers on success, code 2 and the problem on failure) — useful in a systemd `ExecStartPre` or after hand-editing the file, and it confirms the config was read the way it was written, not just that it parses. When an instance has several providers of one type, the summary also lists the parameters that tell them apart, for example `regru(zone=example.org, rr_name=office)`; the values of secret parameters such as passwords are never printed: they show up as `***` only when passwords alone tell the providers apart, and are left out whenever anything else differs.
-
-[examples/](examples/) has self-contained configs for specific scenarios — dual-stack, fallback between retrievers, a proxy, secrets from files, several providers in one file, the full build's ping and notify — each with its own README entry explaining what it shows.
-
-Logs go to stderr at the `info` level. `--log-level debug` (or `DNSPATCH_LOG_LEVEL=debug`; the flag wins) also shows why a provider was skipped: the address is unchanged, or the provider is backing off after a failure. Other levels are `warn` and `error`.
-
-The daemon exits with code 2 when the configuration is invalid (the problems are listed together, each naming its instance) and with code 1 on a runtime failure. `SIGINT` and `SIGTERM` stop it gracefully.
-
-## Configuration
-
-TOML. DNS record names routinely contain `@` and `*`, which YAML reserves, and plugin parameters are loosely typed — TOML avoids both hazards.
-
-A configuration has three parts: definitions of retrievers, definitions of providers, and instances that combine them.
+A configuration defines providers and instances; an instance ties retrievers to providers:
 
 ```toml
-interval = "5m"                    # default for every instance, at least 1s
-
 [provider.regru]
 type     = "regru"
 zone     = "example.com"
@@ -173,236 +49,33 @@ password = "${PASSWORD}"     # read from the environment
 name = "home"
 
 [[instance.retriever]]
-type = "ifconfigco"                # inline: not shared, so no [retriever.<name>] block
+type = "ifconfigco"
 
 [[instance.provider]]
 ref = "regru"
-
-[[instance.provider]]
-ref     = "regru"
-rr_name = "*.home"                 # override a parameter of the definition
 ```
 
-- An instance points at a definition with `ref`, or declares the plugin inline with `type`. `ref` and `type` are mutually exclusive.
-  - `ref` names a `[retriever.<name>]` or `[provider.<name>]` block; parameters written next to `ref` override the definition, except `type`. This is how one provider account serves several records, or one retriever definition serves several instances.
-  - `type` builds the plugin from the instance table alone, with no definition to merge in. Use it for a retriever or provider that only one instance needs — most retrievers, and any provider not shared across records.
-- An instance accepts one or more `[[instance.retriever]]` tables, polled in order until every address family is filled: which family a retriever reports is decided by the address it actually returns, not by configuration. Dual-stack (one A and one AAAA record from the same instance) needs two retrievers, one per family, for example two `ifconfigco` retrievers with `family = "ipv4"` and `family = "ipv6"`:
-
-  ```toml
-  [retriever.v4]
-  type   = "ifconfigco"
-  family = "ipv4"
-
-  [retriever.v6]
-  type   = "ifconfigco"
-  family = "ipv6"
-
-  [[instance]]
-  name = "home"
-
-  [[instance.retriever]]
-  ref = "v4"
-
-  [[instance.retriever]]
-  ref = "v6"
-
-  [[instance.provider]]
-  ref = "regru"
-  ```
-
-  A retriever whose service is itself dual-stack can report both families in one call with `family = "dual"`, supported by `icanhazip`, `identme`, `ifconfigco`, `ipify` and `interface`:
-
-  ```toml
-  [retriever.home]
-  type   = "ipify"
-  family = "dual"
-  ```
-
-  A third or later retriever is a fallback source, tried only for the families the earlier ones did not fill; it is never called once every family already has an address. Two retrievers reporting the same family (for example, two independent sources both configured with `family = "ipv4"`) is a valid fallback chain, not a misconfiguration: the first one to succeed wins, and the others are skipped for that family.
-
-  The retriever's own `family` parameter also tells the instance which families to even look for: an instance whose retrievers are all `family = "ipv4"` never tries to retrieve an IPv6 address, and a retriever pinned to a family that is already filled (by an earlier one, `dual` or otherwise) is skipped without being called. This also builds a fallback chain per family out of retrievers with different roles, for example:
-
-  ```toml
-  [retriever.icanhazip]
-  type   = "icanhazip"
-  family = "dual"
-
-  [retriever.ipify]
-  type   = "ipify"
-  family = "ipv6"
-
-  [retriever.ifconfigco]
-  type   = "ifconfigco"
-  family = "ipv4"
-
-  [[instance]]
-  name = "home"
-
-  [[instance.retriever]]
-  ref = "icanhazip"
-
-  [[instance.retriever]]
-  ref = "ipify"
-
-  [[instance.retriever]]
-  ref = "ifconfigco"
-
-  [[instance.provider]]
-  ref = "regru"
-  ```
-
-  Here `icanhazip` is tried first for both families; if it succeeds, `ipify` and `ifconfigco` are never called. If it fails, `ipify` is tried for IPv6 and `ifconfigco` for IPv4. Only a retriever type that has its own `family` parameter (`icanhazip`, `identme`, `ifconfigco`, `ipify`, `interface`) can be pinned this way; one that does not, such as `2ip`, is always treated like `dual`: a candidate for whichever family is still missing, decided by the address it actually returns, exactly as before this parameter existed.
-- `${NAME}` inside a string is replaced with the environment variable; a variable that is not set is an error, not an empty string. Write `$${` for a literal `${`.
-- `${file:/path}` is replaced with the contents of the file, minus one trailing newline; this is how Docker and Kubernetes secrets, mounted as files, reach the config. An unreadable file is an error.
-- Unknown parameters are rejected with a hint at the closest known name, so a typo does not go unnoticed.
-- Every parameter of every plugin is described in [docs/PARAMETERS.md](docs/PARAMETERS.md).
-
-### Built-in plugins
-
-| Kind | Type | What it does |
-|------|------|--------------|
-| retriever | `2ip` | asks [2ip.io](https://2ip.io) for the public address (IPv4 only) |
-| retriever | `icanhazip` | asks [icanhazip.com](https://icanhazip.com) for the public address, over IPv4, IPv6, or dual |
-| retriever | `identme` | asks [ident.me](https://ident.me) for the public address, over IPv4, IPv6, or dual |
-| retriever | `ifconfigco` | asks [ifconfig.co](https://ifconfig.co) for the public address, over IPv4, IPv6, or dual |
-| retriever | `ipify` | asks [ipify.org](https://www.ipify.org) for the public address, over IPv4, IPv6, or dual |
-| retriever | `interface` | reads the address from a local network interface, with no external service; public addresses only, the lowest one if several, narrowed by `network` (see [examples/interface-ipv6.toml](examples/interface-ipv6.toml)) |
-| provider | `beget` | sets the `A` or `AAAA` record of a zone hosted at [Beget](https://beget.com), through its DNS administration API |
-| provider | `cloudflare` | sets the `A` or `AAAA` record of a zone on [Cloudflare](https://cloudflare.com), through its REST API, authenticating with an API token scoped to one zone |
-| provider | `duckdns` | sets the `A` or `AAAA` record of a subdomain at [DuckDNS](https://www.duckdns.org), through its own update API; not dyndns2, the token travels in the query string |
-| provider | `dyndns2` | updates a record through the dyndns2 protocol of any service that speaks it, for a service that has no plugin of its own; the update URL is a parameter and both addresses go in one request |
-| provider | `dyn` | updates the `A` and `AAAA` record of a host at [Dyn](https://dyn.com) (the former DynDNS) through its Dynamic DNS service, both addresses in one request; a `dyndns2` with the URL filled in |
-| provider | `dynu` | updates the `A` and `AAAA` record of a host at [Dynu](https://www.dynu.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
-| provider | `namecheap` | sets the `A` record of a host at [Namecheap](https://www.namecheap.com) through its Dynamic DNS feature; not dyndns2, IPv4 only, the password travels in the query string |
-| provider | `nicru` | updates the `A` and `AAAA` record of a domain at [NIC.RU](https://www.nic.ru) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in (see [examples/nicru.toml](examples/nicru.toml)) |
-| provider | `noip` | updates the `A` and `AAAA` record of a host at [No-IP](https://www.noip.com) through its Dynamic DNS service, in one request; a `dyndns2` with the URL filled in |
-| provider | `regru` | sets the `A` or `AAAA` record of a zone hosted at [REG.RU](https://www.reg.ru), through REG.API 2 |
-| provider | `rfc2136` | sets the `A` or `AAAA` record on your own name server (BIND, Knot DNS, PowerDNS, Technitium, ...) with RFC 2136 dynamic updates, signed with TSIG |
-| provider | `selectel` | sets the `A` or `AAAA` record of a zone hosted at [Selectel](https://selectel.ru) DNS Hosting, through Cloud DNS API v2 |
-| provider | `timeweb` | sets the `A` or `AAAA` record of a zone hosted at [Timeweb Cloud](https://timeweb.cloud), through its DNS API, authenticating with a static API token |
-| provider | `yandexcloud` | sets the `A` or `AAAA` record of a zone hosted at [Yandex Cloud DNS](https://yandex.cloud/en/services/dns), authenticating as a service account with an authorized key |
-
-### Proxies
-
-Some DNS APIs only accept requests from a fixed address, which does not fit a daemon on a dynamic one. Run a proxy on a small host with a static address, allow that address in the provider's API settings, and give the provider a `proxy` parameter:
-
-```toml
-[provider.regru]
-type  = "regru"
-# ...
-proxy = "${PROXY_URL}"   # for example socks5://user:pass@203.0.113.5:1080
+```sh
+dnspatch --config dnspatch.toml
 ```
 
-- Supported schemes are `socks5`, `socks5h`, `http` and `https`, with an optional `user:pass@`; percent-encode special characters in them. With `socks5` and `socks5h` the proxy resolves the API host name.
-- Every provider and every reference to it can set its own `proxy`, so different zones can leave through different hosts. `proxy = "direct"` means no proxy at all, whatever `HTTP_PROXY` and `HTTPS_PROXY` say.
-- Without `proxy`, a provider connects the way Go does by default, so `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` from the environment apply. With a URL or `direct`, the environment is ignored.
-- Retrievers take the same parameter, but it defaults to `direct` and they never follow the environment. Behind a proxy the address service reports the address the proxy connects from, not the address of this host, so give a retriever a proxy only when that is the address you want. With a proxy the retriever's `family` no longer pins the connection, it only checks the reply.
-- A malformed URL stops the daemon at startup. The URL is never printed in logs or errors, since it may hold a password.
+`dnspatch --check-config` validates the file without starting the daemon.
 
-### Monitoring
+## Documentation
 
-**Health check.** The daemon writes a status file per instance on every completed cycle (successful or not — a failing provider is still activity, already reported through logging and backoff), by default under `$TMPDIR/dnspatch-health` (`DNSPATCH_HEALTH_DIR` overrides it). `dnspatch healthcheck` re-reads the config to learn each instance's own interval, checks that every status file is fresh (at most twice the instance's interval old, at least 30s), and exits non-zero otherwise — no shell or curl needed, which a distroless image does not have. Both the lightweight and the full images already run it as their `HEALTHCHECK`.
+The full documentation is at **[dnspatch.github.io/dnspatch](https://dnspatch.github.io/dnspatch/)**:
 
-If the container's filesystem is `read_only`, mount `/tmp` (or wherever `DNSPATCH_HEALTH_DIR` points) as `tmpfs`, as [compose.yml](compose.yml) does — otherwise every write fails, and `healthcheck` reports the daemon as stuck even though it is working fine. A write failure never affects the DNS updates themselves, only the health check.
+- [Quick start](https://dnspatch.github.io/dnspatch/quick-start/) and [configuration](https://dnspatch.github.io/dnspatch/configuration/): instances, dual-stack, fallback between retrievers, secrets, proxies
+- [Built-in plugins](https://dnspatch.github.io/dnspatch/configuration/plugins/) and the [parameter reference](https://dnspatch.github.io/dnspatch/PARAMETERS/) of every retriever and provider
+- [Docker](https://dnspatch.github.io/dnspatch/deployment/docker/) and [building from source](https://dnspatch.github.io/dnspatch/deployment/building/) with build tags
+- [Monitoring](https://dnspatch.github.io/dnspatch/operations/monitoring/): health check, pings, notifications
+- [Writing a plugin](https://dnspatch.github.io/dnspatch/development/writing-a-plugin/)
 
-**Monitoring pings.** `ping_url`, set on an instance, is called on every completed cycle — a GET request on success, and the same URL with `/fail` appended on failure — compatible with [Healthchecks.io](https://healthchecks.io) and [Uptime Kuma](https://github.com/louislam/uptime-kuma) push monitors. Unlike the health check above, this reaches an external service: it works as a dead man's switch, alerting when the ping stops arriving even if dnspatch's own process and container stay up.
-
-```toml
-[[instance]]
-name     = "home"
-ping_url = "${PING_URL}"   # for example https://hc-ping.com/<uuid>
-# ...
-```
-
-`ping_url` only works on a build with the `ping` tag (the full binary or image); the lightweight build rejects a config that sets it, rather than silently ignoring it, since the field would otherwise do nothing without any indication why.
-
-**Notifications.** A `[notify.<name>]` definition describes a message broker, and an instance that publishes to it sends an event whenever the instance's status flips between success and failure — not on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch):
-
-```toml
-[notify.alerts]
-type    = "redis"
-address = "${REDIS_URL}"   # a redis:// URL; carries auth and the database index
-```
-
-Notifiers are defined the way retrievers and providers are, and each instance names the ones it publishes to in its `notify` list. An instance with no `notify` key publishes to every notifier the file defines, and `notify = []` gives it none. Each definition is its own broker connection, shared by the instances that list it, with its own optional `topic_prefix`, so several can be of one type:
-
-```toml
-[notify.alerts]
-type    = "redis"
-address = "${REDIS_URL}"
-
-[notify.backup]
-type         = "redis"
-address      = "${REDIS_URL_BACKUP}"
-topic_prefix = "backup.dnspatch."
-
-[[instance]]
-name   = "home"
-notify = ["alerts"]             # only alerts
-
-[[instance]]
-name   = "office"
-notify = ["alerts", "backup"]
-
-[[instance]]
-name = "lab"                    # no notify key: alerts and backup
-```
-
-dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
-
-The `rabbitmq` notifier (`address` is an `amqp://` or `amqps://` URL) publishes to a durable topic exchange, `dnspatch` by default (`exchange` changes it), with `dnspatch.events.<instance>` as the routing key. Bind a queue to the exchange with the pattern you want (`dnspatch.events.#` for everything) and events wait there while the consumer is away; with no queue bound, the broker drops them. The connection is opened on the first event, not at startup, and re-opened after a failure.
-
-Like `ping_url`, a notifier needs a build that has its backend compiled in: the `redis` or `rabbitmq` tag for these, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config whose instances use a notifier; a definition that no instance uses is ignored, and `dnspatch --check-config` shows the notifiers each instance publishes to. A build that lacks the backend a definition names says which tag brings it, and an error in one definition is reported by its name (`notify "backup" (redis): ...`). Adding another backend (MQTT, ...) is a `plugins/notifiers/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
-
-## Behaviour
-
-dnspatch is built around three concepts:
-
-- **Retriever** — reports your current public IP address
-- **Provider** — writes that address to a DNS record
-- **Instance** — ties one or more retrievers to one or more providers and polls on its own interval
-
-Instances run independently, so several sites or networks can be tracked at once.
-
-### Failure handling
-
-- Providers of an instance are updated independently: one failing provider never stops the others (a stuck one delays the rest of the tick by at most its 30-second deadline).
-- A provider is written only when the address differs from the last one it accepted; a failed provider is retried on later ticks, the others are left alone.
-- A failing provider is retried with exponential backoff and jitter: the delay is at most the polling interval after the first failure (at least half of it) and its ceiling doubles with every further failure, up to 30 minutes (or the interval, if that is longer).
-- Every retrieval and every write has a 30-second deadline.
-
-### State is not persisted
-
-The last written address is kept in memory only. **After a restart the daemon does not know what it wrote before**, so the first tick writes the current address to every provider, even if the record already holds it. A provider that was backing off is tried again immediately. This costs one API call per provider per restart and is intended: a state file would be lost on every restart of a container without a volume, which is exactly where it would be needed, and would bring a path, permissions and a way to be stale of its own. Providers make the write idempotent, so nothing changes when the record is already correct.
-
-## Writing your own plugin
-
-The `plugin` package is public on purpose. Writing a retriever or a provider means implementing a two-method interface and registering it. The easy route is a pull request to this repository. A plugin can also live in your own module, but in `v0.x` the configuration loader and the runner are internal packages, so a program of your own has to build the plugins and drive the polling itself instead of reusing `dnspatch`:
-
-```go
-type Retriever interface {
-	GetAddresses(ctx context.Context) (Addresses, error)
-}
-
-type Addresses struct{ V4, V6 netip.Addr }
-type RecordOptions struct{ TTL time.Duration }
-
-type Provider interface {
-	Update(ctx context.Context, addrs Addresses, opts RecordOptions) error
-}
-```
-
-`Addresses` carries both families at once: an invalid (zero) `V4` or `V6` means that family is not provided (a `Retriever`) or left untouched (a `Provider`), which lets one call report or update both an A and an AAAA address, or just one of them. `RecordOptions` carries options such as `TTL`, which a provider ignores when its service does not support it.
-
-Migrating a `Retriever` written against the old `GetIPAddress(ctx) (netip.Addr, error)`: return the single address in the matching field of `Addresses` (`V4` if `addr.Is4()`, `V6` otherwise) and leave the other at its zero value; a plugin that only ever handles one family keeps working unchanged. A retriever whose service is itself dual-stack can fill both fields in one call, as the four `family = "dual"` retrievers built into dnspatch do.
-
-Migrating a `Provider` written against the older `SetIPAddress(ctx, addr netip.Addr) error`: write the same record for each family that is valid (`addrs.V4.IsValid()`, `addrs.V6.IsValid()`) instead of branching on `addr.Is4()`; a plugin that only ever handled one family (for example because it always got IPv4 before) keeps working unchanged as long as it ignores the family it does not expect.
-
-A plugin is a configuration struct plus a constructor; struct tags declare the parameters and feed the generated reference. The step-by-step guide is in [CONTRIBUTING.md](CONTRIBUTING.md#writing-a-plugin).
+Ready-made configs for specific scenarios are in [examples/](examples/).
 
 ## Contributing
 
-Bug reports and ideas go to [GitHub Issues](https://github.com/dnspatch/dnspatch/issues). [CONTRIBUTING.md](CONTRIBUTING.md) covers commit messages, pull requests, how branch names and `Linear: DNS-N` lines in pull requests relate to the maintainer's task tracker, and how to write a plugin.
+Bug reports and ideas go to [GitHub Issues](https://github.com/dnspatch/dnspatch/issues). [CONTRIBUTING.md](CONTRIBUTING.md) covers commit messages and pull requests; the documentation sources are in [docs/](docs/).
 
 ## License
 

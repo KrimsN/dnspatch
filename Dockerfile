@@ -24,7 +24,7 @@ ARG TARGETARCH
 ARG TARGETVARIANT
 ARG VERSION=dev
 # Build tags to compile with, comma-separated (see cmd/dnspatch/main.go and
-# "Building from source" in README.md). Empty is the lightweight build, with
+# "Building from source" in the documentation). Empty is the lightweight build, with
 # every retriever and provider; the -full image is built with
 # TAGS="ping,notify_all"; a small custom image with, for example,
 # TAGS="dnspatch_none,ipify,cloudflare".

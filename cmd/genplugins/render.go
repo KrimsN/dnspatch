@@ -24,8 +24,8 @@ const (
 
 	catalogFile = "catalog_gen.go"
 
-	readmeStart = "<!-- plugin-tags:start -->"
-	readmeEnd   = "<!-- plugin-tags:end -->"
+	tagsStart = "<!-- plugin-tags:start -->"
+	tagsEnd   = "<!-- plugin-tags:end -->"
 )
 
 // constraint is the build constraint under which the plugin is compiled in.
@@ -56,10 +56,10 @@ func renderImport(p found) []byte {
 // hint tells the user of a build without the plugin how to get it.
 func hint(p found) string {
 	if p.Kind == plugin.KindNotifier {
-		return fmt.Sprintf("rebuild with the %q or %q build tag, or use the -full image (see \"Building from source\" in README.md)", p.Name, allNotifiersTag)
+		return fmt.Sprintf("rebuild with the %q or %q build tag, or use the -full image (see https://dnspatch.github.io/dnspatch/deployment/building/)", p.Name, allNotifiersTag)
 	}
 
-	return fmt.Sprintf("rebuild with the %q build tag (see \"Building from source\" in README.md)", p.Name)
+	return fmt.Sprintf("rebuild with the %q build tag (see https://dnspatch.github.io/dnspatch/deployment/building/)", p.Name)
 }
 
 // renderCatalog is the file that declares every plugin to plugin.Default, so
@@ -93,7 +93,7 @@ func kindConst(kind plugin.Kind) string {
 	}
 }
 
-// renderTable is the table of build tags for the README.
+// renderTable is the table of build tags for docs/deployment/building.md.
 func renderTable(plugins []found) string {
 	var b strings.Builder
 
@@ -112,14 +112,14 @@ func renderTable(plugins []found) string {
 	return b.String()
 }
 
-// replaceTable swaps the text between the markers of the README for table.
-func replaceTable(readme, table string) (string, error) {
-	start := strings.Index(readme, readmeStart)
-	end := strings.Index(readme, readmeEnd)
+// replaceTable swaps the text between the markers of the page for table.
+func replaceTable(doc, table string) (string, error) {
+	start := strings.Index(doc, tagsStart)
+	end := strings.Index(doc, tagsEnd)
 
 	if start < 0 || end < start {
-		return "", fmt.Errorf("README.md has no %s ... %s block to put the table of build tags in", readmeStart, readmeEnd)
+		return "", fmt.Errorf("the page has no %s ... %s block to put the table of build tags in", tagsStart, tagsEnd)
 	}
 
-	return readme[:start+len(readmeStart)] + "\n\n" + table + "\n" + readme[end:], nil
+	return doc[:start+len(tagsStart)] + "\n\n" + table + "\n" + doc[end:], nil
 }

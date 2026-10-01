@@ -646,11 +646,11 @@ ref = "main"
 	}
 }
 
-// TestBuildInstancesPerFamilyFallbackChainFromREADME builds the README's
+// TestBuildInstancesPerFamilyFallbackChainFromDocs builds the documentation's
 // worked example of a per-family fallback chain (dual + ipv6-only +
 // ipv4-only retrievers, all real plugins) to make sure it is valid
 // configuration and wires the Family hints as documented.
-func TestBuildInstancesPerFamilyFallbackChainFromREADME(t *testing.T) {
+func TestBuildInstancesPerFamilyFallbackChainFromDocs(t *testing.T) {
 	cfg, err := config.Parse([]byte(`
 [retriever.icanhazip]
 type   = "icanhazip"

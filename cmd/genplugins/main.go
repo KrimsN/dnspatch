@@ -2,7 +2,7 @@
 // source tree. It finds every plugin under plugins/ by its registration call
 // and writes, into plugins/all, a file per plugin that imports it under its
 // build tag, a catalog that declares all of them to the registry, and the table
-// of build tags in README.md.
+// of build tags in docs/deployment/building.md.
 //
 // A new plugin is a new package that registers itself; running go generate is
 // all it takes to make it selectable by a tag. See generate.go in the
@@ -44,14 +44,14 @@ func run(root string) error {
 		return fmt.Errorf("no plugins found under %s", filepath.Join(root, "plugins"))
 	}
 
-	readmePath := filepath.Join(root, "README.md")
+	docPath := filepath.Join(root, "docs", "deployment", "building.md")
 
-	readme, err := os.ReadFile(readmePath)
+	doc, err := os.ReadFile(docPath)
 	if err != nil {
 		return err
 	}
 
-	newReadme, err := replaceTable(string(readme), renderTable(plugins))
+	newDoc, err := replaceTable(string(doc), renderTable(plugins))
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func run(root string) error {
 		}
 	}
 
-	return os.WriteFile(readmePath, []byte(newReadme), 0o644)
+	return os.WriteFile(docPath, []byte(newDoc), 0o644)
 }
 
 // removeStale deletes the files of an earlier run that no longer have a plugin.

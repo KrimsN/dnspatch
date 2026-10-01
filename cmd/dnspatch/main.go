@@ -14,7 +14,7 @@
 //	<plugin>       one plugin, by its type name: redis, cloudflare, ipify, ...
 //
 // The tag of a plugin comes from plugins/all, which cmd/genplugins generates,
-// and README.md has the table. The release binaries and images come in two
+// and docs/deployment/building.md has the table. The release binaries and images come in two
 // flavours: this lightweight one and the -full one, built with -tags
 // "ping,notify_all".
 package main

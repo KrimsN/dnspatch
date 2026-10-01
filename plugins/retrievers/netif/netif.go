@@ -8,7 +8,7 @@
 //
 // Which address is chosen when an interface has several is decided by
 // selectAddr; the rule is documented on the "name" parameter and in the
-// README.
+// documentation.
 package netif
 
 import "github.com/dnspatch/dnspatch/plugin"
