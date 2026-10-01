@@ -445,8 +445,8 @@ key = "${YANDEX_CLOUD_KEY}"
 
 # Publishes a JSON event to a message broker whenever an instance flips between
 # success and failure, to the channel <topic_prefix><instance>. The lightweight
-# build rejects a config whose instances use a notifier. See README.md, section
-# Monitoring.
+# build rejects a config whose instances use a notifier. See the Monitoring page of
+# the documentation.
 #
 # Each [notify.<name>] definition is one broker connection, shared by the
 # instances that publish to it. Define several to reach several brokers, of

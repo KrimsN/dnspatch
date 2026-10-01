@@ -1,0 +1,70 @@
+site_name: dnspatch
+site_description: A dynamic DNS daemon in Go that watches your public IP address and patches your DNS records when it changes.
+site_url: https://dnspatch.github.io/dnspatch/
+repo_url: https://github.com/dnspatch/dnspatch
+repo_name: dnspatch/dnspatch
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+# Fail the build on a broken link or a page missing from the nav, so a bad
+# reference never reaches main.
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: installation.md
+      - Quick start: quick-start.md
+  - Configuration:
+      - Overview: configuration/index.md
+      - Retrievers and address families: configuration/retrievers.md
+      - Secrets: configuration/secrets.md
+      - Proxies: configuration/proxies.md
+      - Built-in plugins: configuration/plugins.md
+      - Parameter reference: PARAMETERS.md
+      - Examples: configuration/examples.md
+  - Deployment:
+      - Docker: deployment/docker.md
+      - Building from source: deployment/building.md
+  - Operations:
+      - Behaviour: operations/behaviour.md
+      - Monitoring: operations/monitoring.md
+  - Development:
+      - Writing a plugin: development/writing-a-plugin.md
+      - Plugins outside the repository: development/external-plugins.md
+  - Migrations:
+      - From 0.2 to 0.3: migrations/0.2-to-0.3.md

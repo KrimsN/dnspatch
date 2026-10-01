@@ -28,14 +28,14 @@ func writeTree(t *testing.T, files map[string]string) string {
 	return root
 }
 
-const sampleReadme = "# Sample\n\n" + readmeStart + "\nold\n" + readmeEnd + "\n\nafter\n"
+const sampleDoc = "# Sample\n\n" + tagsStart + "\nold\n" + tagsEnd + "\n\nafter\n"
 
 // sampleTree is a module with one plugin of each kind, written the different
 // ways a registration can look, and a package that registers nothing.
 func sampleTree() map[string]string {
 	return map[string]string{
-		"go.mod":    "module example.test/dp\n\ngo 1.25\n",
-		"README.md": sampleReadme,
+		"go.mod":                      "module example.test/dp\n\ngo 1.25\n",
+		"docs/deployment/building.md": sampleDoc,
 		"plugins/alpha/alpha.go": `package alpha
 
 import "example.test/dp/plugin"
@@ -89,7 +89,7 @@ func TestRunWritesTheGatingFilesTheCatalogAndTheTable(t *testing.T) {
 		"plugins/all/retriever_beta.go": {"//go:build !dnspatch_none || retrievers_all || beta\n", `import _ "example.test/dp/plugins/group/beta"`},
 		"plugins/all/notifier_gamma.go": {"//go:build notify_all || gamma\n", `import _ "example.test/dp/plugins/gamma"`},
 		"plugins/all/catalog_gen.go":    {`plugin.Default.Declare(plugin.KindProvider, "alpha"`, `plugin.Default.Declare(plugin.KindRetriever, "beta"`, `plugin.Default.Declare(plugin.KindNotifier, "gamma"`},
-		"README.md":                     {"| `alpha` | provider | `alpha` | yes |", "| `gamma` | notifier | `gamma` | no (`notify_all` brings it too) |", "after\n"},
+		"docs/deployment/building.md":   {"| `alpha` | provider | `alpha` | yes |", "| `gamma` | notifier | `gamma` | no (`notify_all` brings it too) |", "after\n"},
 	} {
 		got := read(file)
 
@@ -100,8 +100,8 @@ func TestRunWritesTheGatingFilesTheCatalogAndTheTable(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(read("README.md"), "old") {
-		t.Error("the old table is still in README.md")
+	if strings.Contains(read("docs/deployment/building.md"), "old") {
+		t.Error("the old table is still in docs/deployment/building.md")
 	}
 
 	if strings.Contains(read("plugins/all/catalog_gen.go"), "in-a-test") || strings.Contains(read("plugins/all/catalog_gen.go"), "helper") {
@@ -175,9 +175,9 @@ func TestRunRejectsWhatCannotBeGenerated(t *testing.T) {
 	}
 }
 
-func TestRunNeedsTheMarkersInTheReadme(t *testing.T) {
+func TestRunNeedsTheMarkersInTheBuildingPage(t *testing.T) {
 	tree := sampleTree()
-	tree["README.md"] = "# Sample\n"
+	tree["docs/deployment/building.md"] = "# Sample\n"
 
 	err := run(writeTree(t, tree))
 	if err == nil || !strings.Contains(err.Error(), "block to put the table of build tags in") {
@@ -227,17 +227,17 @@ func TestCommittedFilesAreCurrent(t *testing.T) {
 		t.Errorf("plugins/all/%s belongs to no plugin; run go generate ./... and commit the result", e.Name())
 	}
 
-	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	doc, err := os.ReadFile(filepath.Join(root, "docs/deployment/building.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updated, err := replaceTable(string(readme), renderTable(plugins))
+	updated, err := replaceTable(string(doc), renderTable(plugins))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if updated != string(readme) {
-		t.Error("the table of build tags in README.md is out of date; run go generate ./... and commit the result")
+	if updated != string(doc) {
+		t.Error("the table of build tags in docs/deployment/building.md is out of date; run go generate ./... and commit the result")
 	}
 }

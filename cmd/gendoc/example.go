@@ -197,8 +197,8 @@ func writeNotify(b *strings.Builder, notifiers map[string]reflect.Type) error {
 
 	b.WriteString("# Publishes a JSON event to a message broker whenever an instance flips between\n")
 	b.WriteString("# success and failure, to the channel <topic_prefix><instance>. The lightweight\n")
-	b.WriteString("# build rejects a config whose instances use a notifier. See README.md, section\n")
-	b.WriteString("# Monitoring.\n")
+	b.WriteString("# build rejects a config whose instances use a notifier. See the Monitoring page of\n")
+	b.WriteString("# the documentation.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Each [notify.<name>] definition is one broker connection, shared by the\n")
 	b.WriteString("# instances that publish to it. Define several to reach several brokers, of\n")

@@ -169,7 +169,7 @@ func TestRenderOutput(t *testing.T) {
 		"\n" +
 		"This file is generated from plugin struct tags, so manual edits are\n" +
 		"overwritten. After changing a plugin configuration, run `go generate ./...`.\n" +
-		"For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml.example).\n" +
+		"For a configuration to start from, copy [dnspatch.toml.example](https://github.com/dnspatch/dnspatch/blob/main/dnspatch.toml.example).\n" +
 		"\n" +
 		"## Contents\n" +
 		"\n" +

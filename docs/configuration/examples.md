@@ -1,0 +1,18 @@
+# Examples
+
+The [examples/](https://github.com/dnspatch/dnspatch/tree/main/examples) directory has self-contained configs for specific scenarios. Each file is a complete `dnspatch.toml`: copy it, replace the `CHANGE_ME` placeholders and the `${...}` references, and start the daemon with `--config`. CI checks every file with `--check-config`, so they stay valid.
+
+| File | Shows |
+|------|-------|
+| [minimal.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/minimal.toml) | The smallest working config: one retriever, one provider, one instance. Start here. |
+| [dual-stack.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/dual-stack.toml) | One instance writing both an A and an AAAA record, using two retrievers pinned to `ipv4` and `ipv6`. |
+| [family-dual-with-fallback.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/family-dual-with-fallback.toml) | A retriever whose service is itself dual-stack (`family = "dual"`), plus a fallback chain across further retrievers for the families it does not fill. |
+| [interface-ipv6.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/interface-ipv6.toml) | Reading the IPv6 address from a network interface instead of an external service, with a delegated prefix picked by `network`. |
+| [nicru.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/nicru.toml) | Updating a record at NIC.RU with one request for both addresses; notes the NIC.RU quirk of changing same-name records in every zone of the contract. Other dyndns2 services use `type = "dyndns2"` with a `base_url`. |
+| [proxy.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/proxy.toml) | Reaching a provider's API through a proxy, for a DNS host that only accepts requests from a fixed address. |
+| [rfc2136.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/rfc2136.toml) | Updating a record on your own name server (BIND, Knot, PowerDNS, ...) with RFC 2136 dynamic updates signed with a TSIG key. |
+| [secrets-from-files.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/secrets-from-files.toml) | Reading a secret from a file (`${file:/path}`) instead of an environment variable, the way Docker/Kubernetes secrets are mounted. |
+| [multi-provider.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/multi-provider.toml) | Several instances and providers in one process: two sites, two DNS hosts, independent polling intervals. |
+| [full-build.toml](https://github.com/dnspatch/dnspatch/blob/main/examples/full-build.toml) | The features that only exist in the full build: `ping_url` (a ping on every cycle) and `[notify.<name>]` (status changes published to a broker, per instance). |
+
+For the parameters of every plugin see the [Parameter reference](../PARAMETERS.md); the general syntax is in the [Configuration overview](index.md).

@@ -18,6 +18,6 @@ with `--config`.
 | [full-build.toml](full-build.toml) | The two features that only exist in the full build: `ping_url` (a ping on every cycle) and `[notify.<name>]` (status changes published to Redis, per instance). |
 
 For the full parameter reference of every plugin see
-[../docs/PARAMETERS.md](../docs/PARAMETERS.md). The general syntax
+[parameter reference](https://dnspatch.github.io/dnspatch/PARAMETERS/). The general syntax
 (`${NAME}` expansion, `ref` overrides, proxies) is documented in the
-[repository README](../README.md#configuration).
+[documentation](https://dnspatch.github.io/dnspatch/configuration/).
