@@ -1,13 +1,13 @@
 // Package notify publishes instance status changes to whatever message broker
 // an operator configured with a [notify.<name>] definition. The brokers are notifier
 // plugins (plugin.Notifier, registered with plugin.RegisterNotifier; Redis
-// today, RabbitMQ or MQTT can be added later as their own package under
+// and RabbitMQ today, MQTT can be added later as their own package under
 // plugins/, without touching this package or the runner). BuildHook selects one
 // by the table's "type", and Hook is the runner.Hook that turns completed cycles
 // into published Events.
 //
 // A notifier is compiled into a build only when plugins/all imports it, which
-// is behind build tags (redis, notify_all); that keeps a broker's client library
+// is behind build tags (redis, rabbitmq, notify_all); that keeps a broker's client library
 // out of the binary of a build that does not ask for it.
 package notify
 

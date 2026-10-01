@@ -1,4 +1,4 @@
-//go:build !ping && !redis && !notify_all && !dnspatch_none
+//go:build !ping && !redis && !rabbitmq && !notify_all && !dnspatch_none
 
 package main
 

@@ -108,6 +108,7 @@ The tags of all built-in plugins:
 
 | Type | Kind | Build tag | In a plain build |
 |------|------|-----------|------------------|
+| `rabbitmq` | notifier | `rabbitmq` | no (`notify_all` brings it too) |
 | `redis` | notifier | `redis` | no (`notify_all` brings it too) |
 | `beget` | provider | `beget` | yes |
 | `cloudflare` | provider | `cloudflare` | yes |
@@ -349,7 +350,9 @@ name = "lab"                    # no notify key: alerts and backup
 
 dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event (`{"instance": "home", "success": false, "error": "...", "time": "..."}`) to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it — a bot you write, a small relay service — decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url`/health check cycle) still gets through.
 
-Like `ping_url`, a notifier needs a build that has its backend compiled in: the `redis` tag for this one, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config whose instances use a notifier; a definition that no instance uses is ignored, and `dnspatch --check-config` shows the notifiers each instance publishes to. A build that lacks the backend a definition names says which tag brings it, and an error in one definition is reported by its name (`notify "backup" (redis): ...`). Adding another backend (RabbitMQ, MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
+The `rabbitmq` notifier (`address` is an `amqp://` or `amqps://` URL) publishes to a durable topic exchange, `dnspatch` by default (`exchange` changes it), with `dnspatch.events.<instance>` as the routing key. Bind a queue to the exchange with the pattern you want (`dnspatch.events.#` for everything) and events wait there while the consumer is away; with no queue bound, the broker drops them. The connection is opened on the first event, not at startup, and re-opened after a failure.
+
+Like `ping_url`, a notifier needs a build that has its backend compiled in: the `redis` or `rabbitmq` tag for these, or `notify_all` for every backend (the full binary and image use it). The lightweight build rejects a config whose instances use a notifier; a definition that no instance uses is ignored, and `dnspatch --check-config` shows the notifiers each instance publishes to. A build that lacks the backend a definition names says which tag brings it, and an error in one definition is reported by its name (`notify "backup" (redis): ...`). Adding another backend (MQTT, ...) is a `plugins/<backend>` package that implements `plugin.Notifier` and registers itself in `init`, like a provider does; `go generate` gives it a build tag.
 
 ## Behaviour
 

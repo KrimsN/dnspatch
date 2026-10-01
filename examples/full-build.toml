@@ -29,6 +29,16 @@ address = "${REDIS_URL}"
 # address      = "${REDIS_URL_BACKUP}"
 # topic_prefix = "backup.dnspatch."
 
+# RabbitMQ works the same way: "address" is an amqp:// or amqps:// URL, and
+# events go to the durable topic exchange "exchange" (dnspatch by default) with
+# the routing key dnspatch.events.<instance>. Bind a queue to it, for example
+# with the pattern dnspatch.events.#, and the events wait there while the
+# consumer is away.
+# [notify.queue]
+# type     = "rabbitmq"
+# address  = "${RABBITMQ_URL}"
+# exchange = "dnspatch"
+
 [retriever.home]
 type = "ifconfigco"
 
