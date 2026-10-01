@@ -33,13 +33,30 @@ func printConfigSummary(stdout io.Writer, path string, cfg config.Config, instan
 
 	for i, in := range instances {
 		notify := ""
-		if names := cfg.Instances[i].Notify; len(names) > 0 {
-			notify = " notify=[" + strings.Join(names, ", ") + "]"
+		if refs := cfg.Instances[i].Notify; len(refs) > 0 {
+			notify = " notify=[" + describeNotify(refs) + "]"
 		}
 
 		_, _ = fmt.Fprintf(stdout, "  %s: interval=%s retrievers=%s providers=%s%s\n",
 			in.Name, in.Interval, describeRetrievers(in.Retrievers), describeProviders(cfg.Instances[i].Providers, params), notify)
 	}
+}
+
+// describeNotify renders the notifiers of an instance as "name(event, ...)",
+// with the events that will actually reach each one.
+func describeNotify(refs []config.NotifyRef) string {
+	items := make([]string, len(refs))
+
+	for i, ref := range refs {
+		events := make([]string, len(ref.Events))
+		for j, e := range ref.Events {
+			events[j] = string(e)
+		}
+
+		items[i] = fmt.Sprintf("%s(%s)", ref.Name, strings.Join(events, ", "))
+	}
+
+	return strings.Join(items, ", ")
 }
 
 // describeRetrievers renders an instance's retrievers as "name(family)",

@@ -1,6 +1,6 @@
 # Monitoring
 
-Three mechanisms, from the inside out: a health check of the process itself, a ping to an external monitor on every cycle, and notifications when an instance's status flips.
+Three mechanisms, from the inside out: a health check of the process itself, a ping to an external monitor on every cycle, and notifications about what an instance does.
 
 ## Health check
 
@@ -25,12 +25,13 @@ ping_url = "${PING_URL}"   # for example https://hc-ping.com/<uuid>
 
 ## Notifications
 
-A `[notify.<name>]` definition describes a message broker, and an instance that publishes to it sends an event whenever the instance's status flips between success and failure. Events are not sent on every cycle, since that would just be noise for a notification channel (unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch).
+A `[notify.<name>]` definition describes a message broker, and an instance that publishes to it sends events to it. By default that is one kind of event, a flip of the instance's status between success and failure; the `events` key chooses others (see [Event types](#event-types)). The default is deliberately quiet, since a notification channel is for what deserves a human's attention, unlike the ping above, which needs a heartbeat on every cycle to work as a dead man's switch.
 
 ```toml
 [notify.alerts]
 type    = "redis"
 address = "${REDIS_URL}"   # a redis:// URL; carries auth and the database index
+events  = ["status", "ip_change"]   # optional; the default is ["status"]
 ```
 
 ### Connecting instances to notifiers
@@ -59,17 +60,107 @@ notify = ["alerts", "backup"]
 name = "lab"                    # no notify key: alerts and backup
 ```
 
+### Event types
+
+`events` is a list of the types a notifier publishes. It is a setting of dnspatch, not of the broker, so it works the same for every notifier. Without it a notifier publishes `["status"]`, as it did before event types existed.
+
+| Type | What it reports | When |
+|---|---|---|
+| `status` | the instance as a whole worked or failed | when its state changes |
+| `provider_status` | one provider worked or failed | when its state changes |
+| `retriever_status` | one retriever worked or failed | when its state changes |
+| `ip_change` | an address was written to a provider and differs from the previous one | once per cycle, with every change of that cycle |
+| `cycle` | a cycle finished, successfully or not | after every cycle |
+| `lifecycle` | the instance started or stopped | at start, before the first cycle, and at a normal stop |
+
+The three `*_status` types report transitions only. The first time something is seen it is reported only if it failed: a first success is not news. A provider's state changes only when dnspatch really tried to write: a cycle that skipped it because the address had not changed, or because it is waiting out a backoff, leaves it alone. In the same way a retriever's state changes only when it was called: one that is not needed because an earlier retriever already supplied the address keeps what it had, even if that was a failure.
+
+`lifecycle` is published by every instance to its own topic, so a daemon with three instances sends three `started` events. The `stopped` event is delivered before the connection to the broker is closed.
+
+!!! note
+    While a provider is waiting out a backoff, dnspatch counts the cycle as successful, so `status` (and `ping_url`) flip between failure and recovery during that time. To follow a provider precisely, use `provider_status`.
+
+### Choosing events per instance
+
+An entry of an instance's `notify` list is either the name of a definition, which brings the definition's `events`, or a table with a `ref` and its own `events`, which replaces them for this instance only. Names and tables can be mixed in an inline array, and the form with `[[instance.notify]]` headers works too; TOML does not allow both for one instance.
+
+```toml
+[notify.alerts]
+type   = "redis"
+events = ["status", "provider_status", "retriever_status", "ip_change"]
+
+[notify.audit]
+type    = "rabbitmq"
+address = "${AMQP_URL}"
+events  = ["cycle", "lifecycle"]
+
+[[instance]]
+name   = "home"
+notify = ["alerts", "audit"]        # the events of the definitions
+
+[[instance]]
+name   = "lab"
+notify = ["audit", { ref = "alerts", events = ["status"] }]
+
+[[instance]]
+name = "office"
+
+[[instance.notify]]
+ref    = "alerts"
+events = ["status"]                 # the same override, as a table
+
+[[instance.notify]]
+ref = "audit"                       # no events: the definition's
+```
+
+Only `ref` and `events` are allowed in such a table. The connection to the broker belongs to the definition and is shared by every instance that uses it, so an instance cannot change its address or prefix; define another notifier for that. `events` must not be empty and must not repeat a type; to publish nothing to a notifier, leave it out of the list. A mistake is reported at startup with the instance or definition it is in, and `dnspatch --check-config` shows the events each notifier gets in each instance, for example `notify=[alerts(status), audit(cycle, lifecycle)]`.
+
 ### What is published
 
-dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it, a bot you write or a small relay service, decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched.
+dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it, a bot you write or a small relay service, decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. The topic is the same for every type of event; tell them apart by the `event` field.
+
+Every event has these fields:
+
+| Field | Meaning |
+|---|---|
+| `event` | the type, as in the table above |
+| `severity` | `info`, `warning` or `error` |
+| `instance` | the name of the instance |
+| `time` | when it happened, RFC 3339 |
+
+and the fields of its type:
+
+| Type | More fields |
+|---|---|
+| `status` | `state` (`failure` or `recovery`), `success`, `error` (on failure) |
+| `provider_status` | `provider`, `state`, `success`, `error` (on failure) |
+| `retriever_status` | `retriever`, `state`, `success`, `error` (on failure) |
+| `ip_change` | `changes`: a list of `{provider, family, old, new}`, with `family` `ipv4` or `ipv6` and an empty `old` when the previous address is not known (the first write after a start or after a failed one) |
+| `cycle` | `success`, `error` (on failure) |
+| `lifecycle` | `state` (`started` or `stopped`), `version` of dnspatch |
 
 ```json
-{"instance": "home", "success": false, "error": "...", "time": "..."}
+{"event":"status","severity":"error","instance":"home","time":"2026-10-02T10:00:00Z","state":"failure","success":false,"error":"provider \"regru\": ..."}
+{"event":"ip_change","severity":"info","instance":"home","time":"2026-10-02T10:05:00Z","changes":[{"provider":"regru","family":"ipv4","old":"1.2.3.4","new":"5.6.7.8"}]}
+{"event":"lifecycle","severity":"info","instance":"home","time":"2026-10-02T09:00:00Z","state":"started","version":"0.5.0"}
 ```
+
+The severity is fixed for each event:
+
+| Event | Severity |
+|---|---|
+| `status`, `provider_status` failure | `error` |
+| `retriever_status` failure | `warning` |
+| any recovery, `ip_change`, `lifecycle` | `info` |
+| `cycle` | `info`, or `error` when the cycle failed |
+
+The old payload (`instance`, `success`, `error`, `time`) is inside the `status` event, so a consumer written for it keeps working; `event`, `severity` and `state` are added to it.
+
+The text of an error is the same as in dnspatch's log, and the same care is needed with it: a plugin must keep secrets, such as a token in a URL, out of its errors.
 
 ### Redis
 
-The `redis` notifier takes a `redis://` URL as `address`. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine here since the next status change (or the next `ping_url` or health check cycle) still gets through.
+The `redis` notifier takes a `redis://` URL as `address`. Redis Pub/Sub is fire-and-forget: a subscriber that is not connected when an event is published misses it, which is fine for state changes, since the next one (or the next `ping_url` or health check cycle) still gets through; with `cycle` or `lifecycle` a missed event is simply gone.
 
 ### RabbitMQ
 

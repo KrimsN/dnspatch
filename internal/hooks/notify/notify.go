@@ -2,9 +2,9 @@
 // an operator configured with a [notify.<name>] definition. The brokers are notifier
 // plugins (plugin.Notifier, registered with plugin.RegisterNotifier; Redis
 // and RabbitMQ today, MQTT can be added later as their own package under
-// plugins/, without touching this package or the runner). BuildHook selects one
-// by the table's "type", and Hook is the runner.Hook that turns completed cycles
-// into published Events.
+// plugins/, without touching this package or the runner). BuildConnection selects one
+// by the table's "type", and Hook is the runner.EventHook that turns the events
+// of an instance into published payloads.
 //
 // A notifier is compiled into a build only when plugins/all imports it, which
 // is behind build tags (redis, rabbitmq, notify_all); that keeps a broker's client library
@@ -19,14 +19,33 @@ import (
 	"github.com/dnspatch/dnspatch/plugin"
 )
 
-// BuildHook builds the runner.Hook behind one [notify.<name>] definition from the
-// notifiers registered in plugin.Default. It has the signature app.NotifyBuilder
-// wants.
-func BuildHook(cfg config.Plugin, log *slog.Logger) (runner.Hook, error) {
+// Connection is the broker connection behind one [notify.<name>] definition.
+// Every instance that uses the definition gets its own Hook from it, with the
+// event types that instance asked for, and all of them publish through the one
+// connection.
+type Connection struct {
+	pub plugin.Notifier
+	log *slog.Logger
+}
+
+// BuildConnection connects the [notify.<name>] definition cfg with the
+// notifiers registered in plugin.Default.
+func BuildConnection(cfg config.Plugin, log *slog.Logger) (*Connection, error) {
 	n, err := plugin.Default.BuildNotifier(cfg.Type, cfg.Params)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewHook(n, log), nil
+	return &Connection{pub: n, log: log}, nil
+}
+
+// Hook returns the hook that publishes the given event types of an instance.
+func (c *Connection) Hook(events []config.Event) runner.Hook {
+	return newHook(c.pub, c.log, events)
+}
+
+// Close releases the connection. The daemon calls it once, after every instance
+// has stopped.
+func (c *Connection) Close() error {
+	return c.pub.Close()
 }

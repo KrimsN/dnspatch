@@ -847,7 +847,7 @@ func TestNotifyBuilderErrorExitsWithConfigCode(t *testing.T) {
 	path, registry := notifyConfig(t, "redis")
 
 	opts := runWith(registry, nil)
-	opts.Notify = func(config.Plugin, *slog.Logger) (runner.Hook, error) {
+	opts.Notify = func(config.Plugin, *slog.Logger) (NotifyConnection, error) {
 		return nil, errors.New("no such host")
 	}
 
@@ -860,6 +860,30 @@ func TestNotifyBuilderErrorExitsWithConfigCode(t *testing.T) {
 	if !strings.Contains(stderr.String(), "no such host") {
 		t.Errorf("stderr = %q, want it to contain the NotifyBuilder's error", stderr.String())
 	}
+}
+
+// recordingConn is a NotifyConnection that hands out one shared hook and
+// remembers the events each instance asked for and how often it was closed.
+type recordingConn struct {
+	hook *recordingHook
+
+	mu     sync.Mutex
+	asked  [][]config.Event
+	closed int
+}
+
+func (c *recordingConn) Hook(events []config.Event) runner.Hook {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.asked = append(c.asked, events)
+	return c.hook
+}
+
+func (c *recordingConn) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed++
+	return nil
 }
 
 // recordingHook is a runner.Hook that records which instances it was
@@ -930,10 +954,10 @@ func TestNotifyBuilderRunsOnceAndReachesEveryInstance(t *testing.T) {
 	var gotType, gotName string
 	hook := &recordingHook{}
 	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (NotifyConnection, error) {
 		calls++
 		gotType, gotName = cfg.Type, cfg.Name()
-		return hook, nil
+		return &recordingConn{hook: hook}, nil
 	}
 
 	runNotifyDaemon(t, path, opts, func() bool { return hook.sawAll("a", "b") })
@@ -953,8 +977,8 @@ func TestSeveralNotifiersEachReachEveryInstance(t *testing.T) {
 
 	hooks := map[string]*recordingHook{"redis": {}, "mqtt": {}}
 	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
-		return hooks[cfg.Type], nil
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (NotifyConnection, error) {
+		return &recordingConn{hook: hooks[cfg.Type]}, nil
 	}
 
 	runNotifyDaemon(t, path, opts, func() bool {
@@ -970,9 +994,9 @@ func TestInstancesPublishOnlyToTheNotifiersTheyList(t *testing.T) {
 	hooks := map[string]*recordingHook{"redis": {}, "mqtt": {}}
 	built := map[string]int{}
 	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (NotifyConnection, error) {
 		built[cfg.Type]++
-		return hooks[cfg.Type], nil
+		return &recordingConn{hook: hooks[cfg.Type]}, nil
 	}
 
 	runNotifyDaemon(t, path, opts, func() bool {
@@ -993,11 +1017,11 @@ func TestNotifierNoInstanceListsIsNotBuilt(t *testing.T) {
 
 	hook := &recordingHook{}
 	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (NotifyConnection, error) {
 		if cfg.Type == "mqtt" {
 			t.Error("the mqtt notifier was built, but no instance lists it")
 		}
-		return hook, nil
+		return &recordingConn{hook: hook}, nil
 	}
 
 	runNotifyDaemon(t, path, opts, func() bool { return hook.sawAll("a", "b") })
@@ -1009,9 +1033,9 @@ func TestNotifyErrorsNameTheDefinitionAndAreReportedTogether(t *testing.T) {
 	path, registry := notifyConfig(t, "redis", "mqtt", "amqp")
 
 	opts := runWith(registry, nil)
-	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (runner.Hook, error) {
+	opts.Notify = func(cfg config.Plugin, _ *slog.Logger) (NotifyConnection, error) {
 		if cfg.Type == "redis" {
-			return &recordingHook{}, nil
+			return &recordingConn{hook: &recordingHook{}}, nil
 		}
 		return nil, errors.New("unknown backend")
 	}
@@ -1249,7 +1273,9 @@ func TestCheckConfigShowsTheNotifiersOfEachInstance(t *testing.T) {
 	path, registry := notifyConfigWith(t, []string{"redis", "mqtt"}, `notify = ["mqtt"]`+"\n", "notify = []\n")
 
 	opts := runWith(registry, nil)
-	opts.Notify = func(config.Plugin, *slog.Logger) (runner.Hook, error) { return &recordingHook{}, nil }
+	opts.Notify = func(config.Plugin, *slog.Logger) (NotifyConnection, error) {
+		return &recordingConn{hook: &recordingHook{}}, nil
+	}
 
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), []string{"--config", path, "--check-config"}, &stdout, &stderr, opts); code != ExitOK {
@@ -1257,7 +1283,7 @@ func TestCheckConfigShowsTheNotifiersOfEachInstance(t *testing.T) {
 	}
 
 	lines := strings.Split(stdout.String(), "\n")
-	if !strings.HasSuffix(lines[1], "providers=[p] notify=[mqtt]") {
+	if !strings.HasSuffix(lines[1], "providers=[p] notify=[mqtt(status)]") {
 		t.Errorf("summary of a = %q, want it to end with the notifier it lists", lines[1])
 	}
 	if strings.Contains(lines[2], "notify") {

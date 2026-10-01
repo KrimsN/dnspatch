@@ -149,7 +149,10 @@ A notification backend is a plugin as well: it implements `plugin.Notifier`,
 registers with `plugin.RegisterNotifier`, and its configuration struct embeds
 `plugin.NotifierCommon`, which supplies `topic_prefix`. Because it brings the
 client library of a broker, it is off in a plain build; `notify_all` or its own
-tag turns it on.
+tag turns it on. The types of events a notifier publishes (`events` in
+`[notify.<name>]`) are not its concern: the daemon filters them before calling
+`Publish`, so the contract is the same for every backend and has no event
+parameter.
 
 ## 4. Implement it
 

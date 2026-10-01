@@ -417,6 +417,16 @@ func notifyInstance(name, extra string) string {
 	return "\n[[instance]]\nname = \"" + name + "\"\n" + extra + "[[instance.retriever]]\nref = \"home\"\n[[instance.provider]]\nref = \"main\"\n"
 }
 
+// notifyNames lists the names of the notifiers of an instance.
+func notifyNames(refs []NotifyRef) []string {
+	names := make([]string, len(refs))
+	for i, ref := range refs {
+		names[i] = ref.Name
+	}
+
+	return names
+}
+
 func TestNotify(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -450,7 +460,7 @@ type = "redis"
 type = "redis"
 `+notifyInstance("a", ""))
 
-	if got, want := cfg.Instances[0].Notify, []string{"one", "two"}; !slices.Equal(got, want) {
+	if got, want := notifyNames(cfg.Instances[0].Notify), []string{"one", "two"}; !slices.Equal(got, want) {
 		t.Errorf("Instances[0].Notify = %q, want %q", got, want)
 	}
 }
@@ -471,7 +481,7 @@ type = "mqtt"
 `))
 
 	for i, want := range [][]string{{"two"}, {"one", "three"}, {}} {
-		if got := cfg.Instances[i].Notify; !slices.Equal(got, want) {
+		if got := notifyNames(cfg.Instances[i].Notify); !slices.Equal(got, want) {
 			t.Errorf("Instances[%d].Notify = %q, want %q", i, got, want)
 		}
 	}
@@ -549,7 +559,7 @@ func TestInstanceNotifyErrors(t *testing.T) {
 		"not a list": {`notify = "alerts"
 `, `instance "a": "notify" must be an array of names`},
 		"not names": {`notify = [1]
-`, `instance "a": "notify" must be an array of names`},
+`, `instance "a": notify #1 must be the name of a [notify.<name>] definition or a table, not int64`},
 	}
 
 	for name, tc := range tests {

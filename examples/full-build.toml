@@ -6,11 +6,12 @@
 #
 # Everything else in the file is the same as on the lightweight build.
 
-# Publishes a small JSON event to Redis Pub/Sub whenever an instance flips
-# between success and failure: {"instance": "home", "success": false,
-# "error": "...", "time": "..."}. It goes to the channel
-# dnspatch.events.<instance>; change the prefix with topic_prefix. Whatever
-# subscribes to it (a bot, a relay service) decides what to do with it.
+# Publishes a small JSON event to Redis Pub/Sub, by default whenever an instance
+# flips between success and failure: {"event": "status", "severity": "error",
+# "instance": "home", "state": "failure", "success": false, "error": "...",
+# "time": "..."}. It goes to the channel dnspatch.events.<instance>; change the
+# prefix with topic_prefix. Whatever subscribes to it (a bot, a relay service)
+# decides what to do with it.
 #
 # "address" is a redis:// or rediss:// URL; it carries the password and the
 # database index, so keep it in the environment, not in the file.
@@ -19,8 +20,14 @@ type    = "redis"
 address = "${REDIS_URL}"
 # topic_prefix = "dnspatch.events."
 
+# Which events it publishes. The default is ["status"]. The others are
+# provider_status, retriever_status, ip_change, cycle and lifecycle (an
+# instance starting and stopping).
+events = ["status", "provider_status", "ip_change"]
+
 # Each [notify.<name>] definition is its own broker connection, shared by the
-# instances that list it in their notify key. Define more to reach several
+# instances that list it in their notify key, each with the events of the
+# definition or its own (see the instance below). Define more to reach several
 # brokers, of different types or of one type with different addresses, for
 # example a second Redis for another subscriber. Uncomment to try it, and add
 # "backup" to the notify list of the instance below.
@@ -38,6 +45,7 @@ address = "${REDIS_URL}"
 # type     = "rabbitmq"
 # address  = "${RABBITMQ_URL}"
 # exchange = "dnspatch"
+# events   = ["cycle", "lifecycle"]
 
 [retriever.home]
 type = "ifconfigco"
@@ -52,7 +60,10 @@ password = "${PASSWORD}"
 [[instance]]
 name = "home"
 # The notifiers this instance publishes to. Without this key it publishes to
-# every notifier defined above; [] publishes to none.
+# every notifier defined above; [] publishes to none. An entry is a name, which
+# brings the events of the definition, or a table that replaces them for this
+# instance only: { ref = "alerts", events = ["status"] }. Nothing else can be
+# overridden in it: the connection is shared.
 notify = ["alerts"]
 # Called on every completed cycle (a GET on success, the same URL with /fail
 # appended on failure): a dead man's switch for Healthchecks.io or an Uptime

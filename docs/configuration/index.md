@@ -2,7 +2,7 @@
 
 TOML. DNS record names routinely contain `@` and `*`, which YAML reserves, and plugin parameters are loosely typed: TOML avoids both hazards.
 
-A configuration has three parts: definitions of retrievers, definitions of providers, and instances that combine them. A fourth, optional part, `[notify.<name>]`, describes notifiers (see [Monitoring](../operations/monitoring.md)).
+A configuration has three parts: definitions of retrievers, definitions of providers, and instances that combine them. A fourth, optional part, `[notify.<name>]`, describes notifiers and the events they publish (see [Monitoring](../operations/monitoring.md#notifications)).
 
 ```toml
 interval = "5m"                    # default for every instance, at least 1s
@@ -47,6 +47,14 @@ provider  = ["regru", { ref = "regru", rr_name = "*.home" }]
 ```
 
 The `[[instance.retriever]]` and `[[instance.provider]]` form keeps working. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
+
+The `notify` list takes names and tables in the same way, but a table there may only hold `ref` and `events`: it chooses which [event types](../operations/monitoring.md#event-types) reach the notifier from this instance, and nothing else about it can be overridden.
+
+```toml
+[[instance]]
+name   = "lab"
+notify = ["audit", { ref = "alerts", events = ["status"] }]
+```
 
 ## Instances
 
