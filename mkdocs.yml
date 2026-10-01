@@ -43,6 +43,13 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  # Pulls files into pages with --8<-- "path", relative to the repository root,
+  # so the examples shown on the site are the real files.
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
 
 nav:
   - Home: index.md
@@ -68,3 +75,35 @@ nav:
       - Plugins outside the repository: development/external-plugins.md
   - Migrations:
       - From 0.2 to 0.3: migrations/0.2-to-0.3.md
+
+plugins:
+  - search
+  # Writes /llms.txt and /llms-full.txt for AI assistants from the pages below.
+  - llmstxt:
+      full_output: llms-full.txt
+      markdown_description: |
+        dnspatch is a dynamic DNS daemon in Go: it watches the public IP address
+        and patches DNS records when it changes. Retrievers report the address,
+        providers write it to a DNS host, and instances tie them together.
+      sections:
+        Getting started:
+          - index.md: Overview and concepts
+          - installation.md: Binary, Docker and building from source
+          - quick-start.md: A first configuration and the command line
+        Configuration:
+          - configuration/index.md: The configuration file
+          - configuration/retrievers.md: Dual-stack and fallback between retrievers
+          - configuration/secrets.md: Environment variables and secret files
+          - configuration/proxies.md: Reaching a DNS API through a proxy
+          - configuration/plugins.md: Built-in retrievers, providers and notifiers
+          - PARAMETERS.md: Every parameter of every plugin
+          - configuration/examples.md: Ready-made configuration files
+        Deployment:
+          - deployment/docker.md: Running in a container
+          - deployment/building.md: Build tags and cross-compiling
+        Operations:
+          - operations/behaviour.md: Failure handling and state
+          - operations/monitoring.md: Health check, pings and notifications
+        Development:
+          - development/writing-a-plugin.md: Writing a plugin
+          - development/external-plugins.md: Plugins outside the repository

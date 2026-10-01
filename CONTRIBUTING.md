@@ -94,7 +94,7 @@ pip install -r docs/requirements.txt
 mkdocs serve
 ```
 
-`mkdocs build` runs in strict mode in CI: a broken link or a page missing from the `nav` fails the build. `docs/PARAMETERS.md` and the table of build tags in `docs/deployment/building.md` are generated (see below); everything else is written by hand.
+`mkdocs build` runs in strict mode in CI: a broken link or a page missing from the `nav` fails the build. `docs/PARAMETERS.md` and the table of build tags in `docs/deployment/building.md` are generated (see below); everything else is written by hand. The configs on the examples page are included from `examples/` with `--8<-- "path"`, and the build also writes `llms.txt` and `llms-full.txt` for AI assistants; a new page goes into the `nav` and, to be listed there, into the `llmstxt` sections of `mkdocs.yml`.
 
 ## Writing a plugin
 
