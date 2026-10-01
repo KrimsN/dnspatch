@@ -333,15 +333,15 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 	}
 
 	if value, ok := table["retriever"]; ok {
-		if in.Retrievers, ok = asTables(value); !ok {
-			errs = append(errs, errors.New(`"retriever" must be an array of tables: [[instance.retriever]]`))
-		}
+		var refErrs []error
+		in.Retrievers, refErrs = asRefs("retriever", value)
+		errs = append(errs, refErrs...)
 	}
 
 	if value, ok := table["provider"]; ok {
-		if in.Providers, ok = asTables(value); !ok {
-			errs = append(errs, errors.New(`"provider" must be an array of tables: [[instance.provider]]`))
-		}
+		var refErrs []error
+		in.Providers, refErrs = asRefs("provider", value)
+		errs = append(errs, refErrs...)
 	}
 
 	if value, ok := table["notify"]; ok {
@@ -501,6 +501,48 @@ func asTables(value any) ([]map[string]any, bool) {
 	default:
 		return nil, false
 	}
+}
+
+// asRefs converts the retriever or provider list of an instance. Every element
+// is either a table, or a string that stands for { ref = "<string>" }. The
+// decoder yields []map[string]any for [[instance.<kind>]] and []any for an
+// inline array, which may mix both forms.
+func asRefs(kind string, value any) ([]map[string]any, []error) {
+	var items []any
+
+	switch v := value.(type) {
+	case []map[string]any:
+		for _, table := range v {
+			items = append(items, table)
+		}
+	case []any:
+		items = v
+	default:
+		return nil, []error{fmt.Errorf(`%q must be an array of names of [%s.<name>] definitions or tables, for example ["name", { ref = "name" }] or [[instance.%s]]`,
+			kind, kind, kind)}
+	}
+
+	tables := make([]map[string]any, 0, len(items))
+
+	var errs []error
+
+	for i, item := range items {
+		switch v := item.(type) {
+		case map[string]any:
+			tables = append(tables, v)
+		case string:
+			if v == "" {
+				errs = append(errs, fmt.Errorf("%s #%d: the name of a definition must not be empty", kind, i+1))
+				continue
+			}
+
+			tables = append(tables, map[string]any{"ref": v})
+		default:
+			errs = append(errs, fmt.Errorf("%s #%d must be the name of a [%s.<name>] definition or a table, not %T", kind, i+1, kind, item))
+		}
+	}
+
+	return tables, errs
 }
 
 // asStrings converts an array of strings. The decoder yields []any for an

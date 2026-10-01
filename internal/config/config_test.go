@@ -1016,7 +1016,7 @@ retriever = "home"
 [[instance.provider]]
 ref = "main"
 `,
-			wants: []string{`instance "a"`, `"retriever" must be an array of tables`},
+			wants: []string{`instance "a"`, `"retriever" must be an array of names`},
 		},
 		{
 			name: "instance retriever written as a single table",
@@ -1028,7 +1028,7 @@ ref = "home"
 [[instance.provider]]
 ref = "main"
 `,
-			wants: []string{`instance "a"`, `"retriever" must be an array of tables`},
+			wants: []string{`instance "a"`, `"retriever" must be an array of names`},
 		},
 		{
 			name: "instance provider written as a table",
@@ -1040,7 +1040,57 @@ ref = "home"
 [instance.provider]
 ref = "main"
 `,
-			wants: []string{`instance "a"`, `"provider" must be an array of tables`},
+			wants: []string{`instance "a"`, `"provider" must be an array of names`},
+		},
+		{
+			name: "retriever element of the wrong type",
+			doc: header + `
+[[instance]]
+name = "a"
+retriever = ["home", 5]
+provider = ["main"]
+`,
+			wants: []string{`instance "a"`, `retriever #2 must be the name of a [retriever.<name>] definition or a table`},
+		},
+		{
+			name: "provider element is an array",
+			doc: header + `
+[[instance]]
+name = "a"
+retriever = ["home"]
+provider = [["main"]]
+`,
+			wants: []string{`instance "a"`, `provider #1 must be the name of a [provider.<name>] definition or a table`},
+		},
+		{
+			name: "empty definition name",
+			doc: header + `
+[[instance]]
+name = "a"
+retriever = [""]
+provider = ["main"]
+`,
+			wants: []string{`instance "a"`, `retriever #1: the name of a definition must not be empty`},
+		},
+		{
+			name: "unknown definition name",
+			doc: header + `
+[[instance]]
+name = "a"
+retriever = ["home"]
+provider = ["main", "missing"]
+`,
+			wants: []string{`instance "a"`, `provider #2: ref "missing" is not defined`},
+		},
+		{
+			name: "duplicate provider names",
+			doc: header + `
+[[instance]]
+name = "a"
+retriever = ["home"]
+provider = ["main", "main"]
+`,
+			wants: []string{`instance "a"`, `provider #2 repeats provider #1`},
 		},
 		{
 			name:  "instance written as a single table",
@@ -1368,5 +1418,70 @@ func TestPluginNameIsTheRefOrElseTheType(t *testing.T) {
 				t.Errorf("Name() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestShortRefsMatchTables(t *testing.T) {
+	const pools = `
+[retriever.home]
+type = "ifconfigco"
+
+[retriever.backup]
+type = "ifconfigco"
+
+[provider.main]
+type      = "example"
+api_token = "secret"
+zone      = "a.com"
+rr_name   = "@"
+`
+
+	short := mustParse(t, pools+`
+[[instance]]
+name      = "a"
+retriever = ["backup", "home"]
+provider  = ["main", { ref = "main", rr_name = "*.a" }]
+`)
+
+	long := mustParse(t, pools+`
+[[instance]]
+name = "a"
+
+[[instance.retriever]]
+ref = "backup"
+
+[[instance.retriever]]
+ref = "home"
+
+[[instance.provider]]
+ref = "main"
+
+[[instance.provider]]
+ref = "main"
+rr_name = "*.a"
+`)
+
+	if !reflect.DeepEqual(short.Instances, long.Instances) {
+		t.Errorf("short form = %+v, want %+v", short.Instances, long.Instances)
+	}
+
+	if got := short.Instances[0].Retrievers[0].Ref; got != "backup" {
+		t.Errorf("first retriever = %q, want backup: the order must be kept", got)
+	}
+}
+
+func TestShortFormMixesWithTablesOfOtherKey(t *testing.T) {
+	cfg := mustParse(t, header+`
+[[instance]]
+name      = "a"
+retriever = ["home"]
+
+[[instance.provider]]
+ref = "main"
+`)
+
+	inst := cfg.Instances[0]
+	if len(inst.Retrievers) != 1 || inst.Retrievers[0].Ref != "home" || len(inst.Providers) != 1 {
+		t.Errorf("instance = %+v", inst)
 	}
 }
