@@ -35,11 +35,24 @@ An instance points at a definition with `ref`, or declares the plugin inline wit
 - `ref` names a `[retriever.<name>]` or `[provider.<name>]` block; parameters written next to `ref` override the definition, except `type`. This is how one provider account serves several records, or one retriever definition serves several instances.
 - `type` builds the plugin from the instance table alone, with no definition to merge in. Use it for a retriever or provider that only one instance needs: most retrievers, and any provider not shared across records.
 
+## Short form
+
+When a definition is used as it is, with nothing overridden, an instance lists its name instead of a table: `"name"` is the same as `{ ref = "name" }`. Names and inline tables can be mixed in one array:
+
+```toml
+[[instance]]
+name      = "home"
+retriever = ["ipify"]
+provider  = ["regru", { ref = "regru", rr_name = "*.home" }]
+```
+
+The `[[instance.retriever]]` and `[[instance.provider]]` form keeps working. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
+
 ## Instances
 
-An instance accepts one or more `[[instance.retriever]]` tables, polled in order until every address family is filled. Which family a retriever reports is decided by the address it actually returns, not by configuration. Dual-stack setups and fallback chains are described on [Retrievers and address families](retrievers.md).
+An instance accepts one or more retrievers (`[[instance.retriever]]` tables or names, see above), polled in order until every address family is filled. Which family a retriever reports is decided by the address it actually returns, not by configuration. Dual-stack setups and fallback chains are described on [Retrievers and address families](retrievers.md).
 
-An instance also takes one or more `[[instance.provider]]` tables. Providers of an instance are updated independently: see [Behaviour](../operations/behaviour.md).
+An instance also takes one or more providers (`[[instance.provider]]` tables or names). Providers of an instance are updated independently: see [Behaviour](../operations/behaviour.md).
 
 ## Values in strings
 
