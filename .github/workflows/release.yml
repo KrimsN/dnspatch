@@ -77,13 +77,16 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
-          # The full flavour gets "-full" appended to every tag.
-          flavor: suffix=${{ matrix.suffix }}
+          # The full flavour gets "-full" appended to every tag, latest
+          # included: without onlatest both jobs push "latest", and whichever
+          # finishes last wins.
+          flavor: suffix=${{ matrix.suffix }},onlatest=true
           # The same tags go to both registries.
           images: |
             ghcr.io/${{ github.repository }}
             docker.io/krimsn/dnspatch
-          # v0.1.0 -> 0.1.0, 0.1, latest. A pre-release tag does not move latest.
+          # v0.1.0 -> 0.1.0, 0.1, latest (and 0.1.0-full, 0.1-full, latest-full
+          # for the full flavour). A pre-release tag does not move latest.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
