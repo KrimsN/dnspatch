@@ -45,15 +45,26 @@ const EnvLogLevel = "DNSPATCH_LOG_LEVEL"
 // attributes.
 type HookBuilder func(inst config.Instance, log *slog.Logger) ([]runner.Hook, error)
 
-// NotifyBuilder builds the runner.Hook that publishes instances'
-// success/failure transitions to an external broker, from one [notify.<name>]
-// definition (cfg.Ref is its name, cfg.Type its "type", cfg.Params its other
-// parameters). A build with no such backend passes a nil NotifyBuilder: Run
-// then rejects a config whose instances use a notifier instead of silently
-// ignoring it, the same way an unsupported PingURL is rejected. Unlike Hooks,
-// this runs once per definition, not once per instance: each definition is one
-// broker connection, built once and attached to every instance that lists it.
-type NotifyBuilder func(cfg config.Plugin, log *slog.Logger) (runner.Hook, error)
+// NotifyConnection is the broker connection of one [notify.<name>]
+// definition. Each instance that uses the definition takes a hook from it,
+// with the event types that instance wants, and all those hooks share the
+// connection, which is closed once.
+type NotifyConnection interface {
+	// Hook returns the hook that publishes the given event types of one
+	// instance.
+	Hook(events []config.Event) runner.Hook
+	// Close releases the connection.
+	Close() error
+}
+
+// NotifyBuilder connects one [notify.<name>] definition (cfg.Ref is its name,
+// cfg.Type its "type", cfg.Params its other parameters) to an external broker.
+// A build with no such backend passes a nil NotifyBuilder: Run then rejects a
+// config whose instances use a notifier instead of silently ignoring it, the
+// same way an unsupported PingURL is rejected. Unlike Hooks, this runs once per
+// definition, not once per instance: each definition is one broker connection,
+// built once and shared by every instance that lists it.
+type NotifyBuilder func(cfg config.Plugin, log *slog.Logger) (NotifyConnection, error)
 
 // Options configures one build of the daemon.
 type Options struct {
@@ -159,7 +170,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, opts Opti
 
 	logger.Info("starting", "version", buildVersion(opts.Version), "config", path, "instances", len(instances))
 
-	if err := runner.Run(ctx, instances, runner.Options{Logger: logger}); err != nil {
+	if err := runner.Run(ctx, instances, runner.Options{Logger: logger, Version: buildVersion(opts.Version)}); err != nil {
 		return fail(stderr, err, ExitFailure)
 	}
 
@@ -187,10 +198,10 @@ func parseLogLevel(flagValue, envValue string) (slog.Level, error) {
 	return level, nil
 }
 
-// attachNotify builds one hook per notifier definition that an instance uses
-// and appends to each instance the hooks of the notifiers it lists, so its
-// status changes reach those brokers and no others. A definition shared by
-// several instances is built once. Problems in all the definitions are reported
+// attachNotify connects every notifier definition that an instance uses and
+// appends to each instance one hook per notifier it lists, with the event types
+// it asked for, so its events reach those brokers and no others. A definition
+// shared by several instances is connected once. Problems in all the definitions are reported
 // together. The returned function closes the connections the hooks hold; it is
 // safe to call even when err is set, and does nothing when no instance uses a
 // notifier. instances is in the order of cfg.Instances.
@@ -211,25 +222,23 @@ func attachNotify(instances []runner.Instance, cfg config.Config, build NotifyBu
 
 	var errs []error
 
-	hooks := make(map[string]runner.Hook, len(names))
+	conns := make(map[string]NotifyConnection, len(names))
 
 	for _, name := range names {
 		table := cfg.Notify[name]
 
-		hook, err := build(table, log)
+		conn, err := build(table, log)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("notify %q (%s): %w", name, table.Type, err))
 			continue
 		}
 
-		hooks[name] = hook
+		conns[name] = conn
 	}
 
 	closeAll = func() {
-		for _, hook := range hooks {
-			if closer, ok := hook.(interface{ Close() error }); ok {
-				_ = closer.Close()
-			}
+		for _, conn := range conns {
+			_ = conn.Close()
 		}
 	}
 
@@ -238,8 +247,8 @@ func attachNotify(instances []runner.Instance, cfg config.Config, build NotifyBu
 	}
 
 	for i, in := range cfg.Instances {
-		for _, name := range in.Notify {
-			instances[i].Hooks = append(instances[i].Hooks, hooks[name])
+		for _, ref := range in.Notify {
+			instances[i].Hooks = append(instances[i].Hooks, conns[ref.Name].Hook(ref.Events))
 		}
 	}
 

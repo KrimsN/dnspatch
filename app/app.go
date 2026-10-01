@@ -21,9 +21,11 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"os"
 
 	iapp "github.com/dnspatch/dnspatch/internal/app"
+	"github.com/dnspatch/dnspatch/internal/config"
 	"github.com/dnspatch/dnspatch/internal/hooks/notify"
 	"github.com/dnspatch/dnspatch/internal/runner"
 	"github.com/dnspatch/dnspatch/plugin"
@@ -53,7 +55,14 @@ func options(s settings) iapp.Options {
 		Hooks:    hooks,
 		// Always set: with no backend compiled in, the registry has nothing to
 		// build and says so, naming the tag that brings the backend asked for.
-		Notify: notify.BuildHook,
+		Notify: func(cfg config.Plugin, log *slog.Logger) (iapp.NotifyConnection, error) {
+			conn, err := notify.BuildConnection(cfg, log)
+			if err != nil {
+				return nil, err
+			}
+
+			return conn, nil
+		},
 	}
 }
 

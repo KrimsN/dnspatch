@@ -39,6 +39,9 @@ type providerState struct {
 	failures int
 	// next is the earliest moment the provider may be tried again.
 	next time.Time
+	// status is whether the last real write attempt worked. A write skipped
+	// because the address did not change, or because of the backoff, leaves it.
+	status trackedState
 }
 
 // instance polls one or more retrievers, in order, until every address
@@ -57,6 +60,15 @@ type instance struct {
 	needV4, needV6 bool
 
 	hooks []Hook
+	// eventHooks are the hooks that also take Events, in the order of hooks.
+	eventHooks []EventHook
+	version    string
+
+	// status is whether the last completed cycle worked; retrieverStatus is the
+	// same for each retriever, by position, and changes only when the retriever
+	// is actually called.
+	status          trackedState
+	retrieverStatus []trackedState
 
 	clock   Clock
 	log     *slog.Logger
@@ -71,6 +83,15 @@ func newInstance(cfg Instance, opts Options) *instance {
 		providers[i] = &providerState{name: p.Name, provider: p.Provider}
 	}
 	needV4, needV6 := neededFamilies(cfg.Retrievers)
+
+	var eventHooks []EventHook
+
+	for _, h := range cfg.Hooks {
+		if eh, ok := h.(EventHook); ok {
+			eventHooks = append(eventHooks, eh)
+		}
+	}
+
 	return &instance{
 		name:       cfg.Name,
 		interval:   cfg.Interval,
@@ -80,10 +101,15 @@ func newInstance(cfg Instance, opts Options) *instance {
 		needV4:     needV4,
 		needV6:     needV6,
 		hooks:      cfg.Hooks,
-		clock:      opts.Clock,
-		log:        log,
-		backoff:    newBackoff(cfg.Interval),
-		jitter:     rand.Int64N,
+		eventHooks: eventHooks,
+		version:    opts.Version,
+
+		retrieverStatus: make([]trackedState, len(cfg.Retrievers)),
+
+		clock:   opts.Clock,
+		log:     log,
+		backoff: newBackoff(cfg.Interval),
+		jitter:  rand.Int64N,
 	}
 }
 
@@ -135,6 +161,7 @@ func (in *instance) run(ctx context.Context) {
 
 	in.log.Info("instance started", "interval", in.interval)
 	in.warnShortInterval()
+	in.emit(ctx, Event{Kind: KindStarted, Version: in.version})
 	// Every failure is logged per provider inside tick, so the returned error
 	// is not reported again.
 	for ctx.Err() == nil {
@@ -146,9 +173,39 @@ func (in *instance) run(ctx context.Context) {
 		}
 	}
 	in.log.Info("instance stopped")
+	// The context is cancelled by now, and the stop is exactly what is being
+	// reported, so it is not passed on.
+	in.emit(context.WithoutCancel(ctx), Event{Kind: KindStopped, Version: in.version})
 }
 
-// runHooks notifies every hook of the cycle that just finished, unless the
+// emit hands ev to the hooks that take events, unless the context was already
+// cancelled: what a cut-short cycle found is not worth reporting, and a
+// publish would fail anyway.
+func (in *instance) emit(ctx context.Context, ev Event) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	ev.Instance = in.name
+	ev.Time = in.clock.Now()
+
+	for _, h := range in.eventHooks {
+		h.OnEvent(ctx, ev)
+	}
+}
+
+// observe records whether state last worked and, on a transition worth
+// reporting, emits kind for name. A failure carries its err.
+func (in *instance) observe(ctx context.Context, state *trackedState, kind EventKind, name string, err error) {
+	failed := err != nil
+	if !state.observe(failed) {
+		return
+	}
+
+	in.emit(ctx, Event{Kind: kind, Name: name, Failed: failed, Err: err})
+}
+
+// runHooks tells every hook about the cycle that just finished, unless the
 // context was already cancelled: a cycle cut short by shutdown is not a
 // result worth reporting. A hook's own failure (for example a ping request
 // that could not be sent) is its own responsibility to log; the runner does
@@ -157,6 +214,9 @@ func (in *instance) runHooks(ctx context.Context, err error) {
 	if ctx.Err() != nil || len(in.hooks) == 0 {
 		return
 	}
+
+	in.observe(ctx, &in.status, KindInstanceStatus, "", err)
+	in.emit(ctx, Event{Kind: KindCycle, Failed: err != nil, Err: err})
 
 	ev := CycleEvent{Instance: in.name, Success: err == nil, Err: err}
 	for _, h := range in.hooks {
@@ -176,14 +236,25 @@ func (in *instance) tick(ctx context.Context) error {
 		return errors.Join(errs...)
 	}
 
+	var changes []AddressChange
+
 	for _, p := range in.providers {
 		if ctx.Err() != nil {
 			break
 		}
-		if err := in.update(ctx, p, addrs, start); err != nil {
+
+		written, err := in.update(ctx, p, addrs, start)
+		changes = append(changes, written...)
+
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
+
+	if len(changes) > 0 {
+		in.emit(ctx, Event{Kind: KindIPChange, Changes: changes})
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -201,7 +272,7 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 	var addrs plugin.Addresses
 
 	var errs []error
-	for _, r := range in.retrievers {
+	for i, r := range in.retrievers {
 		if ctx.Err() != nil {
 			break
 		}
@@ -227,8 +298,11 @@ func (in *instance) retrieve(ctx context.Context) (plugin.Addresses, []error) {
 			}
 			in.log.Warn("retrieving address failed", "retriever", r.Name, "err", err)
 			errs = append(errs, fmt.Errorf("retriever %q: %w", r.Name, err))
+			in.observe(ctx, &in.retrieverStatus[i], KindRetrieverStatus, r.Name, err)
 			continue
 		}
+
+		in.observe(ctx, &in.retrieverStatus[i], KindRetrieverStatus, r.Name, nil)
 
 		if got.V4.IsValid() {
 			if addrs.V4.IsValid() {
@@ -274,8 +348,9 @@ func (in *instance) retrieverIsNeeded(r NamedRetriever, addrs plugin.Addresses) 
 // update writes the families of addrs that changed to one provider, unless
 // none changed or the provider is still backing off. The tick start, not the
 // end of the attempt, anchors the next allowed attempt so a slow attempt does
-// not eat into the retry delay.
-func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.Addresses, start time.Time) error {
+// not eat into the retry delay. It returns the addresses that were written,
+// with what they replaced.
+func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.Addresses, start time.Time) ([]AddressChange, error) {
 	log := in.log.With("provider", p.name)
 
 	toSend := plugin.Addresses{}
@@ -287,31 +362,35 @@ func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.A
 	}
 	if !toSend.V4.IsValid() && !toSend.V6.IsValid() {
 		log.Debug("address unchanged, skipping", "addrs", addrs)
-		return nil
+		return nil, nil
 	}
 	if start.Before(p.next) {
 		log.Debug("backing off, skipping", "addrs", toSend, "retry_at", p.next)
-		return nil
+		return nil, nil
 	}
 
 	err := in.attempt(ctx, func(ctx context.Context) error {
 		return p.provider.Update(ctx, toSend, plugin.RecordOptions{})
 	})
 	if err == nil {
+		var changes []AddressChange
 		if toSend.V4.IsValid() {
+			changes = append(changes, AddressChange{Provider: p.name, Old: p.lastV4, New: toSend.V4})
 			p.lastV4 = toSend.V4
 		}
 		if toSend.V6.IsValid() {
+			changes = append(changes, AddressChange{Provider: p.name, IPv6: true, Old: p.lastV6, New: toSend.V6})
 			p.lastV6 = toSend.V6
 		}
 		p.failures = 0
 		p.next = time.Time{}
 		log.Info("address updated", "addrs", toSend)
-		return nil
+		in.observe(ctx, &p.status, KindProviderStatus, p.name, nil)
+		return changes, nil
 	}
 	if ctx.Err() != nil {
 		log.Info("update interrupted", "addrs", toSend)
-		return nil
+		return nil, nil
 	}
 
 	p.lastV4 = netip.Addr{}
@@ -320,7 +399,8 @@ func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.A
 	delay := in.backoff.delay(p.failures, in.jitter)
 	p.next = start.Add(delay)
 	log.Warn("update failed", "addrs", toSend, "err", err, "failures", p.failures, "retry_in", delay)
-	return fmt.Errorf("provider %q: %w", p.name, err)
+	in.observe(ctx, &p.status, KindProviderStatus, p.name, err)
+	return nil, fmt.Errorf("provider %q: %w", p.name, err)
 }
 
 // attempt runs fn under the per-attempt deadline. A deadline overrun is

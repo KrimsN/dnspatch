@@ -13,7 +13,7 @@ The [examples/](https://github.com/dnspatch/dnspatch/tree/main/examples) directo
 | [`rfc2136.toml`](#rfc2136toml) | Updating a record on your own name server (BIND, Knot, PowerDNS, ...) with RFC 2136 dynamic updates signed with a TSIG key. |
 | [`secrets-from-files.toml`](#secrets-from-filestoml) | Reading a secret from a file (`${file:/path}`) instead of an environment variable, the way Docker/Kubernetes secrets are mounted. |
 | [`multi-provider.toml`](#multi-providertoml) | Several instances and providers in one process: two sites, two DNS hosts, independent polling intervals. |
-| [`full-build.toml`](#full-buildtoml) | The features that only exist in the full build: `ping_url` (a ping on every cycle) and `[notify.<name>]` (status changes published to a broker, per instance). |
+| [`full-build.toml`](#full-buildtoml) | The features that only exist in the full build: `ping_url` (a ping on every cycle) and `[notify.<name>]` (events published to a broker: status changes by default, more with `events`, per instance). |
 
 For the parameters of every plugin see the [Parameter reference](../PARAMETERS.md); the general syntax is in the [Configuration overview](index.md).
 

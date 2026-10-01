@@ -172,7 +172,8 @@ func writeInstance(b *strings.Builder, retrieverNames, providerNames, notifierNa
 	if len(notifierNames) > 0 {
 		b.WriteString("# The notifiers this instance publishes to, by the name of their [notify.<name>]\n")
 		b.WriteString("# definition. Without it an instance publishes to every notifier you define;\n")
-		b.WriteString("# an empty list, [], publishes to none.\n")
+		b.WriteString("# an empty list, [], publishes to none. An entry can also be a table that\n")
+		b.WriteString("# overrides the events for this instance: { ref = \"name\", events = [\"cycle\"] }.\n")
 		fmt.Fprintf(b, "# notify = [%s]\n", tomlString(notifierNames[0]))
 	}
 
@@ -195,10 +196,12 @@ func writeNotify(b *strings.Builder, notifiers map[string]reflect.Type) error {
 
 	writeBanner(b, "Notifiers: full build only (the -full image or binary).")
 
-	b.WriteString("# Publishes a JSON event to a message broker whenever an instance flips between\n")
-	b.WriteString("# success and failure, to the channel <topic_prefix><instance>. The lightweight\n")
-	b.WriteString("# build rejects a config whose instances use a notifier. See the Monitoring page of\n")
-	b.WriteString("# the documentation.\n")
+	b.WriteString("# Publishes a JSON event to a message broker, by default whenever an instance\n")
+	b.WriteString("# flips between success and failure, to the channel <topic_prefix><instance>.\n")
+	b.WriteString("# The \"events\" key chooses which events: status, provider_status,\n")
+	b.WriteString("# retriever_status, ip_change, cycle and lifecycle. The lightweight build rejects\n")
+	b.WriteString("# a config whose instances use a notifier. See the Monitoring page of the\n")
+	b.WriteString("# documentation.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Each [notify.<name>] definition is one broker connection, shared by the\n")
 	b.WriteString("# instances that publish to it. Define several to reach several brokers, of\n")
@@ -218,7 +221,7 @@ func writeNotify(b *strings.Builder, notifiers map[string]reflect.Type) error {
 			return fmt.Errorf("notifier %q: %w", name, err)
 		}
 
-		fmt.Fprintf(b, "# [notify.%s]\n# type = %s\n\n", name, tomlString(name))
+		fmt.Fprintf(b, "# [notify.%s]\n# type = %s\n# events = [\"status\"]   # optional, this is the default\n\n", name, tomlString(name))
 
 		for _, p := range params {
 			if err := writeParam(b, p, true); err != nil {

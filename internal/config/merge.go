@@ -48,7 +48,7 @@ func resolvePluginByRef(kind, where string, pool map[string]map[string]any, ref 
 
 	for _, source := range []map[string]any{definition, override} {
 		for key, value := range source {
-			if key != "type" && key != "ref" {
+			if key != "type" && key != "ref" && !isEventsKey(kind, key) {
 				merged[key] = value
 			}
 		}
@@ -98,6 +98,12 @@ func resolvePluginInline(kind, where string, override map[string]any) (Plugin, [
 	}
 
 	return Plugin{Type: typ, Params: params}, nil
+}
+
+// isEventsKey reports whether key is the "events" of a notifier definition:
+// a setting of the configuration itself, which is never handed to the plugin.
+func isEventsKey(kind, key string) bool {
+	return kind == "notify" && key == "events"
 }
 
 // expandMap returns a deep copy of params with environment references

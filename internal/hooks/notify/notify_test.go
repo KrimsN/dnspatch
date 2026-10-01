@@ -33,7 +33,7 @@ func init() {
 	})
 }
 
-func TestBuildHookPublishesUnderTheTopicPrefix(t *testing.T) {
+func TestBuildConnectionPublishesUnderTheTopicPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		params map[string]any
@@ -45,12 +45,13 @@ func TestBuildHookPublishesUnderTheTopicPrefix(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			published = nil
 
-			hook, err := BuildHook(config.Plugin{Type: "fake", Params: tc.params}, discardLogger())
+			conn, err := BuildConnection(config.Plugin{Type: "fake", Params: tc.params}, discardLogger())
 			if err != nil {
-				t.Fatalf("BuildHook: %v", err)
+				t.Fatalf("BuildConnection: %v", err)
 			}
 
-			hook.AfterCycle(context.Background(), runner.CycleEvent{Instance: "home", Success: false})
+			hook := conn.Hook([]config.Event{config.EventCycle}).(runner.EventHook)
+			hook.OnEvent(context.Background(), runner.Event{Kind: runner.KindCycle, Instance: "home"})
 
 			if len(published) != 1 || published[0] != tc.want {
 				t.Errorf("published topics = %v, want [%s]", published, tc.want)
@@ -59,8 +60,8 @@ func TestBuildHookPublishesUnderTheTopicPrefix(t *testing.T) {
 	}
 }
 
-func TestBuildHookRejectsAnUnknownType(t *testing.T) {
-	_, err := BuildHook(config.Plugin{Type: "rabbitmq"}, discardLogger())
+func TestBuildConnectionRejectsAnUnknownType(t *testing.T) {
+	_, err := BuildConnection(config.Plugin{Type: "rabbitmq"}, discardLogger())
 	if err == nil {
 		t.Fatal("BuildHook succeeded, want an error")
 	}

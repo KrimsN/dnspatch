@@ -443,10 +443,12 @@ key = "${YANDEX_CLOUD_KEY}"
 # Notifiers: full build only (the -full image or binary).
 # ----------------------------------------------------------------------------
 
-# Publishes a JSON event to a message broker whenever an instance flips between
-# success and failure, to the channel <topic_prefix><instance>. The lightweight
-# build rejects a config whose instances use a notifier. See the Monitoring page of
-# the documentation.
+# Publishes a JSON event to a message broker, by default whenever an instance
+# flips between success and failure, to the channel <topic_prefix><instance>.
+# The "events" key chooses which events: status, provider_status,
+# retriever_status, ip_change, cycle and lifecycle. The lightweight build rejects
+# a config whose instances use a notifier. See the Monitoring page of the
+# documentation.
 #
 # Each [notify.<name>] definition is one broker connection, shared by the
 # instances that publish to it. Define several to reach several brokers, of
@@ -458,6 +460,7 @@ key = "${YANDEX_CLOUD_KEY}"
 
 # [notify.rabbitmq]
 # type = "rabbitmq"
+# events = ["status"]   # optional, this is the default
 
 # An amqp:// or amqps:// URL: it carries the host, the credentials and the
 # virtual host. Required.
@@ -473,6 +476,7 @@ key = "${YANDEX_CLOUD_KEY}"
 
 # [notify.redis]
 # type = "redis"
+# events = ["status"]   # optional, this is the default
 
 # A redis:// or rediss:// URL, as accepted by go-redis: it carries the host,
 # an optional password and the database index. Required.
@@ -492,7 +496,8 @@ key = "${YANDEX_CLOUD_KEY}"
 name = "home"
 # The notifiers this instance publishes to, by the name of their [notify.<name>]
 # definition. Without it an instance publishes to every notifier you define;
-# an empty list, [], publishes to none.
+# an empty list, [], publishes to none. An entry can also be a table that
+# overrides the events for this instance: { ref = "name", events = ["cycle"] }.
 # notify = ["rabbitmq"]
 
 [[instance.retriever]]

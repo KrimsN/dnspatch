@@ -71,10 +71,11 @@ type Instance struct {
 	// are expanded, same as a plugin parameter, since the URL commonly embeds
 	// a secret token (Healthchecks.io, Uptime Kuma).
 	PingURL string
-	// Notify names the notifiers this instance publishes to, each a key of
-	// Config.Notify. An instance that does not say gets all the notifiers the
-	// file defines, and one that says "notify = []" has none.
-	Notify []string
+	// Notify lists the notifiers this instance publishes to, each with the event
+	// types that reach it, and each named by a key of Config.Notify. An instance
+	// that does not say gets all the notifiers the file defines, with their own
+	// events, and one that says "notify = []" has none.
+	Notify []NotifyRef
 }
 
 // Plugin is a plugin type together with its final parameters: the named
@@ -107,7 +108,7 @@ type rawInstance struct {
 	Providers  []map[string]any
 	// Notify is nil when the instance does not set "notify", so that an empty
 	// list can be told from a missing one.
-	Notify []string
+	Notify []rawNotify
 }
 
 // Load reads and parses the config file at path. Problems are listed under a
@@ -141,6 +142,17 @@ func Parse(data []byte) (Config, error) {
 
 	var errs []error
 
+	definedEvents := make(map[string][]Event, len(notifiers))
+
+	for _, name := range slices.Sorted(maps.Keys(notifiers)) {
+		events, eventErrs := definitionEvents(notifiers[name])
+		for _, err := range eventErrs {
+			errs = append(errs, fmt.Errorf("notify %q: %w", name, err))
+		}
+
+		definedEvents[name] = events
+	}
+
 	global := DefaultInterval
 	if value, ok := doc["interval"]; ok {
 		interval, err := parseInterval(value)
@@ -170,11 +182,11 @@ func Parse(data []byte) (Config, error) {
 		}
 		seen[in.Name] = true
 
-		resolved, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, global)
+		resolved, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, definedEvents, global)
 		instErrs = append(instErrs, resolveErrs...)
 
-		for _, name := range resolved.Notify {
-			used[name] = true
+		for _, ref := range resolved.Notify {
+			used[ref.Name] = true
 		}
 
 		for _, e := range instErrs {
@@ -345,16 +357,16 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 	}
 
 	if value, ok := table["notify"]; ok {
-		if in.Notify, ok = asStrings(value); !ok {
-			errs = append(errs, errors.New(`"notify" must be an array of names of [notify.<name>] definitions, for example ["alerts"]`))
-		}
+		var notifyErrs []error
+		in.Notify, notifyErrs = checkNotifyList(value)
+		errs = append(errs, notifyErrs...)
 	}
 
 	return in, errs
 }
 
 // resolveInstance validates one instance and resolves its references.
-func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, global time.Duration) (Instance, []error) {
+func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, definedEvents map[string][]Event, global time.Duration) (Instance, []error) {
 	inst := Instance{Name: in.Name, Interval: global}
 
 	var errs []error
@@ -403,33 +415,56 @@ func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string
 
 	errs = append(errs, duplicateProviders(inst.Providers)...)
 
-	notify, notifyErrs := resolveNotify(in.Notify, notifiers)
+	notify, notifyErrs := resolveNotify(in.Notify, notifiers, definedEvents)
 	errs = append(errs, notifyErrs...)
 	inst.Notify = notify
 
 	return inst, errs
 }
 
-// resolveNotify picks the notifiers of an instance from the names it lists:
-// every one it names must be defined, and none twice. An instance that lists
-// none at all, as opposed to an empty list, publishes to every definition.
-func resolveNotify(names []string, notifiers map[string]map[string]any) ([]string, []error) {
-	if names == nil {
-		return slices.Sorted(maps.Keys(notifiers)), nil
+// resolveNotify picks the notifiers of an instance from the entries it lists:
+// every one it names must be defined, and none twice. An entry's own events
+// take precedence over its definition's. An instance that lists none at all,
+// as opposed to an empty list, publishes to every definition.
+func resolveNotify(entries []rawNotify, notifiers map[string]map[string]any, definedEvents map[string][]Event) ([]NotifyRef, []error) {
+	if entries == nil {
+		refs := make([]NotifyRef, 0, len(notifiers))
+		for _, name := range slices.Sorted(maps.Keys(notifiers)) {
+			refs = append(refs, NotifyRef{Name: name, Events: definedEvents[name]})
+		}
+
+		return refs, nil
 	}
 
 	var errs []error
 
-	for i, name := range names {
+	refs := make([]NotifyRef, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+
+	for _, entry := range entries {
 		switch {
-		case !hasKey(notifiers, name):
-			errs = append(errs, fmt.Errorf("notify %q is not defined (%s)", name, definedNotifiers(notifiers)))
-		case slices.Contains(names[:i], name):
-			errs = append(errs, fmt.Errorf("notify %q is listed twice", name))
+		case entry.Name == "":
+			// Already reported when the list was checked.
+			continue
+		case !hasKey(notifiers, entry.Name):
+			errs = append(errs, fmt.Errorf("notify %q is not defined (%s)", entry.Name, definedNotifiers(notifiers)))
+			continue
+		case seen[entry.Name]:
+			errs = append(errs, fmt.Errorf("notify %q is listed twice", entry.Name))
+			continue
 		}
+
+		seen[entry.Name] = true
+
+		events := entry.Events
+		if events == nil {
+			events = definedEvents[entry.Name]
+		}
+
+		refs = append(refs, NotifyRef{Name: entry.Name, Events: events})
 	}
 
-	return names, errs
+	return refs, errs
 }
 
 func hasKey(pool map[string]map[string]any, name string) bool {
@@ -543,25 +578,6 @@ func asRefs(kind string, value any) ([]map[string]any, []error) {
 	}
 
 	return tables, errs
-}
-
-// asStrings converts an array of strings. The decoder yields []any for an
-// array, and an empty one must stay an empty list, not become nil.
-func asStrings(value any) ([]string, bool) {
-	items, ok := value.([]any)
-	if !ok {
-		return nil, false
-	}
-
-	names := make([]string, len(items))
-
-	for i, item := range items {
-		if names[i], ok = item.(string); !ok {
-			return nil, false
-		}
-	}
-
-	return names, true
 }
 
 func instanceLabel(index int, name string) string {

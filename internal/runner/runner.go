@@ -58,6 +58,7 @@ type Instance struct {
 	Providers  []NamedProvider
 	// Hooks are notified after every completed cycle of this instance. Empty
 	// by default: the daemon builds no hooks unless something wires them in.
+	// A hook that is also an EventHook gets the finer-grained Events too.
 	Hooks []Hook
 }
 
@@ -73,6 +74,9 @@ type Options struct {
 	// the call and does not abandon it, so a plugin that ignores its context
 	// blocks its instance. Defaults to DefaultAttemptTimeout.
 	AttemptTimeout time.Duration
+	// Version is the version of the daemon, reported in the events that start
+	// and stop an instance.
+	Version string
 }
 
 // Run starts all instances and blocks until ctx is cancelled and every
