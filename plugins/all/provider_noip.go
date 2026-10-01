@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/dyndns2/noip"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/dyndns2/noip"

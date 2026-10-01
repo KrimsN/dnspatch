@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/timeweb"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/timeweb"

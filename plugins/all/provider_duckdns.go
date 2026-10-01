@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/duckdns"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/duckdns"

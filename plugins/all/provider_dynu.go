@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/dyndns2/dynu"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/dyndns2/dynu"

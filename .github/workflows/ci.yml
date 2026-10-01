@@ -112,7 +112,7 @@ jobs:
       # named writes a journal next to the zone file, so the directory must be
       # writable by the unprivileged user inside the container.
       - run: |
-          cp -r plugins/rfc2136/testdata/bind "$RUNNER_TEMP/bind"
+          cp -r plugins/providers/rfc2136/testdata/bind "$RUNNER_TEMP/bind"
           chmod -R a+rwX "$RUNNER_TEMP/bind"
           docker run -d --name bind -p 15353:53/tcp -p 15353:53/udp \
             -v "$RUNNER_TEMP/bind/named.conf:/etc/bind/named.conf:ro" \
@@ -126,7 +126,7 @@ jobs:
       - env:
           RFC2136_TEST_SERVER: 127.0.0.1:15353
           RFC2136_TEST_SECRET: c2VjcmV0LXNlY3JldC1zZWNyZXQ=
-        run: go test -count=1 -v -run TestRealServer ./plugins/rfc2136
+        run: go test -count=1 -v -run TestRealServer ./plugins/providers/rfc2136
       - if: failure()
         run: docker logs bind
 

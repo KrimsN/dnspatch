@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/rabbitmq"
+import _ "github.com/dnspatch/dnspatch/plugins/notifiers/rabbitmq"

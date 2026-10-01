@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/icanhazip"
+import _ "github.com/dnspatch/dnspatch/plugins/retrievers/icanhazip"

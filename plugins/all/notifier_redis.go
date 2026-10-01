@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/redis"
+import _ "github.com/dnspatch/dnspatch/plugins/notifiers/redis"

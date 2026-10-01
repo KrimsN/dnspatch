@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/twoip"
+import _ "github.com/dnspatch/dnspatch/plugins/retrievers/twoip"

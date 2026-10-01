@@ -1,22 +1,27 @@
-package plugin
+// Package registry maps plugin type names to the factories that build them.
+package registry
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/dnspatch/dnspatch/plugin/contract"
+	"github.com/dnspatch/dnspatch/plugin/decode"
 )
 
 // providerFactory builds a Provider from raw configuration parameters.
-type providerFactory func(params map[string]any) (Provider, error)
+type providerFactory func(params map[string]any) (contract.Provider, error)
 
 // retrieverFactory builds a Retriever from raw configuration parameters.
-type retrieverFactory func(params map[string]any) (Retriever, error)
+type retrieverFactory func(params map[string]any) (contract.Retriever, error)
 
 // notifierFactory builds a Notifier from raw configuration parameters.
-type notifierFactory func(params map[string]any) (Notifier, error)
+type notifierFactory func(params map[string]any) (contract.Notifier, error)
 
 // Kind is one of the kinds of plugin a Registry holds.
 type Kind string
@@ -74,29 +79,29 @@ func NewRegistry() *Registry {
 // parameter name, a `toml` tag of C carries an unknown or repeated option or
 // name is already registered, since all of these are programming errors that
 // surface at process start.
-func RegisterProvider[C any](name string, build func(cfg C) (Provider, error)) {
+func RegisterProvider[C any](name string, build func(cfg C) (contract.Provider, error)) {
 	RegisterProviderIn(Default, name, build)
 }
 
 // RegisterRetriever registers a retriever type in Default. See RegisterProvider.
-func RegisterRetriever[C any](name string, build func(cfg C) (Retriever, error)) {
+func RegisterRetriever[C any](name string, build func(cfg C) (contract.Retriever, error)) {
 	RegisterRetrieverIn(Default, name, build)
 }
 
 // RegisterNotifier registers a notifier type in Default. See RegisterProvider.
 // The configuration struct C must embed NotifierCommon, which supplies the
 // topic_prefix parameter every notifier takes.
-func RegisterNotifier[C TopicNamer](name string, build func(cfg C) (Notifier, error)) {
+func RegisterNotifier[C contract.TopicNamer](name string, build func(cfg C) (contract.Notifier, error)) {
 	RegisterNotifierIn(Default, name, build)
 }
 
 // RegisterProviderIn registers a provider type in the given registry.
 // See RegisterProvider.
-func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (Provider, error)) {
+func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (contract.Provider, error)) {
 	checkRegistration[C]("provider", name, build == nil)
 
-	factory := func(params map[string]any) (Provider, error) {
-		cfg, err := Decode[C](params)
+	factory := func(params map[string]any) (contract.Provider, error) {
+		cfg, err := decode.Decode[C](params)
 		if err != nil {
 			return nil, err
 		}
@@ -108,11 +113,11 @@ func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (Prov
 
 // RegisterRetrieverIn registers a retriever type in the given registry.
 // See RegisterProvider.
-func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Retriever, error)) {
+func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (contract.Retriever, error)) {
 	checkRegistration[C]("retriever", name, build == nil)
 
-	factory := func(params map[string]any) (Retriever, error) {
-		cfg, err := Decode[C](params)
+	factory := func(params map[string]any) (contract.Retriever, error) {
+		cfg, err := decode.Decode[C](params)
 		if err != nil {
 			return nil, err
 		}
@@ -124,11 +129,11 @@ func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Ret
 
 // RegisterNotifierIn registers a notifier type in the given registry.
 // See RegisterNotifier.
-func RegisterNotifierIn[C TopicNamer](r *Registry, name string, build func(cfg C) (Notifier, error)) {
+func RegisterNotifierIn[C contract.TopicNamer](r *Registry, name string, build func(cfg C) (contract.Notifier, error)) {
 	checkRegistration[C]("notifier", name, build == nil)
 
-	factory := func(params map[string]any) (Notifier, error) {
-		cfg, err := Decode[C](params)
+	factory := func(params map[string]any) (contract.Notifier, error) {
+		cfg, err := decode.Decode[C](params)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +166,7 @@ func checkRegistration[C any](kind, name string, nilBuild bool) {
 	}
 
 	// configFields panics on duplicated parameter names.
-	configFields(reflect.TypeFor[C]())
+	decode.Fields(reflect.TypeFor[C]())
 }
 
 // register adds an entry to one of the registry's maps, creating the map on
@@ -182,7 +187,7 @@ func register[F any](mu *sync.RWMutex, entries *map[string]entry[F], kind, name 
 
 // BuildProvider builds the provider registered under name, decoding params
 // into its configuration struct.
-func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, error) {
+func (r *Registry) BuildProvider(name string, params map[string]any) (contract.Provider, error) {
 	r.mu.RLock()
 	found, ok := r.providers[name]
 	r.mu.RUnlock()
@@ -201,7 +206,7 @@ func (r *Registry) BuildProvider(name string, params map[string]any) (Provider, 
 
 // BuildRetriever builds the retriever registered under name, decoding params
 // into its configuration struct.
-func (r *Registry) BuildRetriever(name string, params map[string]any) (Retriever, error) {
+func (r *Registry) BuildRetriever(name string, params map[string]any) (contract.Retriever, error) {
 	r.mu.RLock()
 	found, ok := r.retrievers[name]
 	r.mu.RUnlock()
@@ -221,7 +226,7 @@ func (r *Registry) BuildRetriever(name string, params map[string]any) (Retriever
 // BuildNotifier builds the notifier registered under name, decoding params
 // into its configuration struct. What it publishes goes under the topic the
 // configuration's topic_prefix gives.
-func (r *Registry) BuildNotifier(name string, params map[string]any) (Notifier, error) {
+func (r *Registry) BuildNotifier(name string, params map[string]any) (contract.Notifier, error) {
 	r.mu.RLock()
 	found, ok := r.notifiers[name]
 	r.mu.RUnlock()
@@ -347,4 +352,15 @@ func (r *Registry) unknownType(kind Kind, name string) error {
 	}
 
 	return fmt.Errorf("unknown %s type %q (registered: %s)", kind, name, strings.Join(registered, ", "))
+}
+
+// prefixed is a Notifier that publishes every event under the topic its
+// configuration derives from the name it is given.
+type prefixed struct {
+	contract.Notifier
+	cfg contract.TopicNamer
+}
+
+func (p prefixed) Publish(ctx context.Context, instance string, payload []byte) error {
+	return p.Notifier.Publish(ctx, p.cfg.Topic(instance), payload)
 }
