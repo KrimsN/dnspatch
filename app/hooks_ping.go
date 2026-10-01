@@ -1,6 +1,6 @@
 //go:build ping
 
-package main
+package app
 
 import "github.com/dnspatch/dnspatch/internal/hooks/ping"
 

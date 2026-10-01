@@ -20,37 +20,13 @@
 package main
 
 import (
-	"context"
-	"os"
-
-	"github.com/dnspatch/dnspatch/internal/app"
-	"github.com/dnspatch/dnspatch/internal/hooks/notify"
-	"github.com/dnspatch/dnspatch/internal/runner"
-	"github.com/dnspatch/dnspatch/plugin"
+	"github.com/dnspatch/dnspatch/app"
 	_ "github.com/dnspatch/dnspatch/plugins/all"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-// hooks builds the per-instance monitoring hooks. It stays nil unless a build
-// tag file sets it, which is what makes the build reject ping_url.
-var hooks app.HookBuilder
-
-func options() app.Options {
-	return app.Options{
-		Registry: plugin.Default,
-		Version:  version,
-		Hooks:    hooks,
-		// Always set: with no backend compiled in, the registry has nothing to
-		// build and says so, naming the tag that brings the backend asked for.
-		Notify: notify.BuildHook,
-	}
-}
-
 func main() {
-	ctx, stop := runner.SignalContext(context.Background())
-	defer stop()
-
-	os.Exit(app.Run(ctx, os.Args[1:], os.Stdout, os.Stderr, options()))
+	app.Main(app.WithVersion(version))
 }

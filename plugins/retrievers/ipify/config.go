@@ -1,6 +1,6 @@
 package ipify
 
-import "github.com/dnspatch/dnspatch/internal/httpx"
+import "github.com/dnspatch/dnspatch/httpx"
 
 // Config holds the parameters of the ipify retriever.
 type Config struct {
