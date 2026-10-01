@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 382 95" role="img">
   <title>dnspatch</title>
   <style>
-    .word { fill: #042C53; }
+    .word { fill: #E6F6FB; }
     .patch { fill: #00ADD8; }
   </style>
   <g transform="translate(6.96 67.65)">

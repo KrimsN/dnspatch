@@ -1,4 +1,4 @@
-# dnspatch
+# ![dnspatch](assets/logo-wordmark.svg#only-light){ width="320" }![dnspatch](assets/logo-wordmark-dark.svg#only-dark){ width="320" }
 
 A dynamic DNS daemon in Go: it watches your public IP address and patches your DNS records when it changes.
 
