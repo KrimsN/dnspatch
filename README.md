@@ -1,4 +1,4 @@
-# dnspatch
+<h1 align="center"><img src="docs/assets/logo.svg" alt="dnspatch" width="360"></h1>
 
 [![CI](https://img.shields.io/github/actions/workflow/status/dnspatch/dnspatch/ci.yml?branch=main&label=CI)](https://github.com/dnspatch/dnspatch/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/dnspatch/dnspatch)](https://github.com/dnspatch/dnspatch/releases/latest)
