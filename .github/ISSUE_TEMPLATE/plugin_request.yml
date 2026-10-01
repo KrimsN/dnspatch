@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before filing this, check `plugins/` for one that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the retriever/provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
+        Before filing this, check `plugins/` (notifiers, retrievers, providers) for one that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the retriever/provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
 
   - type: dropdown
     id: kind

@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/rfc2136"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/rfc2136"

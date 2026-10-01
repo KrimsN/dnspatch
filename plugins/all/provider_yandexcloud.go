@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/yandexcloud"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/yandexcloud"

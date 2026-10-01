@@ -2,7 +2,9 @@
 // Provider and Notifier interfaces, the plugin registry and parameter decoding.
 //
 // The package is public so that third-party modules can implement the
-// interfaces and register their own plugins.
+// interfaces and register their own plugins. It only re-exports: the
+// interfaces live in plugin/contract, the registry in plugin/registry and the
+// decoder in plugin/decode, and a plugin needs no import but this one.
 //
 // A plugin is a configuration struct plus a constructor that turns it into a
 // Retriever, a Provider or a Notifier. Registering it makes its type name usable in the
@@ -21,87 +23,98 @@
 package plugin
 
 import (
-	"context"
-	"net/netip"
-	"time"
+	"github.com/dnspatch/dnspatch/plugin/contract"
+	"github.com/dnspatch/dnspatch/plugin/decode"
+	"github.com/dnspatch/dnspatch/plugin/registry"
 )
 
-// Retriever reports the current public IP address(es) of the machine.
-//
-// The returned Addresses must have at least one valid field; a retriever that
-// only ever discovers one family (the common case) leaves the other at its
-// zero value. Implementations must respect ctx and abort any network call
-// when it is cancelled.
-type Retriever interface {
-	GetAddresses(ctx context.Context) (Addresses, error)
+// The interfaces and value types of a plugin. See package contract.
+type (
+	// Retriever reports the current public IP address(es) of the machine.
+	Retriever = contract.Retriever
+	// Addresses carries the address of each family to write.
+	Addresses = contract.Addresses
+	// RecordOptions carries options that apply to a write, independent of the address.
+	RecordOptions = contract.RecordOptions
+	// Provider writes an IP address to a DNS record.
+	Provider = contract.Provider
+	// Notifier delivers one already-serialized event to a message broker.
+	Notifier = contract.Notifier
+	// NotifierCommon holds the parameters every notifier takes; the
+	// configuration struct of a notifier must embed it.
+	NotifierCommon = contract.NotifierCommon
+	// TopicNamer is what the configuration struct of a notifier must be;
+	// embedding NotifierCommon satisfies it.
+	TopicNamer = contract.TopicNamer
+)
+
+// The registry and what it reports. See package registry.
+type (
+	// Registry maps plugin type names to factories.
+	Registry = registry.Registry
+	// Kind is one of the kinds of plugin a Registry holds.
+	Kind = registry.Kind
+	// Known is a plugin that exists in the source tree, whether or not this build compiled it in.
+	Known = registry.Known
+)
+
+// The kinds of plugin. The values appear in error messages.
+const (
+	KindProvider  = registry.KindProvider
+	KindRetriever = registry.KindRetriever
+	KindNotifier  = registry.KindNotifier
+)
+
+// Default is the package-level registry that built-in plugins register into
+// from their init functions.
+var Default = registry.Default
+
+// NewRegistry returns an empty registry, isolated from Default. Tests and
+// programs that embed dnspatch as a library use it to control exactly which
+// plugins are available.
+func NewRegistry() *Registry {
+	return registry.NewRegistry()
 }
 
-// Addresses carries the address of each family to write. An invalid field
-// (the zero netip.Addr) means that family is not touched: an existing record
-// of that type is left as it is. At least one field must be valid.
-type Addresses struct {
-	V4, V6 netip.Addr
+// RegisterProvider registers a provider type in Default. See
+// registry.RegisterProvider for what it panics on.
+func RegisterProvider[C any](name string, build func(cfg C) (Provider, error)) {
+	registry.RegisterProvider(name, build)
 }
 
-// RecordOptions carries options that apply to a write, independent of the
-// address itself. The zero value means "use the provider's own default for
-// every option"; a provider that cannot honour an option ignores it.
-type RecordOptions struct {
-	// TTL overrides the provider's configured TTL when positive. A provider
-	// whose service does not support setting a TTL ignores it.
-	TTL time.Duration
+// RegisterRetriever registers a retriever type in Default. See RegisterProvider.
+func RegisterRetriever[C any](name string, build func(cfg C) (Retriever, error)) {
+	registry.RegisterRetriever(name, build)
 }
 
-// Provider writes an IP address to a DNS record.
-//
-// The record type is derived from the address family: V4 means an A record,
-// V6 means AAAA. Implementations must respect ctx and abort any network call
-// when it is cancelled.
-type Provider interface {
-	Update(ctx context.Context, addrs Addresses, opts RecordOptions) error
+// RegisterNotifier registers a notifier type in Default. See RegisterProvider.
+// The configuration struct C must embed NotifierCommon, which supplies the
+// topic_prefix parameter every notifier takes.
+func RegisterNotifier[C TopicNamer](name string, build func(cfg C) (Notifier, error)) {
+	registry.RegisterNotifier(name, build)
 }
 
-// Notifier delivers one already-serialized event to a message broker. It is
-// what a notification backend implements: the daemon publishes an event about
-// an instance whose status changed. Close releases any connection the backend
-// holds.
-//
-// The topic Publish receives already carries the prefix of the "topic_prefix"
-// parameter, so a backend uses it as the channel, topic or routing key as it is.
-type Notifier interface {
-	Publish(ctx context.Context, topic string, payload []byte) error
-	Close() error
+// RegisterProviderIn registers a provider type in the given registry.
+// See RegisterProvider.
+func RegisterProviderIn[C any](r *Registry, name string, build func(cfg C) (Provider, error)) {
+	registry.RegisterProviderIn(r, name, build)
 }
 
-// NotifierCommon holds the parameters every notifier takes. RegisterNotifier
-// requires the configuration struct of a notifier to embed it:
-//
-//	type Config struct {
-//		plugin.NotifierCommon
-//		Address string `toml:"address,required"`
-//	}
-type NotifierCommon struct {
-	TopicPrefix string `toml:"topic_prefix" default:"dnspatch.events." doc:"Prepended to the instance name to form the channel, topic or routing key an event is published under"`
+// RegisterRetrieverIn registers a retriever type in the given registry.
+// See RegisterProvider.
+func RegisterRetrieverIn[C any](r *Registry, name string, build func(cfg C) (Retriever, error)) {
+	registry.RegisterRetrieverIn(r, name, build)
 }
 
-// Topic returns the topic an event about the named instance is published under.
-func (c NotifierCommon) Topic(instance string) string {
-	return c.TopicPrefix + instance
+// RegisterNotifierIn registers a notifier type in the given registry.
+// See RegisterNotifier.
+func RegisterNotifierIn[C TopicNamer](r *Registry, name string, build func(cfg C) (Notifier, error)) {
+	registry.RegisterNotifierIn(r, name, build)
 }
 
-// TopicNamer is what the configuration struct of a notifier must be; embedding
-// NotifierCommon satisfies it.
-type TopicNamer interface {
-	Topic(instance string) string
-}
-
-// prefixed is a Notifier that publishes every event under the topic its
-// configuration derives from the name it is given.
-type prefixed struct {
-	Notifier
-	cfg TopicNamer
-}
-
-func (p prefixed) Publish(ctx context.Context, instance string, payload []byte) error {
-	return p.Notifier.Publish(ctx, p.cfg.Topic(instance), payload)
+// Decode converts a plugin's raw parameters into its configuration struct,
+// applying the `toml`, `default` and `required` struct tags. See package
+// decode for the rules.
+func Decode[C any](params map[string]any) (C, error) {
+	return decode.Decode[C](params)
 }

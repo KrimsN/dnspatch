@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/beget"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/beget"

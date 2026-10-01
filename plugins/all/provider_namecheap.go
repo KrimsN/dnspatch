@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/namecheap"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/namecheap"

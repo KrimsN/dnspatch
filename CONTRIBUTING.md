@@ -21,7 +21,7 @@ This repository follows [Conventional Commits](https://www.conventionalcommits.o
 | `chore` | anything else, including dependency bumps |
 
 The scope is the package the change belongs to: `feat(plugin)`, `fix(runner)`,
-`feat(plugins/regru)`. Omit it for changes that span the repository.
+`feat(plugins/providers/regru)`. Omit it for changes that span the repository.
 
 Write the description in the imperative mood, in lower case, with no trailing
 period: `add backoff to failing providers`, not `Added backoff.`.
@@ -87,16 +87,16 @@ Go before treating such a finding as yours.
 
 ## Writing a plugin
 
-A plugin is a package under `plugins/` with a configuration struct and a
+A plugin is a package under `plugins/notifiers/`, `plugins/retrievers/` or `plugins/providers/` (by kind) with a configuration struct and a
 constructor. The steps below use a provider; a retriever differs only in the
 interface it implements (`GetAddresses` instead of `Update`) and in the
-`RegisterRetriever` call. `plugins/regru` (provider) and `plugins/ifconfigco`
+`RegisterRetriever` call. `plugins/providers/regru` (provider) and `plugins/retrievers/ifconfigco`
 (retriever) are complete examples to copy from.
 
 ### 1. Lay out the package
 
 ```
-plugins/example/
+plugins/providers/example/
   example.go        package doc, Name constant, init() registration
   config.go         the Config struct
   provider.go       the implementation

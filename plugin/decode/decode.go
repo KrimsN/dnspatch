@@ -1,4 +1,6 @@
-package plugin
+// Package decode turns the raw parameters of a plugin, as the configuration
+// parser produced them, into the plugin's typed configuration struct.
+package decode
 
 import (
 	"fmt"
@@ -57,7 +59,7 @@ func Decode[C any](params map[string]any) (C, error) {
 // decodeStruct fills a struct from params. The prefix qualifies parameter
 // names in error messages for nested structs.
 func decodeStruct(target reflect.Value, params map[string]any, prefix string) error {
-	matches, err := matchParams(params, configFields(target.Type()), prefix)
+	matches, err := matchParams(params, Fields(target.Type()), prefix)
 	if err != nil {
 		return err
 	}

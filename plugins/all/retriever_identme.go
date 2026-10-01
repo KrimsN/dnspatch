@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/identme"
+import _ "github.com/dnspatch/dnspatch/plugins/retrievers/identme"

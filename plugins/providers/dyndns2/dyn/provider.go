@@ -2,7 +2,7 @@ package dyn
 
 import (
 	"github.com/dnspatch/dnspatch/plugin"
-	"github.com/dnspatch/dnspatch/plugins/dyndns2"
+	"github.com/dnspatch/dnspatch/plugins/providers/dyndns2"
 )
 
 // endpoint is the update URL of the Dyn Dynamic DNS service.

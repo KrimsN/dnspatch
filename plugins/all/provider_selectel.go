@@ -4,4 +4,4 @@
 
 package all
 
-import _ "github.com/dnspatch/dnspatch/plugins/selectel"
+import _ "github.com/dnspatch/dnspatch/plugins/providers/selectel"
