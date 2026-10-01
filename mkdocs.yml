@@ -76,6 +76,7 @@ nav:
       - Writing a plugin: development/writing-a-plugin.md
       - Plugins outside the repository: development/external-plugins.md
   - Migrations:
+      - From 0.3 to 0.4: migrations/0.3-to-0.4.md
       - From 0.2 to 0.3: migrations/0.2-to-0.3.md
 
 plugins:
