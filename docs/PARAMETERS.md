@@ -31,6 +31,7 @@ For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml
   - [timeweb](#provider-timeweb)
   - [yandexcloud](#provider-yandexcloud)
 - [Notifiers](#notifiers)
+  - [rabbitmq](#notifier-rabbitmq)
   - [redis](#notifier-redis)
 
 ## Retrievers
@@ -240,6 +241,14 @@ For a configuration to start from, copy [dnspatch.toml.example](../dnspatch.toml
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ## Notifiers
+
+### Notifier `rabbitmq`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `address` | yes | — | An amqp:// or amqps:// URL: it carries the host, the credentials and the virtual host |
+| `exchange` | no | `dnspatch` | The durable topic exchange events are published to; it is declared on connect if it does not exist |
+| `topic_prefix` | no | `dnspatch.events.` | Prepended to the instance name to form the channel, topic or routing key an event is published under |
 
 ### Notifier `redis`
 
