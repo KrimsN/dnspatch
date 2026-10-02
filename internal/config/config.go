@@ -13,11 +13,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"os"
-	"reflect"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -29,29 +25,22 @@ const (
 
 	// MinInterval is the shortest accepted polling interval.
 	MinInterval = time.Second
-
-	// EnvPath names the environment variable that holds the config file path.
-	EnvPath = "DNSPATCH_CONFIG"
 )
-
-// defaultPaths are tried in order when no path is given explicitly.
-var defaultPaths = []string{"./dnspatch.toml", "/etc/dnspatch/config.toml"}
-
-var errIntervalType = errors.New(`"interval" must be a string such as "30s" or "5m"`)
 
 // Config is a parsed and fully resolved configuration.
 type Config struct {
 	// Interval is the polling interval instances fall back to.
 	Interval  time.Duration
 	Instances []Instance
-	// Notify holds the notifiers, by definition name, that at least one
-	// instance publishes to, including the ones an instance declares in place,
-	// named "<instance>/<type>#<position in its notify list>": the brokers (for example Redis) that receive an
-	// instance's success/failure transitions. A build that has no notifier
-	// rejects a config that uses one, the same way an unsupported PingURL is
-	// rejected. Each entry is one broker connection, shared by every instance
-	// that lists it; two of them may be of one type, for example two Redis
-	// servers. A definition no instance uses is not resolved.
+	// Notify holds the notifiers, by name, that at least one instance publishes
+	// to: the [notify.<name>] definitions it lists or defaults to, and the ones
+	// it declares in place, named "<instance>/<type>#<position in its notify
+	// list>". They receive an instance's success/failure transitions. A build
+	// that has no notifier rejects a config that uses one, the same way an
+	// unsupported PingURL is rejected. Each entry is one broker connection,
+	// shared by every instance that lists it; two of them may be of one type,
+	// for example two Redis servers. A definition no instance uses is not
+	// resolved.
 	Notify map[string]Plugin
 }
 
@@ -100,18 +89,6 @@ func (p Plugin) Name() string {
 	return p.Type
 }
 
-// rawInstance is one [[instance]] table after its shape has been checked.
-type rawInstance struct {
-	Name       string
-	Interval   *string
-	PingURL    *string
-	Retrievers []map[string]any
-	Providers  []map[string]any
-	// Notify is nil when the instance does not set "notify", so that an empty
-	// list can be told from a missing one.
-	Notify []rawNotify
-}
-
 // Load reads and parses the config file at path. Problems are listed under a
 // header line naming the file.
 func Load(path string) (Config, error) {
@@ -136,558 +113,25 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, err
 	}
 
-	retrievers, providers, notifiers, tables, shapeErrs := checkShape(doc)
+	sh, shapeErrs := checkShape(doc)
 	if len(shapeErrs) > 0 {
 		return Config{}, errors.Join(shapeErrs...)
 	}
 
-	var errs []error
+	r := newResolver(sh.pools)
+	r.readGlobalInterval(doc)
 
-	definedEvents := make(map[string][]Event, len(notifiers))
-
-	for _, name := range slices.Sorted(maps.Keys(notifiers)) {
-		events, eventErrs := definitionEvents(notifiers[name])
-		for _, err := range eventErrs {
-			errs = append(errs, fmt.Errorf("notify %q: %w", name, err))
-		}
-
-		definedEvents[name] = events
+	if len(sh.instances) == 0 {
+		r.errs = append(r.errs, errors.New("no instances defined"))
 	}
 
-	global := DefaultInterval
-	if value, ok := doc["interval"]; ok {
-		interval, err := parseInterval(value)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			global = interval
-		}
-	}
+	cfg := Config{Instances: r.resolveInstances(sh.instances)}
+	cfg.Notify = r.resolveNotifiers()
+	cfg.Interval = r.global
 
-	if len(tables) == 0 {
-		errs = append(errs, errors.New("no instances defined"))
-	}
-
-	cfg := Config{Interval: global}
-
-	used := make(map[string]bool)
-
-	// Notifiers declared in place by an instance, by their generated names.
-	inlineNotify := make(map[string]Plugin)
-
-	seen := make(map[string]bool, len(tables))
-
-	for i, table := range tables {
-		in, instErrs := checkInstance(table)
-		label := instanceLabel(i, in.Name)
-
-		if in.Name != "" && seen[in.Name] {
-			instErrs = append(instErrs, errors.New("name is used by more than one instance"))
-		}
-		seen[in.Name] = true
-
-		resolved, inline, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, definedEvents, global)
-		instErrs = append(instErrs, resolveErrs...)
-
-		for _, ref := range resolved.Notify {
-			if _, declared := inline[ref.Name]; !declared {
-				used[ref.Name] = true
-			}
-		}
-
-		maps.Copy(inlineNotify, inline)
-
-		for _, e := range instErrs {
-			errs = append(errs, fmt.Errorf("%s: %w", label, e))
-		}
-		cfg.Instances = append(cfg.Instances, resolved)
-	}
-
-	// Only what an instance publishes to is resolved: the environment
-	// references of a definition nobody uses need not be set.
-	for _, name := range slices.Sorted(maps.Keys(used)) {
-		if !hasKey(notifiers, name) {
-			continue
-		}
-
-		notify, notifyErrs := resolvePluginByRef("notify", "notify", notifiers, name, nil)
-		errs = append(errs, notifyErrs...)
-
-		if cfg.Notify == nil {
-			cfg.Notify = make(map[string]Plugin, len(used))
-		}
-
-		cfg.Notify[name] = notify
-	}
-
-	if len(inlineNotify) > 0 {
-		if cfg.Notify == nil {
-			cfg.Notify = make(map[string]Plugin, len(inlineNotify))
-		}
-
-		maps.Copy(cfg.Notify, inlineNotify)
-	}
-
-	if len(errs) > 0 {
-		return Config{}, errors.Join(errs...)
+	if len(r.errs) > 0 {
+		return Config{}, errors.Join(r.errs...)
 	}
 
 	return cfg, nil
-}
-
-// ResolvePath picks the config file path. Priority: the flag value, the
-// DNSPATCH_CONFIG variable, then the first existing default location. A path
-// given explicitly must exist; the defaults are not consulted in that case.
-func ResolvePath(flagValue string) (string, error) {
-	return resolvePath(flagValue, os.Getenv(EnvPath), defaultPaths)
-}
-
-func resolvePath(flagValue, envValue string, defaults []string) (string, error) {
-	explicit, source := flagValue, "--config"
-	if explicit == "" {
-		explicit, source = envValue, EnvPath
-	}
-
-	if explicit != "" {
-		if _, err := os.Stat(explicit); err != nil {
-			return "", fmt.Errorf("%s: %w", source, err)
-		}
-
-		return explicit, nil
-	}
-
-	for _, path := range defaults {
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path, nil
-		}
-	}
-
-	return "", fmt.Errorf("no config file found: pass --config, set %s or create one of: %s",
-		EnvPath, strings.Join(defaults, ", "))
-}
-
-// checkShape verifies the top-level layout of the document: known keys only,
-// pools of named tables, and an array of instance tables. Definitions are
-// checked for a type.
-func checkShape(doc map[string]any) (retrievers, providers, notifiers map[string]map[string]any, instances []map[string]any, errs []error) {
-	errs = unknownKeys(doc, "interval", "retriever", "provider", "instance", "notify")
-
-	var poolErrs []error
-
-	retrievers, poolErrs = checkPool("retriever", doc["retriever"])
-	errs = append(errs, poolErrs...)
-
-	providers, poolErrs = checkPool("provider", doc["provider"])
-	errs = append(errs, poolErrs...)
-
-	notifiers, poolErrs = checkPool("notify", doc["notify"])
-	errs = append(errs, poolErrs...)
-
-	if value, ok := doc["instance"]; ok {
-		if instances, ok = asTables(value); !ok {
-			errs = append(errs, errors.New(`"instance" must be an array of tables: [[instance]]`))
-		}
-	}
-
-	return retrievers, providers, notifiers, instances, errs
-}
-
-// checkPool verifies that a pool is a table of tables and that every
-// definition names its type.
-func checkPool(kind string, value any) (map[string]map[string]any, []error) {
-	if value == nil {
-		return nil, nil
-	}
-
-	table, ok := value.(map[string]any)
-	if !ok {
-		return nil, []error{fmt.Errorf("%q must be a table of named definitions: [%s.<name>]", kind, kind)}
-	}
-
-	pool := make(map[string]map[string]any, len(table))
-
-	var errs []error
-
-	for _, name := range slices.Sorted(maps.Keys(table)) {
-		definition, ok := table[name].(map[string]any)
-		if !ok {
-			errs = append(errs, fmt.Errorf("%s %q must be a table: [%s.%s]", kind, name, kind, name))
-			continue
-		}
-
-		if typ, _ := definition["type"].(string); typ == "" {
-			errs = append(errs, fmt.Errorf(`%s %q: "type" is required and must be a string`, kind, name))
-		}
-
-		if _, ok := definition["ref"]; ok {
-			errs = append(errs, fmt.Errorf(`%s %q: "ref" is only valid in an instance`, kind, name))
-		}
-
-		pool[name] = definition
-	}
-
-	return pool, errs
-}
-
-// checkInstance verifies the layout of one instance table: known keys and
-// value types.
-func checkInstance(table map[string]any) (rawInstance, []error) {
-	errs := unknownKeys(table, "name", "interval", "ping_url", "retriever", "provider", "notify")
-
-	var in rawInstance
-
-	if value, ok := table["name"]; ok {
-		if in.Name, ok = value.(string); !ok {
-			errs = append(errs, errors.New(`"name" must be a string`))
-		}
-	}
-
-	if value, ok := table["interval"]; ok {
-		text, isString := value.(string)
-		if !isString {
-			errs = append(errs, errIntervalType)
-		} else {
-			in.Interval = &text
-		}
-	}
-
-	if value, ok := table["ping_url"]; ok {
-		text, isString := value.(string)
-		if !isString {
-			errs = append(errs, errors.New(`"ping_url" must be a string`))
-		} else {
-			in.PingURL = &text
-		}
-	}
-
-	if value, ok := table["retriever"]; ok {
-		var refErrs []error
-		in.Retrievers, refErrs = asRefs("retriever", value)
-		errs = append(errs, refErrs...)
-	}
-
-	if value, ok := table["provider"]; ok {
-		var refErrs []error
-		in.Providers, refErrs = asRefs("provider", value)
-		errs = append(errs, refErrs...)
-	}
-
-	if value, ok := table["notify"]; ok {
-		var notifyErrs []error
-		in.Notify, notifyErrs = checkNotifyList(value)
-		errs = append(errs, notifyErrs...)
-	}
-
-	return in, errs
-}
-
-// resolveInstance validates one instance and resolves its references. The
-// second result holds the notifiers the instance declares in place, by name.
-func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, definedEvents map[string][]Event, global time.Duration) (Instance, map[string]Plugin, []error) {
-	inst := Instance{Name: in.Name, Interval: global}
-
-	var errs []error
-
-	if in.Name == "" {
-		errs = append(errs, errors.New(`"name" is required`))
-	}
-
-	if in.Interval != nil {
-		interval, err := parseInterval(*in.Interval)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			inst.Interval = interval
-		}
-	}
-
-	if in.PingURL != nil {
-		pingURL, err := expandString(*in.PingURL)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%q: %w", "ping_url", err))
-		} else {
-			inst.PingURL = pingURL
-		}
-	}
-
-	if len(in.Retrievers) == 0 {
-		errs = append(errs, errors.New("at least one retriever is required"))
-	}
-
-	for i, override := range in.Retrievers {
-		plugin, pluginErrs := resolvePlugin("retriever", fmt.Sprintf("retriever #%d", i+1), retrievers, override)
-		errs = append(errs, pluginErrs...)
-		inst.Retrievers = append(inst.Retrievers, plugin)
-	}
-
-	if len(in.Providers) == 0 {
-		errs = append(errs, errors.New("at least one provider is required"))
-	}
-
-	for i, override := range in.Providers {
-		plugin, pluginErrs := resolvePlugin("provider", fmt.Sprintf("provider #%d", i+1), providers, override)
-		errs = append(errs, pluginErrs...)
-		inst.Providers = append(inst.Providers, plugin)
-	}
-
-	errs = append(errs, duplicateProviders(inst.Providers)...)
-
-	notify, inline, notifyErrs := resolveNotify(in.Name, in.Notify, notifiers, definedEvents)
-	errs = append(errs, notifyErrs...)
-	inst.Notify = notify
-
-	return inst, inline, errs
-}
-
-// resolveNotify picks the notifiers of an instance from the entries it lists:
-// every one it names must be defined, and none twice. An entry's own events
-// take precedence over its definition's. An instance that lists none at all,
-// as opposed to an empty list, publishes to every definition. An entry that
-// declares its notifier in place is named after the instance, the type and its
-// position in the list ("home/redis#2") and returned as a plugin of its own;
-// it is never shared with another instance.
-func resolveNotify(instance string, entries []rawNotify, notifiers map[string]map[string]any, definedEvents map[string][]Event) ([]NotifyRef, map[string]Plugin, []error) {
-	if entries == nil {
-		refs := make([]NotifyRef, 0, len(notifiers))
-		for _, name := range slices.Sorted(maps.Keys(notifiers)) {
-			refs = append(refs, NotifyRef{Name: name, Events: definedEvents[name]})
-		}
-
-		return refs, nil, nil
-	}
-
-	var errs []error
-
-	refs := make([]NotifyRef, 0, len(entries))
-	seen := make(map[string]bool, len(entries))
-
-	var inline map[string]Plugin
-
-	for i, entry := range entries {
-		switch {
-		case entry.Inline != nil:
-			name, plugin, pluginErrs := resolveInlineNotify(instance, i, entry, notifiers)
-			errs = append(errs, pluginErrs...)
-
-			if len(pluginErrs) > 0 {
-				continue
-			}
-
-			if inline == nil {
-				inline = make(map[string]Plugin)
-			}
-
-			inline[name] = plugin
-			refs = append(refs, NotifyRef{Name: name, Events: eventsOrDefault(entry.Events)})
-
-			continue
-		case entry.Name == "":
-			// Already reported when the list was checked.
-			continue
-		case !hasKey(notifiers, entry.Name):
-			errs = append(errs, fmt.Errorf("notify %q is not defined (%s)", entry.Name, definedNotifiers(notifiers)))
-			continue
-		case seen[entry.Name]:
-			errs = append(errs, fmt.Errorf("notify %q is listed twice", entry.Name))
-			continue
-		}
-
-		seen[entry.Name] = true
-
-		events := entry.Events
-		if events == nil {
-			events = definedEvents[entry.Name]
-		}
-
-		refs = append(refs, NotifyRef{Name: entry.Name, Events: events})
-	}
-
-	return refs, inline, errs
-}
-
-// resolveInlineNotify builds the plugin of the notifier an instance declares
-// in place, at position index of its notify list, and returns it with its
-// generated name.
-func resolveInlineNotify(instance string, index int, entry rawNotify, notifiers map[string]map[string]any) (string, Plugin, []error) {
-	where := fmt.Sprintf("notify #%d", index+1)
-
-	plugin, errs := resolvePluginInline("notify", where, entry.Inline)
-	if len(errs) > 0 {
-		return "", Plugin{}, errs
-	}
-
-	name := fmt.Sprintf("%s/%s#%d", instance, plugin.Type, index+1)
-	if hasKey(notifiers, name) {
-		return "", Plugin{}, []error{fmt.Errorf("%s: the generated name %q is taken by a [notify.<name>] definition, rename it", where, name)}
-	}
-
-	plugin.Ref = name
-
-	return name, plugin, nil
-}
-
-// eventsOrDefault is events, or a copy of the default set when there are none:
-// a notifier declared in place has no definition to take them from.
-func eventsOrDefault(events []Event) []Event {
-	if events == nil {
-		return slices.Clone(defaultEvents)
-	}
-
-	return events
-}
-
-func hasKey(pool map[string]map[string]any, name string) bool {
-	_, ok := pool[name]
-
-	return ok
-}
-
-// definedNotifiers renders the names of the notifier definitions for an error
-// message.
-func definedNotifiers(pool map[string]map[string]any) string {
-	if len(pool) == 0 {
-		return "no notifiers are defined"
-	}
-
-	return "defined: " + strings.Join(slices.Sorted(maps.Keys(pool)), ", ")
-}
-
-// parseInterval parses a duration such as "30s" or "5m" of at least MinInterval.
-func parseInterval(value any) (time.Duration, error) {
-	text, ok := value.(string)
-	if !ok {
-		return 0, errIntervalType
-	}
-
-	interval, err := time.ParseDuration(text)
-	if err != nil {
-		return 0, fmt.Errorf("invalid interval %q: %w", text, err)
-	}
-
-	if interval < MinInterval {
-		return 0, fmt.Errorf("interval %q is too short: the minimum is %s", text, MinInterval)
-	}
-
-	return interval, nil
-}
-
-// unknownKeys reports every key of table that is not in allowed.
-func unknownKeys(table map[string]any, allowed ...string) []error {
-	var errs []error
-
-	for _, key := range slices.Sorted(maps.Keys(table)) {
-		if !slices.Contains(allowed, key) {
-			errs = append(errs, fmt.Errorf("unknown key %q (expected one of: %s)",
-				key, strings.Join(slices.Sorted(slices.Values(allowed)), ", ")))
-		}
-	}
-
-	return errs
-}
-
-// asTables converts an array of tables. The decoder yields []map[string]any
-// for [[name]] and []any for an inline array.
-func asTables(value any) ([]map[string]any, bool) {
-	switch v := value.(type) {
-	case []map[string]any:
-		return v, true
-	case []any:
-		tables := make([]map[string]any, len(v))
-		for i, item := range v {
-			table, ok := item.(map[string]any)
-			if !ok {
-				return nil, false
-			}
-			tables[i] = table
-		}
-
-		return tables, true
-	default:
-		return nil, false
-	}
-}
-
-// asRefs converts the retriever or provider list of an instance. Every element
-// is either a table, or a string that stands for { ref = "<string>" }. The
-// decoder yields []map[string]any for [[instance.<kind>]] and []any for an
-// inline array, which may mix both forms.
-func asRefs(kind string, value any) ([]map[string]any, []error) {
-	var items []any
-
-	switch v := value.(type) {
-	case []map[string]any:
-		for _, table := range v {
-			items = append(items, table)
-		}
-	case []any:
-		items = v
-	default:
-		return nil, []error{fmt.Errorf(`%q must be an array of names of [%s.<name>] definitions or tables, for example ["name", { ref = "name" }] or [[instance.%s]]`,
-			kind, kind, kind)}
-	}
-
-	tables := make([]map[string]any, 0, len(items))
-
-	var errs []error
-
-	for i, item := range items {
-		switch v := item.(type) {
-		case map[string]any:
-			tables = append(tables, v)
-		case string:
-			if v == "" {
-				errs = append(errs, fmt.Errorf("%s #%d: the name of a definition must not be empty", kind, i+1))
-				continue
-			}
-
-			tables = append(tables, map[string]any{"ref": v})
-		default:
-			errs = append(errs, fmt.Errorf("%s #%d must be the name of a [%s.<name>] definition or a table, not %T", kind, i+1, kind, item))
-		}
-	}
-
-	return tables, errs
-}
-
-func instanceLabel(index int, name string) string {
-	if name == "" {
-		return fmt.Sprintf("instance #%d", index+1)
-	}
-
-	return fmt.Sprintf("instance %q", name)
-}
-
-// definedNames renders the names in a pool for an error message.
-func definedNames(kind string, pool map[string]map[string]any) string {
-	if len(pool) == 0 {
-		return fmt.Sprintf("no %ss are defined", kind)
-	}
-
-	return "defined: " + strings.Join(slices.Sorted(maps.Keys(pool)), ", ")
-}
-
-// duplicateProviders reports providers of one instance that were built from
-// the same definition and ended up with the same parameters: they would write
-// the same record twice on every tick. A provider that overrides a parameter,
-// such as the zone, is a different one. A provider declared inline (no Ref)
-// is never flagged: it does not name a shared definition, so there is nothing
-// to compare it against.
-func duplicateProviders(providers []Plugin) []error {
-	var errs []error
-
-	for i, later := range providers {
-		if later.Ref == "" {
-			continue
-		}
-
-		for j, earlier := range providers[:i] {
-			if earlier.Ref == later.Ref && reflect.DeepEqual(earlier.Params, later.Params) {
-				errs = append(errs, fmt.Errorf("provider #%d repeats provider #%d: same ref %q and same parameters, the record would be written twice",
-					i+1, j+1, later.Ref))
-				break
-			}
-		}
-	}
-
-	return errs
 }
