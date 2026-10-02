@@ -73,7 +73,7 @@ func (p *publisher) Publish(ctx context.Context, routingKey string, payload []by
 	}
 
 	if p.ch == nil || p.ch.IsClosed() {
-		if err := p.connect(); err != nil {
+		if err := p.connect(ctx); err != nil {
 			return err
 		}
 	}
@@ -104,38 +104,74 @@ func (p *publisher) Publish(ctx context.Context, routingKey string, payload []by
 	return nil
 }
 
-// connect opens the connection and a channel in confirm mode, and declares the
-// exchange. It leaves nothing half-open on failure.
-func (p *publisher) connect() error {
+// connect opens the connection through dial, giving up when ctx ends: the AMQP
+// handshake does not look at the context, only at dialTimeout, and Publish
+// holds the mutex meanwhile. A connection that completes after ctx ended is
+// closed, so it does not leak.
+func (p *publisher) connect(ctx context.Context) error {
 	p.disconnect()
 
-	conn, err := amqp.DialConfig(p.address, amqp.Config{Dial: amqp.DefaultDial(dialTimeout)})
+	type result struct {
+		conn *amqp.Connection
+		ch   *amqp.Channel
+		err  error
+	}
+
+	done := make(chan result, 1)
+
+	go func(address, exchange string) {
+		conn, ch, err := dial(address, exchange)
+		done <- result{conn, ch, err}
+	}(p.address, p.exchange)
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return r.err
+		}
+
+		p.conn, p.ch = r.conn, r.ch
+
+		return nil
+	case <-ctx.Done():
+		go func() {
+			if r := <-done; r.conn != nil {
+				_ = r.conn.Close()
+			}
+		}()
+
+		return fmt.Errorf("connect: %w", ctx.Err())
+	}
+}
+
+// dial opens a connection and a channel in confirm mode, and declares the
+// exchange. It leaves nothing half-open on failure.
+func dial(address, exchange string) (*amqp.Connection, *amqp.Channel, error) {
+	conn, err := amqp.DialConfig(address, amqp.Config{Dial: amqp.DefaultDial(dialTimeout)})
 	if err != nil {
-		return fmt.Errorf("connect: %w", err)
+		return nil, nil, fmt.Errorf("connect: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
 
-		return fmt.Errorf("open channel: %w", err)
+		return nil, nil, fmt.Errorf("open channel: %w", err)
 	}
 
-	if err := ch.ExchangeDeclare(p.exchange, amqp.ExchangeTopic, true, false, false, false, nil); err != nil {
+	if err := ch.ExchangeDeclare(exchange, amqp.ExchangeTopic, true, false, false, false, nil); err != nil {
 		_ = conn.Close()
 
-		return fmt.Errorf("declare exchange %q: %w", p.exchange, err)
+		return nil, nil, fmt.Errorf("declare exchange %q: %w", exchange, err)
 	}
 
 	if err := ch.Confirm(false); err != nil {
 		_ = conn.Close()
 
-		return fmt.Errorf("enable publisher confirms: %w", err)
+		return nil, nil, fmt.Errorf("enable publisher confirms: %w", err)
 	}
 
-	p.conn, p.ch = conn, ch
-
-	return nil
+	return conn, ch, nil
 }
 
 func (p *publisher) disconnect() {

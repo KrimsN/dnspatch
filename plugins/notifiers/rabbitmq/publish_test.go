@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -202,5 +203,49 @@ func TestCloseClosesAnOpenConnection(t *testing.T) {
 
 	if err := n.Close(); err != nil {
 		t.Errorf("Close: %v", err)
+	}
+}
+
+// silentListener accepts connections and never answers, like a broker that is
+// reachable but stuck.
+func silentListener(t *testing.T) string {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			if _, err := ln.Accept(); err != nil {
+				return
+			}
+		}
+	}()
+
+	return ln.Addr().String()
+}
+
+func TestPublishHonoursTheContextWhileTheBrokerIsSilent(t *testing.T) {
+	n, err := build(t, map[string]any{"address": "amqp://guest:guest@" + silentListener(t) + "/"})
+	if err != nil {
+		t.Fatalf("BuildNotifier: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = n.Publish(ctx, "home", nil)
+
+	if err == nil || !strings.Contains(err.Error(), "connect") {
+		t.Errorf("Publish error = %v, want a connect error", err)
+	}
+
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("Publish took %v with a 200ms context, want it to give up with the context", took)
 	}
 }
