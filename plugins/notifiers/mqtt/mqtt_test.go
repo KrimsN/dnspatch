@@ -123,9 +123,8 @@ func TestPublishAfterCloseFails(t *testing.T) {
 	}
 }
 
-// TestPublishReachesASubscriber runs against a real broker that accepts
-// anonymous clients, for example the eclipse-mosquitto:2 image started with the
-// config file it ships for that, and is skipped without MQTT_TEST_URL.
+// TestPublishReachesASubscriber runs against a real MQTT broker that accepts
+// anonymous clients, and is skipped without MQTT_TEST_URL.
 func TestPublishReachesASubscriber(t *testing.T) {
 	url := os.Getenv("MQTT_TEST_URL")
 	if url == "" {
