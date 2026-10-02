@@ -13,6 +13,7 @@ Instances run independently, so several sites or networks can be tracked at once
 - Providers of an instance are updated independently: one failing provider never stops the others (a stuck one delays the rest of the tick by at most its 30-second deadline).
 - A provider is written only when the address differs from the last one it accepted; a failed provider is retried on later ticks, the others are left alone.
 - A failing provider is retried with exponential backoff and jitter: the delay is at most the polling interval after the first failure (at least half of it) and its ceiling doubles with every further failure, up to 30 minutes (or the interval, if that is longer).
+- While a provider is backing off, the cycles that skip it are failed too, with the error of its last failed write: a cycle is successful only when no provider of the instance is in a failed state. This keeps `ping_url` on `/fail` and `status` notifications on `failure` until the provider is written again.
 - Every retrieval and every write has a 30-second deadline.
 
 ## State is not persisted

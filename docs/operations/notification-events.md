@@ -180,10 +180,7 @@ The instance as a whole: did its last cycle work. This was the only event of 0.4
     - For a cycle that repeats the outcome of the previous one: a long outage is one `failure`, not one per cycle.
     - For a cycle that a shutdown interrupted.
 
-    **What fails a cycle.** A cycle fails when any retriever that was called or any provider that was written to returned an error. That includes a retriever that failed while a fallback retriever supplied the address. A provider that is skipped because its address did not change, or because it is waiting out a backoff, does not fail the cycle.
-
-    !!! warning "Flapping during a backoff"
-        A provider that failed is not tried on every cycle, but after a pause that grows with each failure. The cycles in between count as successful, so `status` alternates between `failure` (the cycle that retries) and `recovery` (the cycles that skip the provider) for as long as the provider is down. This is a known problem. To follow a provider reliably, use [`provider_status`](#provider_status).
+    **What fails a cycle.** A cycle fails when any retriever that was called or any provider that was written to returned an error. That includes a retriever that failed while a fallback retriever supplied the address. A provider that is skipped because its address did not change does not fail the cycle. A provider that is waiting out a backoff does: the cycle reports the error of its last failed write, so it stays failed until the provider is written again.
 
 === "Message"
 
@@ -219,7 +216,7 @@ The instance as a whole: did its last cycle work. This was the only event of 0.4
 
 One provider: did its last attempt to write the address work.
 
-**Switch on:** `events = ["provider_status"]`. **Use it for** an instance with several providers, to know which of them is in trouble, and to follow a provider through a backoff without the flapping of [`status`](#status).
+**Switch on:** `events = ["provider_status"]`. **Use it for** an instance with several providers, to know which of them is in trouble, and to see which of them is failed.
 
 === "When it arrives"
 
@@ -384,7 +381,7 @@ A cycle, one pass of the instance over its retrievers and providers, finished. I
 
     - For a cycle that a shutdown interrupted.
 
-    Unlike `status`, `cycle` has no `state`: it reports every cycle, not the changes. It fails by the same rule as `status`, including the flapping during a backoff.
+    Unlike `status`, `cycle` has no `state`: it reports every cycle, not the changes. It fails by the same rule as `status`, so it keeps `success: false` through a backoff.
 
 === "Message"
 
@@ -486,9 +483,9 @@ What arrives in common situations. The instance `home` has one retriever `ifconf
 === "The provider's API is down"
 
     1. At the first failed write: `provider_status` `failure`, `status` `failure` and `cycle` with `success: false`.
-    2. During the pause before the next attempt the provider is skipped and the cycle counts as successful: `status` `recovery` (the [flapping](#status) described above) and `cycle` with `success: true`.
-    3. A retry that fails sends `status` `failure` and `cycle` again, but no new `provider_status`: the provider is already failed.
-    4. When a retry works: `provider_status` `recovery`, `ip_change` with `old` empty, and `cycle`. If the previous cycle had failed, `status` `recovery` comes too.
+    2. During the pause before the next attempt the provider is skipped, but the cycle still fails with its last error: only `cycle` with `success: false` arrives, since `status` is already `failure`.
+    3. A retry that fails sends `cycle` with `success: false` again, but no new `status` or `provider_status`: both are already failed.
+    4. When a retry works: `provider_status` `recovery`, `status` `recovery`, `ip_change` with `old` empty, and `cycle` with `success: true`.
 
 === "A retriever fails, a fallback serves"
 

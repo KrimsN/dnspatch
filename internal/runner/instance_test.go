@@ -366,6 +366,42 @@ func TestBackoffSkipsTicksAndGapsGrow(t *testing.T) {
 	}
 }
 
+func TestTickFailsWhileProviderIsBackingOff(t *testing.T) {
+	clock := newFakeClock()
+	provider := newFakeProvider()
+	provider.fail = func(int) error { return errBoom }
+	in := newTestInstance(clock, testInterval, newFakeRetriever("203.0.113.1"), provider)
+
+	for tick := range 40 {
+		err := in.tick(context.Background())
+		if !errors.Is(err, errBoom) {
+			t.Fatalf("tick %d: err = %v, want the last failure of the provider", tick, err)
+		}
+		clock.Advance(testInterval)
+	}
+}
+
+func TestTickSucceedsOnceBackedOffProviderRecovers(t *testing.T) {
+	clock := newFakeClock()
+	provider := newFakeProvider()
+	provider.fail = func(int) error { return errBoom }
+	in := newTestInstance(clock, testInterval, newFakeRetriever("203.0.113.1"), provider)
+
+	for range 4 {
+		_ = in.tick(context.Background())
+		clock.Advance(testInterval)
+	}
+
+	provider.fail = func(int) error { return nil }
+	clock.Advance(time.Hour)
+	if err := in.tick(context.Background()); err != nil {
+		t.Fatalf("tick after recovery: err = %v, want nil", err)
+	}
+	if err := in.tick(context.Background()); err != nil {
+		t.Errorf("tick with an unchanged address: err = %v, want nil", err)
+	}
+}
+
 func TestSuccessResetsBackoff(t *testing.T) {
 	clock := newFakeClock()
 	retriever := newFakeRetriever("203.0.113.1")
