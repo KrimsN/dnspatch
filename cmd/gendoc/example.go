@@ -172,8 +172,8 @@ func writeInstance(b *strings.Builder, retrieverNames, providerNames, notifierNa
 	if len(notifierNames) > 0 {
 		b.WriteString("# The notifiers this instance publishes to, by the name of their [notify.<name>]\n")
 		b.WriteString("# definition. Without it an instance publishes to every notifier you define;\n")
-		b.WriteString("# an empty list, [], publishes to none. An entry can also be a table that\n")
-		b.WriteString("# overrides the events for this instance: { ref = \"name\", events = [\"cycle\"] }.\n")
+		b.WriteString("# an empty list, [], publishes to none. To override the events of a notifier for\n")
+		b.WriteString("# this instance, use [[instance.notify]] tables with ref and events instead.\n")
 		fmt.Fprintf(b, "# notify = [%s]\n", tomlString(notifierNames[0]))
 	}
 

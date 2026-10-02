@@ -496,8 +496,8 @@ key = "${YANDEX_CLOUD_KEY}"
 name = "home"
 # The notifiers this instance publishes to, by the name of their [notify.<name>]
 # definition. Without it an instance publishes to every notifier you define;
-# an empty list, [], publishes to none. An entry can also be a table that
-# overrides the events for this instance: { ref = "name", events = ["cycle"] }.
+# an empty list, [], publishes to none. To override the events of a notifier for
+# this instance, use [[instance.notify]] tables with ref and events instead.
 # notify = ["rabbitmq"]
 
 [[instance.retriever]]
