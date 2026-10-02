@@ -60,7 +60,7 @@ The three `*_status` types are **transitions**: they say that something changed,
 
 ## Choosing the events
 
-Which events reach a broker is decided by `events`, a list of the names above. It is a setting of dnspatch, so it works the same for every notifier (`redis`, `rabbitmq`, ...), and a notifier plugin does not know about it.
+Which events reach a broker is decided by `events`, a list of the names above. It is a setting of dnspatch, so it works the same for every notifier (`redis`, `rabbitmq`, `mqtt`, ...), and a notifier plugin does not know about it.
 
 There are two places to set it, the notifier and the instance that uses it. Without `events` anywhere a notifier publishes `["status"]`, the behaviour before event types existed. The `events` of the instance's `[[instance.notify]]` take priority over those of the notifier.
 

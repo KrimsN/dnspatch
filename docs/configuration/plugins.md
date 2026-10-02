@@ -26,5 +26,6 @@ Every parameter of every plugin is described in the [Parameter reference](../PAR
 | provider | `yandexcloud` | sets the `A` or `AAAA` record of a zone hosted at [Yandex Cloud DNS](https://yandex.cloud/en/services/dns), authenticating as a service account with an authorized key |
 | notifier | `redis` | publishes status changes to a Redis Pub/Sub channel (full build) |
 | notifier | `rabbitmq` | publishes status changes to a RabbitMQ topic exchange (full build) |
+| notifier | `mqtt` | publishes status changes to an MQTT topic (full build) |
 
 Notifiers are described in [Monitoring](../operations/monitoring.md#notifications). Which plugins a build contains, and how to choose them, is covered in [Building from source](../deployment/building.md).

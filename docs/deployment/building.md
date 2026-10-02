@@ -62,6 +62,7 @@ docker build --build-arg TAGS=ping,notify_all -t dnspatch-full .
 
 | Type | Kind | Build tag | In a plain build |
 |------|------|-----------|------------------|
+| `mqtt` | notifier | `mqtt` | no (`notify_all` brings it too) |
 | `rabbitmq` | notifier | `rabbitmq` | no (`notify_all` brings it too) |
 | `redis` | notifier | `redis` | no (`notify_all` brings it too) |
 | `beget` | provider | `beget` | yes |

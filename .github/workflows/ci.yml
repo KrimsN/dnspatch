@@ -168,6 +168,7 @@ jobs:
           PING_URL: https://hc-ping.example/00000000-0000-0000-0000-000000000000
           REDIS_URL: redis://localhost:6379/0
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+          MQTT_URL: mqtt://localhost:1883
           TSIG_SECRET: Y2hlY2stY29uZmln
         run: |
           set -e
