@@ -458,6 +458,29 @@ key = "${YANDEX_CLOUD_KEY}"
 # Each definition below is a template for one notifier: uncomment it, together
 # with the parameters you set and at least the ones marked Required.
 
+# [notify.mqtt]
+# type = "mqtt"
+# events = ["status"]   # optional, this is the default
+
+# A mqtt://, mqtts://, tcp://, ssl://, ws:// or wss:// URL: it carries the
+# host and an optional user name and password. Required.
+# address = "${MQTT_URL}"
+
+# The client identifier the notifier connects with; by default a random one,
+# so that several daemons never take each other's session over
+# client_id = ""
+
+# The delivery guarantee: 0 at most once, 1 at least once, 2 exactly once
+# qos = 1
+
+# Ask the broker to keep the last event of each topic and hand it to a
+# subscriber that joins later
+# retain = false
+
+# Prepended to the instance name to form the channel, topic or routing key an
+# event is published under
+# topic_prefix = "dnspatch.events."
+
 # [notify.rabbitmq]
 # type = "rabbitmq"
 # events = ["status"]   # optional, this is the default
@@ -498,7 +521,7 @@ name = "home"
 # definition. Without it an instance publishes to every notifier you define;
 # an empty list, [], publishes to none. To override the events of a notifier for
 # this instance, use [[instance.notify]] tables with ref and events instead.
-# notify = ["rabbitmq"]
+# notify = ["mqtt"]
 
 [[instance.retriever]]
 ref = "2ip"

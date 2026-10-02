@@ -8,6 +8,7 @@ import "github.com/dnspatch/dnspatch/plugin"
 // compiled it in: that is what lets a configuration that names a missing one
 // be told which build tag brings it.
 func init() {
+	plugin.Default.Declare(plugin.KindNotifier, "mqtt", "rebuild with the \"mqtt\" or \"notify_all\" build tag, or use the -full image (see https://dnspatch.github.io/dnspatch/deployment/building/)")
 	plugin.Default.Declare(plugin.KindNotifier, "rabbitmq", "rebuild with the \"rabbitmq\" or \"notify_all\" build tag, or use the -full image (see https://dnspatch.github.io/dnspatch/deployment/building/)")
 	plugin.Default.Declare(plugin.KindNotifier, "redis", "rebuild with the \"redis\" or \"notify_all\" build tag, or use the -full image (see https://dnspatch.github.io/dnspatch/deployment/building/)")
 	plugin.Default.Declare(plugin.KindProvider, "beget", "rebuild with the \"beget\" build tag (see https://dnspatch.github.io/dnspatch/deployment/building/)")

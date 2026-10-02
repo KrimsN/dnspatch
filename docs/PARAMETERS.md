@@ -31,6 +31,7 @@ For a configuration to start from, copy [dnspatch.toml.example](https://github.c
   - [timeweb](#provider-timeweb)
   - [yandexcloud](#provider-yandexcloud)
 - [Notifiers](#notifiers)
+  - [mqtt](#notifier-mqtt)
   - [rabbitmq](#notifier-rabbitmq)
   - [redis](#notifier-redis)
 
@@ -241,6 +242,16 @@ For a configuration to start from, copy [dnspatch.toml.example](https://github.c
 | `proxy` | no | — | URL of a proxy to send API requests through, for example socks5://user:pass@203.0.113.5:1080. Schemes: socks5 and socks5h (the proxy resolves the API host name), http and https. Percent-encode special characters in the login and password. Use it when the API only accepts requests from a fixed address. The word direct connects without a proxy and ignores the proxy environment variables. Empty: connect directly, or through HTTP_PROXY/HTTPS_PROXY from the environment. The address retriever has its own proxy parameter and does not use this one |
 
 ## Notifiers
+
+### Notifier `mqtt`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `address` | yes | — | A mqtt://, mqtts://, tcp://, ssl://, ws:// or wss:// URL: it carries the host and an optional user name and password |
+| `client_id` | no | — | The client identifier the notifier connects with; by default a random one, so that several daemons never take each other's session over |
+| `qos` | no | `1` | The delivery guarantee: 0 at most once, 1 at least once, 2 exactly once |
+| `retain` | no | `false` | Ask the broker to keep the last event of each topic and hand it to a subscriber that joins later |
+| `topic_prefix` | no | `dnspatch.events.` | Prepended to the instance name to form the channel, topic or routing key an event is published under |
 
 ### Notifier `rabbitmq`
 

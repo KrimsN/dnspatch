@@ -1,4 +1,4 @@
-//go:build dnspatch_none && retrievers_all && cloudflare && !providers_all && !notify_all && !redis && !rabbitmq
+//go:build dnspatch_none && retrievers_all && cloudflare && !providers_all && !notify_all && !redis && !rabbitmq && !mqtt
 
 package main
 

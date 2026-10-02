@@ -47,6 +47,17 @@ events = ["status", "provider_status", "ip_change"]
 # exchange = "dnspatch"
 # events   = ["cycle", "lifecycle"]
 
+# MQTT is the same again: "address" is a mqtt://, mqtts://, tcp://, ssl://,
+# ws:// or wss:// URL, and events go to the topic dnspatch/events/<instance>
+# (the dots of topic_prefix and the instance name become slashes). Subscribe to
+# dnspatch/events/# for everything. qos is 1 by default; retain = true makes the
+# broker keep the last event of each topic.
+# [notify.mosquitto]
+# type    = "mqtt"
+# address = "${MQTT_URL}"
+# qos     = 1
+# retain  = false
+
 [retriever.home]
 type = "ifconfigco"
 
