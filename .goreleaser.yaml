@@ -94,6 +94,10 @@ changelog:
 release:
   draft: false
   prerelease: auto
+  # Releases are immutable, so schema.json has to be in the release when it is
+  # published; the workflow generates it (see release.yml) and names it here.
+  extra_files:
+    - glob: "{{ .Env.SCHEMA_FILE }}"
   # Appended to the notes of every release, a candidate as well: the image tag
   # is the version without the "v", the Go tag is the git tag.
   footer: |
