@@ -37,16 +37,16 @@ An instance points at a definition with `ref`, or declares the plugin inline wit
 
 ## Short form
 
-When a definition is used as it is, with nothing overridden, an instance lists its name instead of a table: `"name"` is the same as `{ ref = "name" }`. Names and inline tables can be mixed in one array:
+When a definition is used as it is, with nothing overridden, an instance lists its name instead of a table: `"name"` is the same as a table with only `ref`.
 
 ```toml
 [[instance]]
 name      = "home"
 retriever = ["ipify"]
-provider  = ["regru", { ref = "regru", rr_name = "*.home" }]
+provider  = ["regru"]
 ```
 
-The `[[instance.retriever]]` and `[[instance.provider]]` form keeps working. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
+A definition with overrides is written as an `[[instance.retriever]]` or `[[instance.provider]]` table. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
 
 `notify` works the same way: `notify = ["alerts"]` is the short form, and a `[[instance.notify]]` table may only hold `ref` and `events`. It chooses which [event types](../operations/notification-events.md#choosing-the-events) reach the notifier from this instance, and nothing else about it can be overridden.
 

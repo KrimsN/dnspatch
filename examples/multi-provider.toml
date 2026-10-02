@@ -27,19 +27,21 @@ account_id   = "CHANGE_ME"
 username     = "CHANGE_ME"
 password     = "${PASSWORD}"
 
-# A name in the list is the same as a table with only "ref".
+# A name in the list is the same as a table with only "ref". Both DNS hosts
+# are updated from the same address.
 [[instance]]
 name      = "home"
 retriever = ["home"]
-
-# Update both DNS hosts from the same address.
 provider  = ["regru", "selectel"]
 
+# Same regru definition, a different zone for this instance: an override
+# needs a [[instance.provider]] table.
 [[instance]]
 name      = "office"
 interval  = "1m"
 retriever = ["office"]
 
-# Same regru definition, a different zone for this instance: an override
-# needs a table, and the list can mix names and tables.
-provider  = [{ ref = "regru", zone = "example.org", rr_name = "office" }]
+[[instance.provider]]
+ref     = "regru"
+zone    = "example.org"
+rr_name = "office"
