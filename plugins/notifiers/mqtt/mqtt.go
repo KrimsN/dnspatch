@@ -128,7 +128,24 @@ func (p *publisher) Publish(ctx context.Context, topic string, payload []byte) e
 		}
 	}
 
-	token := p.client.Publish(strings.ReplaceAll(topic, ".", "/"), p.qos, p.retain, payload)
+	// The client's Publish blocks for up to 30s, ignoring ctx, while the
+	// connection is dead but not yet noticed as lost, so it runs aside and
+	// is abandoned when ctx ends; the disconnect below then frees the client.
+	client := p.client
+	started := make(chan paho.Token, 1)
+
+	go func() { started <- client.Publish(strings.ReplaceAll(topic, ".", "/"), p.qos, p.retain, payload) }()
+
+	var token paho.Token
+
+	select {
+	case token = <-started:
+	case <-ctx.Done():
+		p.disconnect()
+
+		return fmt.Errorf("publish: %w", ctx.Err())
+	}
+
 	if err := wait(ctx, token); err != nil {
 		p.disconnect()
 

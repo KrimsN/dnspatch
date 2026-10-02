@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -355,4 +356,12 @@ events = []
 		`instance "a": notify #1: event "status" is listed twice`,
 		`instance "a": notify #2: unknown event "nope"`,
 	)
+}
+
+func TestEventStringIsItsName(t *testing.T) {
+	for _, e := range allEvents {
+		if got := fmt.Sprint(e); got != string(e) {
+			t.Errorf("fmt.Sprint(%q) = %q, want the name itself", string(e), got)
+		}
+	}
 }

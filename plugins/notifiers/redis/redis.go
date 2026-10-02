@@ -38,6 +38,11 @@ func newNotifier(cfg Config) (plugin.Notifier, error) {
 		return nil, fmt.Errorf("address: %w", err)
 	}
 
+	// Without this go-redis ignores the deadline of the context in network
+	// calls and is bounded only by its own timeouts, so a silent server would
+	// outlast the publish timeout of the hook.
+	opts.ContextTimeoutEnabled = true
+
 	return &publisher{client: goredis.NewClient(opts)}, nil
 }
 
