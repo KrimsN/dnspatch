@@ -37,6 +37,10 @@ type providerState struct {
 	lastV4, lastV6 netip.Addr
 	// failures counts consecutive failed writes.
 	failures int
+	// lastErr is the error of the last failed write, nil while the provider is
+	// healthy. A cycle that skips the provider because of the backoff returns it,
+	// so the cycle does not count as successful while the record is stale.
+	lastErr error
 	// next is the earliest moment the provider may be tried again.
 	next time.Time
 	// status is whether the last real write attempt worked. A write skipped
@@ -349,7 +353,8 @@ func (in *instance) retrieverIsNeeded(r NamedRetriever, addrs plugin.Addresses) 
 // none changed or the provider is still backing off. The tick start, not the
 // end of the attempt, anchors the next allowed attempt so a slow attempt does
 // not eat into the retry delay. It returns the addresses that were written,
-// with what they replaced.
+// with what they replaced. A provider skipped because of the backoff reports
+// the error of its last failed write, without logging it again.
 func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.Addresses, start time.Time) ([]AddressChange, error) {
 	log := in.log.With("provider", p.name)
 
@@ -366,7 +371,7 @@ func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.A
 	}
 	if start.Before(p.next) {
 		log.Debug("backing off, skipping", "addrs", toSend, "retry_at", p.next)
-		return nil, nil
+		return nil, p.lastErr
 	}
 
 	err := in.attempt(ctx, func(ctx context.Context) error {
@@ -383,6 +388,7 @@ func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.A
 			p.lastV6 = toSend.V6
 		}
 		p.failures = 0
+		p.lastErr = nil
 		p.next = time.Time{}
 		log.Info("address updated", "addrs", toSend)
 		in.observe(ctx, &p.status, KindProviderStatus, p.name, nil)
@@ -396,11 +402,12 @@ func (in *instance) update(ctx context.Context, p *providerState, addrs plugin.A
 	p.lastV4 = netip.Addr{}
 	p.lastV6 = netip.Addr{}
 	p.failures++
+	p.lastErr = fmt.Errorf("provider %q: %w", p.name, err)
 	delay := in.backoff.delay(p.failures, in.jitter)
 	p.next = start.Add(delay)
 	log.Warn("update failed", "addrs", toSend, "err", err, "failures", p.failures, "retry_in", delay)
 	in.observe(ctx, &p.status, KindProviderStatus, p.name, err)
-	return nil, fmt.Errorf("provider %q: %w", p.name, err)
+	return nil, p.lastErr
 }
 
 // attempt runs fn under the per-attempt deadline. A deadline overrun is
