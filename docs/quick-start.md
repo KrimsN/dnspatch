@@ -8,6 +8,8 @@ dnspatch --config dnspatch.toml
 
 Without `--config` the daemon uses `$DNSPATCH_CONFIG`, then `./dnspatch.toml`, then `/etc/dnspatch/config.toml`. `dnspatch --version` prints the version.
 
+You can also assemble the file in the [online config builder](https://dnspatch.github.io/builder/): pick the retrievers and providers, fill in the parameters and copy the result.
+
 A first configuration is one retriever, one provider and one instance that ties them together:
 
 ```toml

@@ -26,7 +26,7 @@ go build -tags "ping,notify_all" -o dnspatch ./cmd/dnspatch
 go build -tags "ping,redis" -o dnspatch ./cmd/dnspatch
 ```
 
-A build that lacks a plugin your configuration names refuses to start and says which tag to add, for example `provider type "cloudflare" is not compiled into this build: rebuild with the "cloudflare" build tag`. Every retriever and provider a configuration uses must be in the build, so the list of tags is easiest to write from the `type` lines of your `dnspatch.toml`.
+A build that lacks a plugin your configuration names refuses to start and says which tag to add, for example `provider type "cloudflare" is not compiled into this build: rebuild with the "cloudflare" build tag`. Every retriever and provider a configuration uses must be in the build, so the list of tags is easiest to write from the `type` lines of your `dnspatch.toml`. The [config builder](https://dnspatch.github.io/builder/) does this for you: it lists the tags, the Docker image and the build command for the plugins you chose.
 
 ## Notes on the tags
 
