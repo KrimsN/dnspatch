@@ -72,6 +72,7 @@ nav:
   - Operations:
       - Behaviour: operations/behaviour.md
       - Monitoring: operations/monitoring.md
+      - Notification events: operations/notification-events.md
   - Development:
       - Writing a plugin: development/writing-a-plugin.md
       - Plugins outside the repository: development/external-plugins.md
@@ -107,6 +108,7 @@ plugins:
         Operations:
           - operations/behaviour.md: Failure handling and state
           - operations/monitoring.md: Health check, pings and notifications
+          - operations/notification-events.md: Notification event types, message fields and when each is sent
         Development:
           - development/writing-a-plugin.md: Writing a plugin
           - development/external-plugins.md: Plugins outside the repository

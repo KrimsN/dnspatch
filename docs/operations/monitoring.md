@@ -62,16 +62,18 @@ name = "lab"                    # no notify key: alerts and backup
 
 ### Event types
 
+This is a summary. Every type, with its fields, an example message and the situations in which it arrives, is described on [Notification events](notification-events.md).
+
 `events` is a list of the types a notifier publishes. It is a setting of dnspatch, not of the broker, so it works the same for every notifier. Without it a notifier publishes `["status"]`, as it did before event types existed.
 
 | Type | What it reports | When |
 |---|---|---|
-| `status` | the instance as a whole worked or failed | when its state changes |
-| `provider_status` | one provider worked or failed | when its state changes |
-| `retriever_status` | one retriever worked or failed | when its state changes |
-| `ip_change` | an address was written to a provider and differs from the previous one | once per cycle, with every change of that cycle |
-| `cycle` | a cycle finished, successfully or not | after every cycle |
-| `lifecycle` | the instance started or stopped | at start, before the first cycle, and at a normal stop |
+| [`status`](notification-events.md#status) | the instance as a whole worked or failed | when its state changes |
+| [`provider_status`](notification-events.md#provider_status) | one provider worked or failed | when its state changes |
+| [`retriever_status`](notification-events.md#retriever_status) | one retriever worked or failed | when its state changes |
+| [`ip_change`](notification-events.md#ip_change) | an address was written to a provider and differs from the previous one | once per cycle, with every change of that cycle |
+| [`cycle`](notification-events.md#cycle) | a cycle finished, successfully or not | after every cycle |
+| [`lifecycle`](notification-events.md#lifecycle) | the instance started or stopped | at start, before the first cycle, and at a normal stop |
 
 The three `*_status` types report transitions only. The first time something is seen it is reported only if it failed: a first success is not news. A provider's state changes only when dnspatch really tried to write: a cycle that skipped it because the address had not changed, or because it is waiting out a backoff, leaves it alone. In the same way a retriever's state changes only when it was called: one that is not needed because an earlier retriever already supplied the address keeps what it had, even if that was a failure.
 
@@ -119,42 +121,13 @@ Only `ref` and `events` are allowed in such a table. The connection to the broke
 
 dnspatch itself never talks to Telegram, Slack or anything else: it publishes a small JSON event to the channel `dnspatch.events.<instance>` (override the prefix with `topic_prefix`), and whatever is subscribed to it, a bot you write or a small relay service, decides what to do next. This keeps adding a new notification channel a change on the listener's side only, with dnspatch's config and binary untouched. The topic is the same for every type of event; tell them apart by the `event` field.
 
-Every event has these fields:
-
-| Field | Meaning |
-|---|---|
-| `event` | the type, as in the table above |
-| `severity` | `info`, `warning` or `error` |
-| `instance` | the name of the instance |
-| `time` | when it happened, RFC 3339 |
-
-and the fields of its type:
-
-| Type | More fields |
-|---|---|
-| `status` | `state` (`failure` or `recovery`), `success`, `error` (on failure) |
-| `provider_status` | `provider`, `state`, `success`, `error` (on failure) |
-| `retriever_status` | `retriever`, `state`, `success`, `error` (on failure) |
-| `ip_change` | `changes`: a list of `{provider, family, old, new}`, with `family` `ipv4` or `ipv6` and an empty `old` when the previous address is not known (the first write after a start or after a failed one) |
-| `cycle` | `success`, `error` (on failure) |
-| `lifecycle` | `state` (`started` or `stopped`), `version` of dnspatch |
+Every message is a JSON object with `event`, `severity`, `instance` and `time`, plus the fields of its type:
 
 ```json
-{"event":"status","severity":"error","instance":"home","time":"2026-10-02T10:00:00Z","state":"failure","success":false,"error":"provider \"regru\": ..."}
-{"event":"ip_change","severity":"info","instance":"home","time":"2026-10-02T10:05:00Z","changes":[{"provider":"regru","family":"ipv4","old":"1.2.3.4","new":"5.6.7.8"}]}
-{"event":"lifecycle","severity":"info","instance":"home","time":"2026-10-02T09:00:00Z","state":"started","version":"0.5.0"}
+{"event":"status","severity":"error","instance":"home","time":"2026-10-02T10:00:03+07:00","state":"failure","success":false,"error":"provider \"regru\": ..."}
 ```
 
-The severity is fixed for each event:
-
-| Event | Severity |
-|---|---|
-| `status`, `provider_status` failure | `error` |
-| `retriever_status` failure | `warning` |
-| any recovery, `ip_change`, `lifecycle` | `info` |
-| `cycle` | `info`, or `error` when the cycle failed |
-
-The old payload (`instance`, `success`, `error`, `time`) is inside the `status` event, so a consumer written for it keeps working; `event`, `severity` and `state` are added to it.
+The fields of each type, when it is sent, the severity and typical sequences of events are on [Notification events](notification-events.md). The payload of 0.4.0 (`instance`, `success`, `error`, `time`) is inside `status`, so a consumer written for it keeps working; `event`, `severity` and `state` are added to it.
 
 The text of an error is the same as in dnspatch's log, and the same care is needed with it: a plugin must keep secrets, such as a token in a URL, out of its errors.
 
