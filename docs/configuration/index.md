@@ -48,7 +48,7 @@ provider  = ["regru", { ref = "regru", rr_name = "*.home" }]
 
 The `[[instance.retriever]]` and `[[instance.provider]]` form keeps working. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
 
-The `notify` list takes names and tables in the same way, but a table there may only hold `ref` and `events`: it chooses which [event types](../operations/monitoring.md#event-types) reach the notifier from this instance, and nothing else about it can be overridden.
+The `notify` list takes names and tables in the same way, but a table there may only hold `ref` and `events`: it chooses which [event types](../operations/notification-events.md) reach the notifier from this instance, and nothing else about it can be overridden.
 
 ```toml
 [[instance]]
