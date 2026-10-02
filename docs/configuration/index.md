@@ -112,7 +112,7 @@ TOML does not allow one key to be written both as an array of names and as `[[..
 
 ### Notifiers
 
-`notify` works the same way: `notify = ["alerts"]` is the short form, and a `[[instance.notify]]` table may only hold `ref` and `events`. It chooses which [event types](../operations/notification-events.md#choosing-the-events) reach the notifier from this instance, and nothing else about it can be overridden.
+`notify` takes the same forms. `notify = ["alerts"]` is the short form, and a `[[instance.notify]]` table with `ref` may hold only `ref` and `events`: it chooses which [event types](../operations/notification-events.md#choosing-the-events) reach the notifier from this instance. Nothing else about a referenced notifier can be overridden, because the connection to the broker belongs to the definition and is shared by every instance that lists it.
 
 ```toml
 [[instance]]
@@ -122,6 +122,20 @@ name = "lab"
 ref    = "alerts"
 events = ["status"]
 ```
+
+A notifier used by one instance only can be declared in place, with `type` instead of `ref`. The table takes every parameter of the plugin, plus `events`:
+
+```toml
+[[instance]]
+name = "lab"
+
+[[instance.notify]]
+type    = "redis"
+address = "${REDIS_URL}"
+events  = ["status", "ip_change"]
+```
+
+Such a notifier has a connection of its own and is named `<instance>/<type>#<position>` in `--check-config` and in logs, here `lab/redis#1`. Declared identically in several instances it makes several connections; when that matters, move it to `[notify.<name>]` and refer to it. A notifier declared in place belongs to its instance: an instance without `notify` publishes only to the `[notify.<name>]` definitions.
 
 ## Instances
 

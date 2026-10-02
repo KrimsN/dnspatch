@@ -67,9 +67,12 @@ type NotifyRef struct {
 
 // rawNotify is one entry of an instance's notify list after its shape has been
 // checked. Events is nil when the entry does not override the definition's.
+// Inline is the plugin table of an entry that declares its notifier itself
+// ("type" instead of "ref"), without "events"; it is nil for a reference.
 type rawNotify struct {
 	Name   string
 	Events []Event
+	Inline map[string]any
 }
 
 // parseEvents converts the value of an "events" key. Every problem is
@@ -111,9 +114,9 @@ func parseEvents(value any) ([]Event, []error) {
 }
 
 // checkNotifyList converts the notify list of an instance. Every entry is the
-// name of a definition, or a table with a "ref" and optionally an "events" to
-// override the definition's for this instance only; strings and tables may be
-// mixed in an inline array.
+// name of a definition, a table with a "ref" and optionally an "events" to
+// override the definition's for this instance only, or a table with a "type"
+// that declares a notifier of its own; they may be mixed in an inline array.
 func checkNotifyList(value any) ([]rawNotify, []error) {
 	tables, errs := asRefs("notify", value)
 
@@ -133,11 +136,29 @@ func checkNotifyList(value any) ([]rawNotify, []error) {
 	return notify, errs
 }
 
-// checkNotifyTable checks one table of an instance's notify list. Only "ref"
-// and "events" are allowed: the connection to the broker belongs to the
-// definition and is shared by every instance that uses it, so an instance
-// cannot reconfigure it.
+// checkNotifyTable checks one table of an instance's notify list. With a "ref"
+// only "ref" and "events" are allowed: the connection to the broker belongs to
+// the definition and is shared by every instance that uses it, so an instance
+// cannot reconfigure it. With a "type" the table is a definition of its own
+// and takes every parameter of the plugin.
 func checkNotifyTable(table map[string]any) (rawNotify, []error) {
+	_, hasRef := table["ref"]
+	_, hasType := table["type"]
+
+	switch {
+	case hasRef && hasType:
+		return rawNotify{}, []error{errors.New(`"ref" and "type" cannot both be set: a notifier is either a reference to [notify.<name>] or declared in place`)}
+	case hasType:
+		return checkInlineNotify(table)
+	case hasRef:
+		return checkNotifyRef(table)
+	default:
+		return rawNotify{}, []error{errors.New(`either "ref" or "type" is required`)}
+	}
+}
+
+// checkNotifyRef checks a table that refers to a [notify.<name>] definition.
+func checkNotifyRef(table map[string]any) (rawNotify, []error) {
 	var (
 		entry rawNotify
 		errs  []error
@@ -145,27 +166,57 @@ func checkNotifyTable(table map[string]any) (rawNotify, []error) {
 
 	for _, key := range slices.Sorted(maps.Keys(table)) {
 		if key != "ref" && key != "events" {
-			errs = append(errs, fmt.Errorf(`unknown key %q: only "ref" and "events" are allowed, the connection is set in [notify.<name>] and shared by every instance that uses it`, key))
+			errs = append(errs, fmt.Errorf(`unknown key %q: only "ref" and "events" are allowed next to "ref", the connection is set in [notify.<name>] and shared by every instance that uses it; to configure it here, declare the notifier with "type" instead`, key))
 		}
 	}
 
-	ref, hasRef := table["ref"]
-	if !hasRef {
-		errs = append(errs, errors.New(`"ref" is required: an instance cannot declare a notifier inline, define it in [notify.<name>]`))
-	} else if name, ok := ref.(string); !ok || name == "" {
+	if name, ok := table["ref"].(string); !ok || name == "" {
 		errs = append(errs, errors.New(`"ref" must be the name of a [notify.<name>] definition`))
 	} else {
 		entry.Name = name
 	}
 
-	if value, ok := table["events"]; ok {
-		var eventErrs []error
+	var eventErrs []error
 
-		entry.Events, eventErrs = parseEvents(value)
-		errs = append(errs, eventErrs...)
-	}
+	entry.Events, eventErrs = optionalEvents(table)
+	errs = append(errs, eventErrs...)
 
 	return entry, errs
+}
+
+// checkInlineNotify checks a table that declares a notifier in place. Its
+// parameters are checked later, by the plugin that receives them.
+func checkInlineNotify(table map[string]any) (rawNotify, []error) {
+	var errs []error
+
+	if typ, ok := table["type"].(string); !ok || typ == "" {
+		errs = append(errs, errors.New(`"type" must be a string`))
+	}
+
+	entry := rawNotify{Inline: make(map[string]any, len(table))}
+
+	for key, value := range table {
+		if key != "events" {
+			entry.Inline[key] = value
+		}
+	}
+
+	var eventErrs []error
+
+	entry.Events, eventErrs = optionalEvents(table)
+	errs = append(errs, eventErrs...)
+
+	return entry, errs
+}
+
+// optionalEvents reads the "events" of a table, nil when it has none.
+func optionalEvents(table map[string]any) ([]Event, []error) {
+	value, ok := table["events"]
+	if !ok {
+		return nil, nil
+	}
+
+	return parseEvents(value)
 }
 
 // definitionEvents reads the "events" of a [notify.<name>] definition,
