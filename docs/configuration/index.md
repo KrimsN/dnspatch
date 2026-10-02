@@ -78,7 +78,24 @@ An instance gets its retrievers and providers in one of three ways. All of them 
 
     [[instance.provider]]
     ref = "regru"
+
+    [[instance.provider]]
+    ref     = "regru"
+    rr_name = "*.home"             # override: another record on the same account
+
+    [[instance]]
+    name = "office"
+
+    [[instance.retriever]]
+    ref      = "home"
+    base_url = "https://10.0.0.1"  # override: the same retriever with another address
+
+    [[instance.provider]]
+    ref     = "regru"
+    rr_name = "office"             # override: the rest comes from [provider.regru]
     ```
+
+    Parameters written next to `ref` replace the same parameters of the definition for this instance only; see [Overriding fields](#overriding-fields).
 
 === "Short form"
 
