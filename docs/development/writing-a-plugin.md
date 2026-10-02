@@ -213,7 +213,56 @@ and commit the result. It runs two generators:
   struct tags. It has to see every plugin, so `go generate` builds it with the
   `notify_all` tag; it refuses to write from a build that lacks one.
 
+  With `-schema <file>` it also writes `schema.json`, which is not committed:
+  the release workflow generates it and attaches it to the release as an asset
+  (see below).
+
 The tests `TestCommittedFilesAreCurrent` of both (part of `go test ./...`, so
 of CI) fail when the committed files are out of date; the one of `cmd/gendoc`
 needs `-tags notify_all` to run, and CI passes it. Never edit the generated
 files by hand.
+
+## schema.json
+
+Every release carries a `schema.json` asset: the plugins and parameters of that
+version in a form that tools can read. The site that builds a configuration and
+a `dnspatch` binary for you reads it, so a new plugin or parameter shows up there
+without an edit. It comes from the same struct tags as `docs/PARAMETERS.md`, so
+a plugin needs nothing extra.
+
+```json
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "kind": "provider",
+      "name": "cloudflare",
+      "build_tags": ["cloudflare", "providers_all"],
+      "fields": [
+        {
+          "name": "zone_id",
+          "type": "string",
+          "required": true,
+          "description": "…",
+          "secret": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | the version of the format; it grows only when a reader of the previous one would misread the file, never for a new plugin or parameter |
+| `kind` | `retriever`, `provider` or `notifier` |
+| `name` | the value of `type` in the configuration file |
+| `build_tags` | build tags of which any one compiles the plugin in |
+| `fields[].name` | the parameter name; a parameter of a nested table is written `table.name` |
+| `fields[].type` | `string`, `boolean`, `integer`, `number`, `duration`, `array` or `table` |
+| `fields[].required` | the parameter has to be given; with `required_if` set, only once that optional table is present |
+| `fields[].default`, `example` | the text of the value from the `default` and `example` tags; absent when the tag is |
+| `fields[].description` | the `doc` tag |
+| `fields[].secret` | the `secret` option of the `toml` tag: a password, a key or the like |
+
+To produce the file locally, run `go run -tags notify_all ./cmd/gendoc -schema schema.json`.

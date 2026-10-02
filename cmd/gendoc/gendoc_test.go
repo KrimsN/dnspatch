@@ -280,7 +280,7 @@ func TestRunWritesBothFilesAndCreatesTheirDirectories(t *testing.T) {
 	dir := t.TempDir()
 	docs, example := filepath.Join(dir, "docs", "PARAMETERS.md"), filepath.Join(dir, "etc", "dnspatch.toml.example")
 
-	err := run(docs, example)
+	err := run(docs, example, "")
 	if incomplete := checkComplete(plugin.Default); incomplete != nil {
 		// A build without some plugins must refuse to write, and write nothing.
 		if err == nil {
