@@ -31,36 +31,33 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: stable
+      # Written outside the checkout: an untracked file there would make the
+      # tree dirty, which goreleaser refuses. .goreleaser.yaml attaches it.
+      - run: go run -tags notify_all ./cmd/gendoc -docs "$RUNNER_TEMP/PARAMETERS.md" -example "$RUNNER_TEMP/dnspatch.toml.example" -schema "$RUNNER_TEMP/schema.json"
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCHEMA_FILE: ${{ runner.temp }}/schema.json
           # goreleaser otherwise picks the tag itself, and when a release
           # candidate and the final release sit on one commit it takes the
           # candidate, whose release already exists.
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
 
   # The site dnspatch/builder offers the plugins and parameters listed in
-  # schema.json, so each release carries the file generated from its code and
-  # tells the site to pick it up.
-  schema:
-    name: schema.json
+  # schema.json. The file is attached to the release by goreleaser (releases
+  # are immutable, so it cannot be added afterwards); this job tells the site
+  # that a release with a new one is out.
+  notify-builder:
+    name: notify builder
     needs: goreleaser
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: {}
+    env:
+      TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-      - run: go run -tags notify_all ./cmd/gendoc -docs "$RUNNER_TEMP/PARAMETERS.md" -example "$RUNNER_TEMP/dnspatch.toml.example" -schema schema.json
-      - run: gh release upload "$TAG" schema.json --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
       # BUILDER_DISPATCH_TOKEN is a fine-grained token with Contents: write on
       # dnspatch/builder; the default token cannot reach another repository.
       # Without it the step only warns and the site is refreshed by hand.
@@ -73,7 +70,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.BUILDER_DISPATCH_TOKEN }}
           BUILDER_DISPATCH_TOKEN: ${{ secrets.BUILDER_DISPATCH_TOKEN }}
-          TAG: ${{ github.ref_name }}
 
   image:
     name: image (${{ matrix.variant }})
