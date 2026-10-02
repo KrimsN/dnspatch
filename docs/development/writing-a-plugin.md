@@ -240,11 +240,11 @@ a plugin needs nothing extra.
       "build_tags": ["cloudflare", "providers_all"],
       "fields": [
         {
-          "name": "token",
+          "name": "zone_id",
           "type": "string",
           "required": true,
           "description": "…",
-          "secret": true
+          "secret": false
         }
       ]
     }
