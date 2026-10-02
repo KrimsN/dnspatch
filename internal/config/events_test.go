@@ -223,16 +223,30 @@ events = [1]
 		"no ref": {
 			doc: header + definition + notifyInstance("a", `notify = [{ events = ["status"] }]
 `),
-			want: []string{`instance "a": notify #1: "ref" is required`},
+			want: []string{`instance "a": notify #1: either "ref" or "type" is required`},
 		},
-		"inline notifier": {
-			doc: header + definition + notifyInstance("a", `notify = [{ type = "redis", address = "x" }]
+		"ref and type": {
+			doc: header + definition + notifyInstance("a", `notify = [{ ref = "alerts", type = "redis" }]
 `),
-			want: []string{
-				`instance "a": notify #1: unknown key "address"`,
-				`instance "a": notify #1: unknown key "type"`,
-				`"ref" is required`,
-			},
+			want: []string{`instance "a": notify #1: "ref" and "type" cannot both be set`},
+		},
+		"inline type is not a string": {
+			doc: header + definition + notifyInstance("a", `notify = [{ type = 1 }]
+`),
+			want: []string{`instance "a": notify #1: "type" must be a string`},
+		},
+		"inline events are checked": {
+			doc: header + definition + notifyInstance("a", `notify = [{ type = "redis", events = ["nope"] }]
+`),
+			want: []string{`instance "a": notify #1: unknown event "nope"`},
+		},
+		"inline name is taken": {
+			doc: header + `
+[notify."a/redis#1"]
+type = "redis"
+` + notifyInstance("a", `notify = [{ type = "redis" }]
+`),
+			want: []string{`instance "a": notify #1: the generated name "a/redis#1" is taken`},
 		},
 		"connection setting in the override": {
 			doc: header + definition + notifyInstance("a", `notify = [{ ref = "alerts", address = "redis://other" }]
@@ -259,6 +273,67 @@ topic_prefix = "x"
 			wantContains(t, parseError(t, tc.doc), tc.want...)
 		})
 	}
+}
+
+// A notifier declared in place takes every parameter of its plugin, has a name
+// made of the instance, the type and its position, and is not shared.
+func TestInlineNotify(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+
+	cfg := mustParse(t, header+`
+[notify.alerts]
+type = "redis"
+`+notifyInstance("a", `notify = ["alerts", { type = "redis", address = "${REDIS_URL}", events = ["cycle"] }, { type = "redis" }]
+`)+notifyInstance("b", `notify = [{ type = "redis" }]
+`))
+
+	a := cfg.Instances[0].Notify
+	if got, want := notifyNames(a), []string{"alerts", "a/redis#2", "a/redis#3"}; !slices.Equal(got, want) {
+		t.Fatalf("instance a notify = %q, want %q", got, want)
+	}
+
+	wantEvents(t, a, "a/redis#2", "cycle")
+	wantEvents(t, a, "a/redis#3", "status")
+
+	plugin := cfg.Notify["a/redis#2"]
+	if plugin.Type != "redis" || plugin.Name() != "a/redis#2" {
+		t.Errorf("Notify[a/redis#2] = %+v, want type redis named after the instance", plugin)
+	}
+
+	if got := plugin.Params["address"]; got != "redis://localhost:6379/0" {
+		t.Errorf(`Params["address"] = %v, want the expanded URL`, got)
+	}
+
+	if _, ok := plugin.Params["events"]; ok {
+		t.Errorf("Params = %v, want no events: they belong to the configuration", plugin.Params)
+	}
+
+	if got, want := notifyNames(cfg.Instances[1].Notify), []string{"b/redis#1"}; !slices.Equal(got, want) {
+		t.Errorf("instance b notify = %q, want %q", got, want)
+	}
+
+	if len(cfg.Notify) != 4 {
+		t.Errorf("Notify has %d entries, want alerts and the three declared in place", len(cfg.Notify))
+	}
+}
+
+// An instance that does not say gets the definitions of the file, not the
+// notifiers another instance declares in place.
+func TestInlineNotifyIsNotInherited(t *testing.T) {
+	cfg := mustParse(t, header+`
+[notify.alerts]
+type = "redis"
+`+notifyInstance("a", `notify = [{ type = "redis" }]
+`)+notifyInstance("b", ""))
+
+	if got, want := notifyNames(cfg.Instances[1].Notify), []string{"alerts"}; !slices.Equal(got, want) {
+		t.Errorf("instance b notify = %q, want %q", got, want)
+	}
+}
+
+func TestInlineNotifyReportsEnvironmentErrors(t *testing.T) {
+	wantContains(t, parseError(t, header+notifyInstance("a", `notify = [{ type = "redis", address = "${NOTIFY_NOT_SET}" }]
+`)), `NOTIFY_NOT_SET`)
 }
 
 // Every problem is reported at once, not only the first.

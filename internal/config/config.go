@@ -45,7 +45,8 @@ type Config struct {
 	Interval  time.Duration
 	Instances []Instance
 	// Notify holds the notifiers, by definition name, that at least one
-	// instance publishes to: the brokers (for example Redis) that receive an
+	// instance publishes to, including the ones an instance declares in place,
+	// named "<instance>/<type>#<position in its notify list>": the brokers (for example Redis) that receive an
 	// instance's success/failure transitions. A build that has no notifier
 	// rejects a config that uses one, the same way an unsupported PingURL is
 	// rejected. Each entry is one broker connection, shared by every instance
@@ -171,6 +172,9 @@ func Parse(data []byte) (Config, error) {
 
 	used := make(map[string]bool)
 
+	// Notifiers declared in place by an instance, by their generated names.
+	inlineNotify := make(map[string]Plugin)
+
 	seen := make(map[string]bool, len(tables))
 
 	for i, table := range tables {
@@ -182,12 +186,16 @@ func Parse(data []byte) (Config, error) {
 		}
 		seen[in.Name] = true
 
-		resolved, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, definedEvents, global)
+		resolved, inline, resolveErrs := resolveInstance(in, retrievers, providers, notifiers, definedEvents, global)
 		instErrs = append(instErrs, resolveErrs...)
 
 		for _, ref := range resolved.Notify {
-			used[ref.Name] = true
+			if _, declared := inline[ref.Name]; !declared {
+				used[ref.Name] = true
+			}
 		}
+
+		maps.Copy(inlineNotify, inline)
 
 		for _, e := range instErrs {
 			errs = append(errs, fmt.Errorf("%s: %w", label, e))
@@ -210,6 +218,14 @@ func Parse(data []byte) (Config, error) {
 		}
 
 		cfg.Notify[name] = notify
+	}
+
+	if len(inlineNotify) > 0 {
+		if cfg.Notify == nil {
+			cfg.Notify = make(map[string]Plugin, len(inlineNotify))
+		}
+
+		maps.Copy(cfg.Notify, inlineNotify)
 	}
 
 	if len(errs) > 0 {
@@ -365,8 +381,9 @@ func checkInstance(table map[string]any) (rawInstance, []error) {
 	return in, errs
 }
 
-// resolveInstance validates one instance and resolves its references.
-func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, definedEvents map[string][]Event, global time.Duration) (Instance, []error) {
+// resolveInstance validates one instance and resolves its references. The
+// second result holds the notifiers the instance declares in place, by name.
+func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string]map[string]any, definedEvents map[string][]Event, global time.Duration) (Instance, map[string]Plugin, []error) {
 	inst := Instance{Name: in.Name, Interval: global}
 
 	var errs []error
@@ -415,25 +432,28 @@ func resolveInstance(in rawInstance, retrievers, providers, notifiers map[string
 
 	errs = append(errs, duplicateProviders(inst.Providers)...)
 
-	notify, notifyErrs := resolveNotify(in.Notify, notifiers, definedEvents)
+	notify, inline, notifyErrs := resolveNotify(in.Name, in.Notify, notifiers, definedEvents)
 	errs = append(errs, notifyErrs...)
 	inst.Notify = notify
 
-	return inst, errs
+	return inst, inline, errs
 }
 
 // resolveNotify picks the notifiers of an instance from the entries it lists:
 // every one it names must be defined, and none twice. An entry's own events
 // take precedence over its definition's. An instance that lists none at all,
-// as opposed to an empty list, publishes to every definition.
-func resolveNotify(entries []rawNotify, notifiers map[string]map[string]any, definedEvents map[string][]Event) ([]NotifyRef, []error) {
+// as opposed to an empty list, publishes to every definition. An entry that
+// declares its notifier in place is named after the instance, the type and its
+// position in the list ("home/redis#2") and returned as a plugin of its own;
+// it is never shared with another instance.
+func resolveNotify(instance string, entries []rawNotify, notifiers map[string]map[string]any, definedEvents map[string][]Event) ([]NotifyRef, map[string]Plugin, []error) {
 	if entries == nil {
 		refs := make([]NotifyRef, 0, len(notifiers))
 		for _, name := range slices.Sorted(maps.Keys(notifiers)) {
 			refs = append(refs, NotifyRef{Name: name, Events: definedEvents[name]})
 		}
 
-		return refs, nil
+		return refs, nil, nil
 	}
 
 	var errs []error
@@ -441,8 +461,26 @@ func resolveNotify(entries []rawNotify, notifiers map[string]map[string]any, def
 	refs := make([]NotifyRef, 0, len(entries))
 	seen := make(map[string]bool, len(entries))
 
-	for _, entry := range entries {
+	var inline map[string]Plugin
+
+	for i, entry := range entries {
 		switch {
+		case entry.Inline != nil:
+			name, plugin, pluginErrs := resolveInlineNotify(instance, i, entry, notifiers)
+			errs = append(errs, pluginErrs...)
+
+			if len(pluginErrs) > 0 {
+				continue
+			}
+
+			if inline == nil {
+				inline = make(map[string]Plugin)
+			}
+
+			inline[name] = plugin
+			refs = append(refs, NotifyRef{Name: name, Events: eventsOrDefault(entry.Events)})
+
+			continue
 		case entry.Name == "":
 			// Already reported when the list was checked.
 			continue
@@ -464,7 +502,38 @@ func resolveNotify(entries []rawNotify, notifiers map[string]map[string]any, def
 		refs = append(refs, NotifyRef{Name: entry.Name, Events: events})
 	}
 
-	return refs, errs
+	return refs, inline, errs
+}
+
+// resolveInlineNotify builds the plugin of the notifier an instance declares
+// in place, at position index of its notify list, and returns it with its
+// generated name.
+func resolveInlineNotify(instance string, index int, entry rawNotify, notifiers map[string]map[string]any) (string, Plugin, []error) {
+	where := fmt.Sprintf("notify #%d", index+1)
+
+	plugin, errs := resolvePluginInline("notify", where, entry.Inline)
+	if len(errs) > 0 {
+		return "", Plugin{}, errs
+	}
+
+	name := fmt.Sprintf("%s/%s#%d", instance, plugin.Type, index+1)
+	if hasKey(notifiers, name) {
+		return "", Plugin{}, []error{fmt.Errorf("%s: the generated name %q is taken by a [notify.<name>] definition, rename it", where, name)}
+	}
+
+	plugin.Ref = name
+
+	return name, plugin, nil
+}
+
+// eventsOrDefault is events, or a copy of the default set when there are none:
+// a notifier declared in place has no definition to take them from.
+func eventsOrDefault(events []Event) []Event {
+	if events == nil {
+		return slices.Clone(defaultEvents)
+	}
+
+	return events
 }
 
 func hasKey(pool map[string]map[string]any, name string) bool {

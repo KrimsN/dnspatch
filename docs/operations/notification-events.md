@@ -138,7 +138,7 @@ The rules, each reported at startup with the instance or notifier it is in:
 
 - The valid names are `status`, `provider_status`, `retriever_status`, `ip_change`, `cycle` and `lifecycle`. An unknown name is an error that lists them.
 - `events` must not be empty, and must not repeat a name. To publish nothing to a notifier, leave it out of the instance's `notify`.
-- A `[[instance.notify]]` table takes only `ref` and `events`, and `ref` is required. The connection to the broker belongs to the notifier and is shared by every instance that uses it, so an instance cannot change its address or prefix; define another notifier for that.
+- A `[[instance.notify]]` table with `ref` takes only `ref` and `events`. The connection to the broker belongs to the notifier and is shared by every instance that uses it, so an instance cannot change its address or prefix. To configure it for one instance, declare a notifier in place with `type` instead of `ref`; `ref` and `type` in one table are an error.
 
 `dnspatch --check-config` prints the events each instance ends up with, for example `notify=[alerts(status), audit(cycle, lifecycle)]`.
 
