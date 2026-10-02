@@ -22,6 +22,7 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
+    - content.code.annotate
     - content.action.edit
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -38,6 +39,7 @@ theme:
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
@@ -72,7 +74,7 @@ nav:
   - Operations:
       - Behaviour: operations/behaviour.md
       - Monitoring: operations/monitoring.md
-      - Notification events: operations/notification-events.md
+      - Notification event types: operations/notification-events.md
   - Development:
       - Writing a plugin: development/writing-a-plugin.md
       - Plugins outside the repository: development/external-plugins.md

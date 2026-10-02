@@ -60,10 +60,11 @@ password = "${PASSWORD}"
 [[instance]]
 name = "home"
 # The notifiers this instance publishes to. Without this key it publishes to
-# every notifier defined above; [] publishes to none. An entry is a name, which
-# brings the events of the definition, or a table that replaces them for this
-# instance only: { ref = "alerts", events = ["status"] }. Nothing else can be
-# overridden in it: the connection is shared.
+# every notifier defined above; [] publishes to none. A name brings the events
+# of the definition. To replace them for this instance only, use a
+# [[instance.notify]] table with "ref" and "events" instead of this key (the two
+# forms cannot be mixed). Nothing else can be overridden there: the connection
+# is shared.
 notify = ["alerts"]
 # Called on every completed cycle (a GET on success, the same URL with /fail
 # appended on failure): a dead man's switch for Healthchecks.io or an Uptime
