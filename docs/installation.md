@@ -32,6 +32,8 @@ Releases ship two builds of the daemon:
 | lightweight | `dnspatch_*` | `0.4.0`, `0.4`, `latest` | every retriever and provider, none of the optional monitoring features |
 | full | `dnspatch-full_*` | `0.4.0-full`, `0.4-full`, `latest-full` | the same, plus the `ping_url` hook and the notifiers that publish to a message broker (see [Monitoring](operations/monitoring.md)) |
 
+The [config builder](https://dnspatch.github.io/builder/) tells which of the two your configuration needs.
+
 The full build exists from 0.4.0 on. Releases 0.1 to 0.3 had a single build, the lightweight one.
 
 Nothing else changes between them, and a config that uses none of the optional features behaves identically on both.

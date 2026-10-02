@@ -10,7 +10,7 @@
 
 dnspatch is a dynamic DNS daemon in Go. It watches your public IPv4 and IPv6 address and updates your DNS records when it changes. It is a single static binary or a container image of a few megabytes, with no runtime dependencies.
 
-[Documentation](https://dnspatch.github.io/dnspatch/) · [Releases](https://github.com/dnspatch/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/dnspatch/dnspatch) · [Issues](https://github.com/dnspatch/dnspatch/issues)
+[Documentation](https://dnspatch.github.io/dnspatch/) · [Config builder](https://dnspatch.github.io/builder/) · [Releases](https://github.com/dnspatch/dnspatch/releases) · [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) · [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) · [API reference](https://pkg.go.dev/github.com/dnspatch/dnspatch) · [Issues](https://github.com/dnspatch/dnspatch/issues)
 
 ## Why dnspatch
 
@@ -25,6 +25,8 @@ dnspatch is a dynamic DNS daemon in Go. It watches your public IPv4 and IPv6 add
 > **Versioning.** dnspatch follows [semantic versioning](https://semver.org) and is in the `v0.x` series on purpose: the plugin contract has not been proven by many plugins yet. Until `v1.0.0`, a minor release may change the public API of the `plugin`, `httpx` and `app` packages and the configuration format; patch releases will not. Breaking changes are called out in the release notes and described in the [migration guides](https://dnspatch.github.io/dnspatch/migrations/0.2-to-0.3/). Pin the version you tested.
 
 ## Quick start
+
+Prefer a form to a text editor? The [online builder](https://dnspatch.github.io/builder/) assembles `dnspatch.toml` and tells you which image or build tags you need.
 
 1. Create `dnspatch.toml`. This keeps `home.example.com` on Cloudflare pointed at your current public IP:
 
@@ -85,7 +87,7 @@ dnspatch is a dynamic DNS daemon in Go. It watches your public IPv4 and IPv6 add
     go install -tags "ping,notify_all" github.com/dnspatch/dnspatch/cmd/dnspatch@latest
     ```
 
-Docker Compose, build tags for a smaller binary and cross-compiling are in the [installation guide](https://dnspatch.github.io/dnspatch/installation/).
+Docker Compose, build tags for a smaller binary and cross-compiling are in the [installation guide](https://dnspatch.github.io/dnspatch/installation/). Not sure which build or tags you need? The [builder](https://dnspatch.github.io/builder/) picks them from the plugins in your config.
 
 ## Supported providers
 
@@ -106,6 +108,7 @@ The full list with every parameter is in the [parameter reference](https://dnspa
 The full documentation is at **[dnspatch.github.io/dnspatch](https://dnspatch.github.io/dnspatch/)**:
 
 - [Quick start](https://dnspatch.github.io/dnspatch/quick-start/) and [configuration](https://dnspatch.github.io/dnspatch/configuration/): instances, dual-stack, fallback between retrievers, secrets, proxies
+- [Config builder](https://dnspatch.github.io/builder/): an interactive form that produces a config and the matching image or build tags
 - [Built-in plugins](https://dnspatch.github.io/dnspatch/configuration/plugins/) and the [parameter reference](https://dnspatch.github.io/dnspatch/PARAMETERS/) of every retriever and provider
 - [Docker](https://dnspatch.github.io/dnspatch/deployment/docker/) and [building from source](https://dnspatch.github.io/dnspatch/deployment/building/) with build tags
 - [Monitoring](https://dnspatch.github.io/dnspatch/operations/monitoring/): health check, pings, notifications

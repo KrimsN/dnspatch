@@ -22,6 +22,7 @@ Instances run independently, so several sites or networks can be tracked at once
 |--------------|------|
 | install the daemon | [Installation](installation.md) |
 | get a first working config | [Quick start](quick-start.md) |
+| fill in a config through a form | [Config builder](https://dnspatch.github.io/builder/) |
 | understand the configuration file | [Configuration overview](configuration/index.md) |
 | see what a provider or retriever accepts | [Parameter reference](PARAMETERS.md) |
 | run it in a container | [Docker](deployment/docker.md) |
@@ -35,6 +36,7 @@ Instances run independently, so several sites or networks can be tracked at once
 
 ## Links
 
+[Config builder](https://dnspatch.github.io/builder/) ·
 [Releases](https://github.com/dnspatch/dnspatch/releases) ·
 [Docker Hub](https://hub.docker.com/r/krimsn/dnspatch) ·
 [GitHub Container Registry](https://github.com/dnspatch/dnspatch/pkgs/container/dnspatch) ·
