@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -67,5 +68,40 @@ func TestBuildConnectionRejectsAnUnknownType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `"rabbitmq"`) || !strings.Contains(err.Error(), "fake") {
 		t.Errorf("error = %v, want it to name the unknown type and what is registered", err)
+	}
+}
+
+type closeRecorder struct {
+	topicRecorder
+	closed int
+}
+
+func (c *closeRecorder) Close() error {
+	c.closed++
+
+	return errors.New("close failed")
+}
+
+func TestConnectionCloseClosesTheNotifier(t *testing.T) {
+	pub := &closeRecorder{}
+	conn := &Connection{pub: pub, log: discardLogger()}
+
+	if err := conn.Close(); err == nil || err.Error() != "close failed" {
+		t.Errorf("Close error = %v, want the notifier's error passed through", err)
+	}
+
+	if pub.closed != 1 {
+		t.Errorf("the notifier was closed %d times, want once", pub.closed)
+	}
+}
+
+func TestAfterCycleDoesNotPublish(t *testing.T) {
+	pub := &recordingPublisher{}
+	hook := newHook(pub, discardLogger(), []config.Event{config.EventCycle, config.EventStatus})
+
+	hook.AfterCycle(context.Background(), runner.CycleEvent{})
+
+	if got := pub.all(); len(got) != 0 {
+		t.Errorf("AfterCycle published %v, want nothing: events come through OnEvent", got)
 	}
 }
