@@ -28,25 +28,89 @@ ref     = "regru"
 rr_name = "*.home"                 # override a parameter of the definition
 ```
 
-## `ref` and inline `type`
+## Declaring retrievers and providers
 
-An instance points at a definition with `ref`, or declares the plugin inline with `type`. `ref` and `type` are mutually exclusive.
+An instance gets its retrievers and providers in one of three ways. All of them produce the same result; they differ in how much you write and whether the object can be reused.
 
-- `ref` names a `[retriever.<name>]` or `[provider.<name>]` block; parameters written next to `ref` override the definition, except `type`. This is how one provider account serves several records, or one retriever definition serves several instances.
-- `type` builds the plugin from the instance table alone, with no definition to merge in. Use it for a retriever or provider that only one instance needs: most retrievers, and any provider not shared across records.
+### Inline declaration
 
-## Short form
+The plugin is described in the instance itself, with `type`. Nothing else has to exist: no `[retriever.<name>]` or `[provider.<name>]` block.
 
-When a definition is used as it is, with nothing overridden, an instance lists its name instead of a table: `"name"` is the same as a table with only `ref`.
+```toml
+[[instance]]
+name = "home"
+
+[[instance.retriever]]
+type = "ifconfigco"
+
+[[instance.provider]]
+type     = "regru"
+zone     = "example.com"
+rr_name  = "home"
+username = "my-login"
+password = "${PASSWORD}"
+```
+
+Use it for an object that only one instance needs: most retrievers, and any provider that is not shared across records. The object cannot be referred to from another instance; if a second instance needs it, move it to a definition.
+
+### Reference to a definition
+
+A definition is a `[retriever.<name>]` or `[provider.<name>]` block. `ref` points at it by name, and the instance takes the object as defined. This is how one provider account serves several instances, or one retriever serves several sites.
+
+```toml
+[provider.regru]
+type     = "regru"
+zone     = "example.com"
+rr_name  = "home"
+username = "my-login"
+password = "${PASSWORD}"
+
+[[instance]]
+name = "home"
+
+[[instance.provider]]
+ref = "regru"
+```
+
+When nothing is overridden, the table can be replaced with the name alone: `"regru"` is the same as a table with only `ref = "regru"`. This is the short form, and it is the most compact way to assemble an instance from ready definitions:
 
 ```toml
 [[instance]]
 name      = "home"
 retriever = ["ipify"]
-provider  = ["regru"]
+provider  = ["regru", "selectel"]
 ```
 
-A definition with overrides is written as an `[[instance.retriever]]` or `[[instance.provider]]` table. TOML does not allow one key to be written both ways in the same instance, but different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. The order of the elements is kept; for retrievers it is the polling order. A name cannot carry overrides or `type`: use a table for that.
+### Overriding fields
+
+Parameters written next to `ref` replace the same parameters of the definition for this instance only; everything else is taken from the definition. One provider account then serves several records:
+
+```toml
+[[instance]]
+name = "home"
+
+[[instance.provider]]
+ref     = "regru"
+rr_name = "*.home"                 # a different record, the rest comes from [provider.regru]
+```
+
+Only the parameters of the plugin can be overridden. `type` cannot: it is fixed by the definition, and `ref` and `type` in one table are an error. A name in the short form cannot carry overrides, so an element with an override is always a table.
+
+### Choosing a form
+
+| You want | Write |
+|---|---|
+| An object used by one instance only | inline: `[[instance.retriever]]` or `[[instance.provider]]` with `type` |
+| A shared object, used as it is | the short form, `provider = ["regru"]` |
+| A shared object with a different zone, record or address | `[[instance.provider]]` with `ref` and the changed parameters |
+
+### Mixing forms
+
+The order of the elements is kept; for retrievers it is the polling order. Elements of one list can be of different kinds: an instance may have one retriever by `ref` and another inline.
+
+TOML does not allow one key to be written both as an array of names and as `[[...]]` tables in the same instance, so `provider = ["regru"]` and `[[instance.provider]]` cannot be used together. Different keys can: `retriever = ["ipify"]` goes together with `[[instance.provider]]`. If one provider needs an override, write all providers of that instance as `[[instance.provider]]` tables.
+
+### Notifiers
 
 `notify` works the same way: `notify = ["alerts"]` is the short form, and a `[[instance.notify]]` table may only hold `ref` and `events`. It chooses which [event types](../operations/notification-events.md#choosing-the-events) reach the notifier from this instance, and nothing else about it can be overridden.
 
