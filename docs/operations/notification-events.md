@@ -1,17 +1,32 @@
-# Notification events
+# Notification event types
 
-The reference for what a [notifier](monitoring.md#notifications) publishes: every type of event, how to switch it on, when it arrives, and the exact fields of its message. The setup of brokers and the connection of instances to them is on the [Monitoring](monitoring.md#notifications) page.
+A [notifier](monitoring.md#notifications) publishes events: small JSON messages about what an instance is doing. This page is the reference for them: every type of event, how to switch it on, when it arrives and when it does not, and the exact fields of its message. How brokers are defined and connected to instances is on the [Monitoring](monitoring.md#notifications) page.
 
-## Choosing events
+## The types at a glance
 
-Which events reach a broker is decided by `events`, a list of the names below. It is a setting of dnspatch and works the same for every notifier (`redis`, `rabbitmq`, ...).
+| Type | Tells you that | Arrives | Default |
+|---|---|---|---|
+| [`status`](#status) | the instance as a whole started failing or recovered | when the outcome of a cycle changes | yes |
+| [`provider_status`](#provider_status) | one provider started failing or recovered | when the result of a write to it changes | no |
+| [`retriever_status`](#retriever_status) | one retriever started failing or recovered | when the result of a call to it changes | no |
+| [`ip_change`](#ip_change) | an address was written to a provider and differs from the previous one | once per cycle that wrote something | no |
+| [`cycle`](#cycle) | a cycle finished | after every cycle | no |
+| [`lifecycle`](#lifecycle) | an instance started or stopped | at start and at a normal stop | no |
+
+The three `*_status` types are **transitions**: they say that something changed, not how it is now, and a thing that stays broken is reported once. `ip_change`, `cycle` and `lifecycle` are **occurrences**: each one is a fact that happened.
+
+## Choosing the events
+
+Which events reach a broker is decided by `events`, a list of the names above. It is a setting of dnspatch, so it works the same for every notifier (`redis`, `rabbitmq`, ...), and a notifier plugin does not know about it.
 
 | Where | Syntax | Effect |
 |---|---|---|
 | In `[notify.<name>]` | `events = ["status", "ip_change"]` | The events of every instance that uses this notifier |
-| Not set | | `["status"]`, the behaviour before event types existed |
-| In an instance's `notify` list | `{ ref = "alerts", events = ["cycle"] }` | Replaces the notifier's events for this instance only |
+| Nowhere | | `["status"]`, the behaviour before event types existed |
 | In an instance's `notify` list | `"alerts"` | The notifier's own events |
+| In an instance's `notify` list | `{ ref = "alerts", events = ["cycle"] }` | Replaces the notifier's events for this instance only |
+
+The priority is the table of the instance, then the notifier's definition, then the default.
 
 ```toml
 [notify.alerts]
@@ -25,23 +40,41 @@ events  = ["cycle", "lifecycle"]
 
 [[instance]]
 name   = "home"
-notify = ["alerts", "audit"]                               # each with its own events
+notify = ["alerts", "audit"]        # each with the events of its definition
 
 [[instance]]
 name   = "lab"
-notify = ["audit", { ref = "alerts", events = ["status"] }] # alerts: only status, here
+notify = ["audit", { ref = "alerts", events = ["status"] }]   # names and tables can be mixed
+
+[[instance]]
+name = "office"
+
+[[instance.notify]]                 # the same override, written as table headers
+ref    = "alerts"
+events = ["status"]
+
+[[instance.notify]]
+ref = "audit"                       # no events: the definition's
 ```
 
-The valid names are `status`, `provider_status`, `retriever_status`, `ip_change`, `cycle` and `lifecycle`. `events` must not be empty and must not repeat a name; an unknown name is an error that lists the valid ones. Only `ref` and `events` are allowed in a table of an instance's `notify`, because the connection to the broker belongs to the notifier and is shared by every instance that uses it. See [Choosing events per instance](monitoring.md#choosing-events-per-instance) for the TOML forms, and run `dnspatch --check-config` to see the events each instance ends up with.
+TOML does not allow `notify` to be written both as an array and as `[[instance.notify]]` headers in one instance. An instance without a `notify` key publishes to every notifier the file defines, and `notify = []` gives it none.
+
+The rules, each reported at startup with the instance or notifier it is in:
+
+- The valid names are `status`, `provider_status`, `retriever_status`, `ip_change`, `cycle` and `lifecycle`. An unknown name is an error that lists them.
+- `events` must not be empty, and must not repeat a name. To publish nothing to a notifier, leave it out of the instance's `notify` list.
+- A table in an instance's `notify` takes only `ref` and `events`, and `ref` is required. The connection to the broker belongs to the notifier and is shared by every instance that uses it, so an instance cannot change its address or prefix; define another notifier for that.
+
+`dnspatch --check-config` prints the events each instance ends up with, for example `notify=[alerts(status), audit(cycle, lifecycle)]`.
 
 ## Delivery
 
-- Every event goes to the topic `<topic_prefix><instance>` (by default `dnspatch.events.<instance>`). The topic is the same for all types of one instance; tell them apart by the `event` field.
+- Every event goes to the topic `<topic_prefix><instance>`, by default `dnspatch.events.<instance>`. The topic is the same for all types of one instance; tell them apart by the `event` field.
 - The message body is one JSON object.
 - Events of one instance are published in the order they happen. Within one cycle that order is: `retriever_status`, `provider_status` (providers in the order of the instance), `ip_change`, `status`, `cycle`.
-- A publication is cut off after 5 seconds. If it fails, dnspatch logs a warning and carries on: a broker problem never stops the DNS updates, and the event is not retried.
-- A cycle that is interrupted by a shutdown reports nothing, since its result is not known.
-- dnspatch keeps what it needs for transitions in memory only. After a restart it starts from scratch: an outage that is still going on is reported as a new failure, and every provider gets an `ip_change` with an empty `old`.
+- A publication is cut off after 5 seconds. If it fails, dnspatch logs a warning and goes on: a broker problem never stops the DNS updates, and the event is not retried. Redis Pub/Sub also drops an event that nobody is subscribed to at that moment.
+- A cycle that a shutdown interrupts reports nothing, since its result is not known.
+- What dnspatch needs for transitions is kept in memory only. After a restart it starts from scratch: an outage that is still going on is reported again as a new failure, and every provider gets an `ip_change` with an empty `old`.
 
 ## Fields of every event
 
@@ -50,29 +83,38 @@ The valid names are `status`, `provider_status`, `retriever_status`, `ip_change`
 | `event` | string | The type: `status`, `provider_status`, `retriever_status`, `ip_change`, `cycle` or `lifecycle` |
 | `severity` | string | `info`, `warning` or `error`; fixed for each event, see [Severity](#severity) |
 | `instance` | string | The name of the instance |
-| `time` | string | When it happened, RFC 3339 with the daemon's own UTC offset |
+| `time` | string | When it happened, RFC 3339, with the UTC offset of the machine dnspatch runs on |
+
+The text in `error` is the same as in dnspatch's log. When several things failed in one cycle, the messages are joined with a line break. A plugin is responsible for keeping secrets, such as a token in a URL, out of its errors.
 
 ## status
 
-**Enable with:** `events = ["status"]`, also the default.
+The instance as a whole: did its last cycle work. This was the only event of 0.4.0, and its message still has the fields of that version (`instance`, `success`, `error`, `time`), with `event`, `severity` and `state` added to them.
 
-The instance as a whole: did its last cycle work. This is the only event of 0.4.0, and its message still has the fields of that version (`instance`, `success`, `error`, `time`) with `event`, `severity` and `state` added.
+**Switch on:** `events = ["status"]`, which is also the default.
 
-**When it arrives:** when the outcome of a cycle differs from the previous one.
+**Use it for** a single alert per instance: "something is wrong with `home`" and "it is fine again".
 
-- The first cycle after a start is reported only if it failed. A first success is the normal start of the day and is not news.
-- Then every change is reported: `failure` when a cycle that worked is followed by one that did not, `recovery` when it is the other way round. Cycles that repeat the previous outcome send nothing.
+**Arrives**
 
-A cycle fails when any retriever that was called, or any provider that was written to, returned an error. That includes a retriever that failed while a fallback retriever supplied the address. A provider that is skipped because the address did not change, or because it is waiting out a backoff, does not fail the cycle.
+- When the outcome of a cycle differs from that of the previous one: `failure` after a cycle that worked, `recovery` after a cycle that failed.
+- For the first cycle after a start, only if it failed. A first success is the normal start of the day and is not news.
+
+**Does not arrive**
+
+- For a cycle that repeats the outcome of the previous one: a long outage is one `failure`, not one per cycle.
+- For a cycle that a shutdown interrupted.
+
+**What fails a cycle.** A cycle fails when any retriever that was called or any provider that was written to returned an error. That includes a retriever that failed while a fallback retriever supplied the address. A provider that is skipped because its address did not change, or because it is waiting out a backoff, does not fail the cycle.
 
 !!! warning "Flapping during a backoff"
-    A provider that failed is not tried on every cycle but after a growing pause. The cycles in between count as successful, so `status` alternates between `failure` (the cycle that retries) and `recovery` (the cycles that skip it) for as long as the provider is down. This is a known problem. To follow a provider reliably use [`provider_status`](#provider_status).
+    A provider that failed is not tried on every cycle, but after a pause that grows with each failure. The cycles in between count as successful, so `status` alternates between `failure` (the cycle that retries) and `recovery` (the cycles that skip the provider) for as long as the provider is down. This is a known problem. To follow a provider reliably, use [`provider_status`](#provider_status).
 
 | Field | Type | Meaning |
 |---|---|---|
 | `state` | string | `failure` or `recovery` |
 | `success` | bool | `false` for a failure, `true` for a recovery |
-| `error` | string | Only for a failure: the errors of the cycle, one per failed retriever or provider, joined, for example `provider "regru": status 500` |
+| `error` | string | Only for a failure: the errors of the cycle, one per failed retriever or provider, for example `provider "regru": update failed: status 500` |
 
 ```json
 {"event":"status","severity":"error","instance":"home","time":"2026-10-02T10:00:03+07:00","state":"failure","success":false,"error":"provider \"regru\": update failed: status 500"}
@@ -81,19 +123,26 @@ A cycle fails when any retriever that was called, or any provider that was writt
 
 ## provider_status
 
-**Enable with:** `events = ["provider_status"]`.
+One provider: did its last attempt to write the address work.
 
-One provider: did its last attempt to write the address work. Use it when one instance updates several providers and you need to know which of them is in trouble.
+**Switch on:** `events = ["provider_status"]`.
 
-**When it arrives:** when the result of a real write attempt differs from the previous one. As with `status`, a first observation counts only if it is a failure.
+**Use it for** an instance with several providers, to know which of them is in trouble, and to follow a provider through a backoff without the flapping of [`status`](#status).
 
-- A write that fails: `failure`, if the provider worked before or had not been tried yet.
-- A write that works after a failure: `recovery`. Because a failed provider is retried after a pause, the recovery comes with the first retry that succeeds, not at the moment the provider is back.
-- Nothing is sent for a cycle in which the provider was not written to: the address had not changed, or it is waiting out a backoff. Repeated failures of a provider that is already `failed` send nothing either.
+**Arrives**
+
+- When the result of a real write attempt differs from that of the previous one: `failure` when a write fails after one that worked or the first time the provider is tried, `recovery` when a write works after a failure.
+- A failed provider is retried after a pause that grows with each failure, so `recovery` comes with the first retry that succeeds, not at the moment the provider is back.
+
+**Does not arrive**
+
+- For a cycle in which the provider was not written to: its address had not changed, or it is waiting out a backoff.
+- For a retry that fails again: the provider is already failed.
+- For the first write after a start, if it worked.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `provider` | string | The name of the provider as in the instance: the `ref` of the definition |
+| `provider` | string | The name of the provider in the instance: the `ref` of its definition |
 | `state` | string | `failure` or `recovery` |
 | `success` | bool | `false` for a failure, `true` for a recovery |
 | `error` | string | Only for a failure: the error of the provider |
@@ -105,18 +154,25 @@ One provider: did its last attempt to write the address work. Use it when one in
 
 ## retriever_status
 
-**Enable with:** `events = ["retriever_status"]`.
+One retriever: did its last call work.
 
-One retriever: did its last call work. Use it to notice that a source of the address (an external service, a network interface) went bad even though a fallback retriever keeps the instance going.
+**Switch on:** `events = ["retriever_status"]`.
 
-**When it arrives:** when the result of a call to the retriever differs from the previous one; a first observation counts only if it is a failure.
+**Use it for** noticing that a source of the address, an external service or a network interface, went bad while a fallback retriever keeps the instance going. Without it the failure shows up only in the log and in `status`.
 
-- A retriever counts as failed when it returns an error, runs out of time, or returns no valid address.
-- A retriever is called only while an address family is still missing. One that is not needed in a cycle, because an earlier retriever already supplied everything, is not called and keeps its state: if it had failed, it stays failed, and no `recovery` comes until it is called again and works.
+**Arrives**
+
+- When the result of a call to the retriever differs from that of the previous one: `failure` or `recovery`. A first observation counts only if it is a failure.
+- A call counts as failed when the retriever returns an error, runs out of time (30 seconds), or returns no valid address.
+
+**Does not arrive**
+
+- For a retriever that was not called. A retriever is called only while an address family is still missing, so one behind a working retriever is not called, and it keeps its state: if it had failed it stays failed, and no `recovery` comes until it is called again and works.
+- For a call that repeats the previous result.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `retriever` | string | The name of the retriever as in the instance: the `ref` of the definition |
+| `retriever` | string | The name of the retriever in the instance: the `ref` of its definition |
 | `state` | string | `failure` or `recovery` |
 | `success` | bool | `false` for a failure, `true` for a recovery |
 | `error` | string | Only for a failure: the error of the retriever |
@@ -128,20 +184,30 @@ One retriever: did its last call work. Use it to notice that a source of the add
 
 ## ip_change
 
-**Enable with:** `events = ["ip_change"]`.
+An address was written to a provider and it differs from the one written before.
 
-An address was written to a provider and it differs from the one written before. This is the event to listen to when you want to know that the address of your home or office changed.
+**Switch on:** `events = ["ip_change"]`.
 
-**When it arrives:** once per cycle, if at least one provider was written to successfully in that cycle. `changes` lists every successful write of the cycle, for every provider and every address family. A write that failed is not in the list, and a cycle in which nothing was written (the address did not change, or all providers failed) sends nothing.
+**Use it for** learning that the address of a home or an office changed, and for reacting to it: updating a firewall allowlist, telling a user, adding a log line.
 
-`old` is empty when dnspatch does not know the previous address. That is the case for the first write after a start, since nothing is remembered between runs, and for the first write after a failed one, since the content of the record is then uncertain. So every start of the daemon sends an `ip_change` for each provider, even if the address is the same as before the restart.
+**Arrives**
+
+- Once per cycle, if at least one provider was written to successfully in it. `changes` lists every successful write of the cycle, for every provider and every address family, so a change of the address with three providers is one event with three elements.
+- On every start of the daemon, for each provider, with an empty `old`. Nothing is remembered between runs, so the first write is always a change from the unknown, even if the address is the same as before the restart.
+
+**Does not arrive**
+
+- For a cycle in which nothing was written: the address did not change, or every write failed.
+- For a provider whose write failed: it is not in `changes`.
+
+`old` is an empty string when dnspatch does not know the previous address: for the first write after a start, and for the first write after a failed one, when the content of the record is uncertain.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `changes` | array | One element per address written |
 | `changes[].provider` | string | The provider the address was written to |
 | `changes[].family` | string | `ipv4` or `ipv6` |
-| `changes[].old` | string | The previous address, or an empty string if unknown |
+| `changes[].old` | string | The previous address, or an empty string if it is not known |
 | `changes[].new` | string | The address that was written |
 
 ```json
@@ -151,36 +217,50 @@ An address was written to a provider and it differs from the one written before.
 
 ## cycle
 
-**Enable with:** `events = ["cycle"]`.
+A cycle, one pass of the instance over its retrievers and providers, finished. It is a heartbeat with a result.
 
-A cycle (one pass of the instance over its retrievers and providers) finished. It is a heartbeat with a result, for an audit log or a metrics pipeline.
+**Switch on:** `events = ["cycle"]`.
 
-**When it arrives:** after every cycle, whether it succeeded or failed, and also when nothing was written because the address had not changed. With an `interval` of 5 minutes that is 288 messages a day per instance, so enable it for a notifier that is meant for a log, not for a chat. A cycle interrupted by a shutdown sends nothing.
+**Use it for** an audit log, metrics, or a dead man's switch on the receiving side, such as alerting when no `cycle` has arrived for a while. Do not point it at a chat: with an `interval` of 5 minutes it is 288 messages a day for each instance.
+
+**Arrives**
+
+- After every cycle, successful or not, including a cycle in which nothing was written because the address had not changed.
+
+**Does not arrive**
+
+- For a cycle that a shutdown interrupted.
+
+Unlike `status`, `cycle` has no `state`: it reports every cycle, not the changes. It fails by the same rule as `status`, including the flapping during a backoff.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `success` | bool | Whether the cycle worked, by the same rule as [`status`](#status) |
-| `error` | string | Only for a failed cycle: the joined errors, as in `status` |
+| `success` | bool | Whether the cycle worked |
+| `error` | string | Only for a failed cycle: its errors, as in `status` |
 
 ```json
 {"event":"cycle","severity":"info","instance":"home","time":"2026-10-02T10:05:03+07:00","success":true}
 {"event":"cycle","severity":"error","instance":"home","time":"2026-10-02T10:10:03+07:00","success":false,"error":"retriever \"ifconfig\": attempt timed out after 30s: context deadline exceeded"}
 ```
 
-Unlike `status`, `cycle` has no `state`: it reports every cycle, not changes.
-
 ## lifecycle
 
-**Enable with:** `events = ["lifecycle"]`.
+An instance started or stopped. One type with two meanings, told apart by `state`.
 
-An instance started or stopped. One event type with two meanings, told apart by `state`.
+**Switch on:** `events = ["lifecycle"]`.
 
-**When it arrives:**
+**Use it for** seeing restarts and deployments: a `started` you did not expect means the process was restarted, and a `started` without a preceding `stopped` means it died.
+
+**Arrives**
 
 - `started`: when the instance begins, before its first cycle.
 - `stopped`: when the instance ends at a normal shutdown (SIGINT or SIGTERM, for example `docker stop`), after its last cycle. It is published before the connection to the broker is closed, within 5 seconds.
+- For every instance separately, to its own topic. There is no event for the daemon as a whole: a daemon with three instances sends three `started` and three `stopped`.
 
-Every instance sends its own pair to its own topic; there is no event for the daemon as a whole. A daemon with three instances sends three `started`. A process that is killed (`kill -9`, power loss, an out-of-memory kill) sends no `stopped`, so the absence of one after a `started` means the instance did not stop normally. If the process crashes and is restarted, a new `started` arrives.
+**Does not arrive**
+
+- `stopped` when the process is killed (`kill -9`, power loss, an out-of-memory kill). A crash that is followed by a restart shows up as a `started` with no `stopped` before it.
+- `started` for an instance whose configuration is rejected at startup: the daemon does not start at all.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -194,7 +274,7 @@ Every instance sends its own pair to its own topic; there is no event for the da
 
 ## Severity
 
-Fixed for each event; it only tells the receiver how to treat the message and cannot be configured or used as a filter.
+Fixed for each event. It only tells the receiver how to treat the message: it cannot be configured, and there is no filter by it.
 
 | Event | `severity` |
 |---|---|
@@ -208,27 +288,27 @@ Fixed for each event; it only tells the receiver how to treat the message and ca
 
 ## Scenarios
 
-What arrives in common situations. The instance `home` has one retriever `ifconfig`, one provider `regru` and an interval of 5 minutes, and a notifier with every event enabled.
+What arrives in common situations. The instance `home` has one retriever `ifconfig`, one provider `regru` and an interval of 5 minutes, and its notifier has every event switched on.
 
 **A normal start.**
 
 1. `lifecycle` `started`
-2. `ip_change` with `old` empty (the first write of the provider)
+2. `ip_change` with `old` empty: the first write of the provider
 3. `cycle` with `success: true`
 
-No `status` or `provider_status`: first successes are not news. Cycles after that send only `cycle`, until something changes.
+There is no `status` or `provider_status`: first successes are not news. The cycles after that send only `cycle`, until something changes.
 
 **The address changes.** The next cycle sends `ip_change` with `old` and `new`, then `cycle`.
 
 **The provider's API is down.**
 
 1. At the first failed write: `provider_status` `failure`, `status` `failure` and `cycle` with `success: false`.
-2. During the pause before the next attempt the provider is skipped, and the cycle counts as successful: `status` `recovery` (this is the [flapping](#status) described above) and `cycle` with `success: true`.
-3. Further attempts that fail send `status` `failure` and `cycle` again, but no new `provider_status`: the provider is already failed.
-4. When a retry works: `provider_status` `recovery`, then `ip_change` with `old` empty, `status` `recovery` (if it was failed) and `cycle`.
+2. During the pause before the next attempt the provider is skipped and the cycle counts as successful: `status` `recovery` (the [flapping](#status) described above) and `cycle` with `success: true`.
+3. A retry that fails sends `status` `failure` and `cycle` again, but no new `provider_status`: the provider is already failed.
+4. When a retry works: `provider_status` `recovery`, `ip_change` with `old` empty, and `cycle`. If the previous cycle had failed, `status` `recovery` comes too.
 
-**The primary retriever fails and a fallback serves the address.** `retriever_status` `failure` (severity `warning`) for the primary, then, as the cycle reports the error, `status` `failure` and `cycle` with `success: false`. The address is still written from the fallback, so `ip_change` comes too if it changed. When the primary works again: `retriever_status` `recovery`.
+**The primary retriever fails and a fallback serves the address.** `retriever_status` `failure` (severity `warning`) for the primary, then, because the cycle reports the error, `status` `failure` and `cycle` with `success: false`. The address is still written from the fallback, so `ip_change` comes too if it changed. When the primary works again: `retriever_status` `recovery`.
 
 **Every retriever fails.** `retriever_status` `failure` for each of them, then `status` `failure` and `cycle` with `success: false`. No provider is touched, so there is no `provider_status`.
 
-**A planned stop.** `lifecycle` `stopped` for every instance, then the connection to the broker closes. After `docker start` the instance sends `started` and an `ip_change` with `old` empty again.
+**A planned stop.** `lifecycle` `stopped` for every instance, then the connection to the broker closes. After `docker start`, the instance sends `started` and an `ip_change` with `old` empty again.

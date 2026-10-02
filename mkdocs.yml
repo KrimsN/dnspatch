@@ -72,7 +72,7 @@ nav:
   - Operations:
       - Behaviour: operations/behaviour.md
       - Monitoring: operations/monitoring.md
-      - Notification events: operations/notification-events.md
+      - Notification event types: operations/notification-events.md
   - Development:
       - Writing a plugin: development/writing-a-plugin.md
       - Plugins outside the repository: development/external-plugins.md
