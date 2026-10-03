@@ -5,6 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/dnspatch/dnspatch.svg)](https://pkg.go.dev/github.com/dnspatch/dnspatch)
 [![Docker pulls](https://img.shields.io/docker/pulls/krimsn/dnspatch)](https://hub.docker.com/r/krimsn/dnspatch)
 [![License](https://img.shields.io/github/license/dnspatch/dnspatch)](LICENSE)
+[![Hits](https://hits.sh/github.com/dnspatch/dnspatch.svg)](https://hits.sh/github.com/dnspatch/dnspatch/)
 
 **Keep your DNS records pointed at your home or server IP, even when your ISP changes it.**
 
