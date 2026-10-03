@@ -1,13 +1,13 @@
 name: New provider request
 description: Ask for a DNS provider (the service that holds your domain) to be added
-labels: ["enhancement", "plugins"]
+labels: ["enhancement", "plugins", "provider"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before filing this, check `plugins/` for a provider that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
+        Before filing this, check `plugins/providers/` for one that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
 
-        This form is also opened by the [config builder](https://dnspatch.github.io/builder/) when a service is missing from its list. For a new IP source (retriever), use the "New retriever/provider request" form instead.
+        The [config builder](https://dnspatch.github.io/builder/) opens this form, already filled in, when a service is missing from its list.
 
   - type: input
     id: service

@@ -1,0 +1,39 @@
+name: New notifier request
+description: Ask for a new way to be told about address changes and failures (a chat, a queue, a webhook)
+labels: ["enhancement", "plugins", "notifier"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing this, check `plugins/notifiers/` for one that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the notifier interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
+
+  - type: input
+    id: service
+    attributes:
+      label: Service or protocol
+      description: Where the notifications should go.
+      placeholder: e.g. Matrix, NATS, a generic webhook
+    validations:
+      required: true
+
+  - type: input
+    id: api-docs
+    attributes:
+      label: Documentation
+      description: Link to the service's or protocol's API docs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this one
+      description: What you're trying to do that existing plugins don't cover.
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication
+      description: How a client authenticates (token, user and password, TLS certificate, ...), and anything unusual about it.
