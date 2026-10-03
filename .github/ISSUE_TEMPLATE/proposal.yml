@@ -1,11 +1,11 @@
 name: Feature proposal
-description: Suggest a change that isn't a new retriever/provider plugin
+description: Suggest a change that isn't a new retriever, provider or notifier plugin
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        For a new retriever or DNS provider, use the "New retriever/provider request" template instead. For an open-ended idea you're not sure about yet, [Discussions](../discussions) may fit better.
+        For a new retriever, DNS provider or notifier, use the matching "New ... request" template instead. For an open-ended idea you're not sure about yet, [Discussions](../discussions) may fit better.
 
   - type: textarea
     id: problem
