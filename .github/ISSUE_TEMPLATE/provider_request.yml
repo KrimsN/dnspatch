@@ -1,0 +1,41 @@
+name: New provider request
+description: Ask for a DNS provider (the service that holds your domain) to be added
+labels: ["enhancement", "plugins"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing this, check `plugins/` for a provider that already exists, and [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd rather write it yourself — the provider interface is a public Go package, so plugins don't need to live in this repo or be written by a maintainer.
+
+        This form is also opened by the [config builder](https://dnspatch.github.io/builder/) when a service is missing from its list. For a new IP source (retriever), use the "New retriever/provider request" form instead.
+
+  - type: input
+    id: service
+    attributes:
+      label: Service name
+      description: The DNS host this provider would talk to.
+      placeholder: e.g. Gandi, DuckDNS
+    validations:
+      required: true
+
+  - type: input
+    id: api-docs
+    attributes:
+      label: API documentation
+      description: Link to the service's API docs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this one
+      description: What you're trying to do that existing plugins don't cover.
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication
+      description: How the API authenticates (API key, token, account credentials, IP allowlist, ...), and anything unusual about it (rate limits, IPv6-only, requires a fixed source IP, etc.)
